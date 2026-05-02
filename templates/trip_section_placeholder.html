@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ section_name }} — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; {{ section_name }}
+</div>
+
+<h1 class="h3 mb-3">{{ section_emoji }} {{ section_name }}</h1>
+
+<div class="vp-empty">
+  <div class="vp-empty-emoji" aria-hidden="true">🚧</div>
+  <div class="vp-empty-title">Coming in Step {{ step_number }}</div>
+  <p class="vp-empty-body">{{ description }}</p>
+  <a class="btn btn-outline-secondary" href="{{ url_for('trip_overview', trip_id=trip.id) }}">
+    Back to {{ trip.name }}
+  </a>
+</div>
+{% endblock %}

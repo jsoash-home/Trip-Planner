@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Share — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Share
+</div>
+
+<h1 class="h3 mb-3">Share this trip</h1>
+
+<div class="vp-card mb-3">
+  <div class="text-muted small">Trip owner</div>
+  <div class="fs-5 fw-semibold">
+    <i class="bi bi-person-badge me-1" aria-hidden="true"></i>
+    {{ owner.name or owner.email }}
+  </div>
+  <div class="text-muted small">{{ owner.email }}</div>
+</div>
+
+{% if is_owner(user_role) %}
+  <div class="vp-card mb-3">
+    <h2 class="h6 mb-3">Add a collaborator</h2>
+
+    {% if errors %}
+      <div class="vp-flash vp-flash--danger">
+        <strong>Please fix:</strong>
+        <ul class="mb-0 mt-1">
+          {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('share_add', trip_id=trip.id) }}" novalidate>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-7">
+          <label for="s-email" class="form-label">Google email address</label>
+          <input id="s-email" name="email" type="email" class="form-control"
+                 value="{{ form.get('email', '') }}"
+                 placeholder="travelpartner@gmail.com" required>
+        </div>
+        <div class="col-md-3">
+          <label for="s-role" class="form-label">Access</label>
+          {% set current_role = form.get('role', 'viewer') %}
+          <select id="s-role" name="role" class="form-select">
+            {% for code, label in share_roles %}
+              <option value="{{ code }}" {% if code == current_role %}selected{% endif %}>{{ code | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-vp-primary w-100">
+            Add
+          </button>
+        </div>
+      </div>
+      <div class="form-text mt-2">
+        They'll see this trip on their dashboard the next time they sign in
+        with this exact Google address.
+      </div>
+    </form>
+  </div>
+{% else %}
+  <div class="vp-flash vp-flash--info">
+    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    Only the trip owner can change who has access.
+  </div>
+{% endif %}
+
+{# Existing collaborators #}
+{% if collaborators %}
+  <h2 class="h6 mb-2 vp-section-title">Currently shared with</h2>
+  <div class="vp-card p-0">
+    {% for c in collaborators %}
+      <div class="share-row">
+        <div class="share-row-main">
+          <div class="share-row-email">{{ c.email }}</div>
+          <div class="share-row-meta">
+            {{ share_role_label(c.role) }}
+            &middot; added {{ c.added_at.strftime('%b %d, %Y') }}
+          </div>
+        </div>
+        {% if is_owner(user_role) %}
+          <div class="share-row-actions">
+            <form method="post"
+                  class="d-inline m-0"
+                  action="{{ url_for('share_remove', trip_id=trip.id, collab_id=c.id) }}"
+                  onsubmit="return confirm('Remove {{ c.email | e }} from this trip?');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-x-lg me-1" aria-hidden="true"></i> Remove
+              </button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">👥</div>
+    <div class="vp-empty-title">Just you so far</div>
+    <p class="vp-empty-body mb-0">
+      {% if is_owner(user_role) %}
+        Add someone above to share this trip with them.
+      {% else %}
+        No one else has been added to this trip yet.
+      {% endif %}
+    </p>
+  </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit item" if item else "Add itinerary item" }} — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Itinerary</a>
+  &nbsp;›&nbsp; {{ "Edit" if item else "New" }}
+</div>
+
+<h1 class="h3 mb-4">{{ "Edit itinerary item" if item else "Add itinerary item" }}</h1>
+
+{% if errors %}
+  <div class="vp-flash vp-flash--danger">
+    <strong>Please fix:</strong>
+    <ul class="mb-0 mt-1">
+      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<form method="post" class="vp-card" novalidate>
+  <div class="row g-3">
+    <div class="col-12">
+      <label for="i-title" class="form-label">Title</label>
+      <input id="i-title" name="title" type="text" class="form-control"
+             value="{{ form.get('title', '') }}"
+             placeholder="e.g. Colosseum tour" required maxlength="300" autofocus>
+    </div>
+
+    <div class="col-md-4">
+      <label for="i-category" class="form-label">Category</label>
+      {% set current_cat = form.get('category', 'sightseeing') %}
+      <select id="i-category" name="category" class="form-select">
+        {% for code, label, emoji, _css in itinerary_categories %}
+          <option value="{{ code }}" {% if code == current_cat %}selected{% endif %}>
+            {{ emoji }} {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label for="i-day" class="form-label">Day</label>
+      <input id="i-day" name="day_date" type="date" class="form-control"
+             value="{{ form.get('day_date', '') }}"
+             min="{{ trip.start_date.isoformat() }}"
+             max="{{ trip.end_date.isoformat() }}"
+             required>
+      <div class="form-text">
+        Between {{ trip.start_date.strftime('%b %d') }} and {{ trip.end_date.strftime('%b %d') }}.
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">&nbsp;</label>
+      <div class="text-muted small">
+        Leave times blank for an "anytime" entry that floats at the top of the day.
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <label for="i-start" class="form-label">Start time <span class="text-muted small">— optional</span></label>
+      <input id="i-start" name="start_time" type="time" class="form-control"
+             value="{{ form.get('start_time', '') }}">
+    </div>
+
+    <div class="col-md-6">
+      <label for="i-end" class="form-label">End time <span class="text-muted small">— optional</span></label>
+      <input id="i-end" name="end_time" type="time" class="form-control"
+             value="{{ form.get('end_time', '') }}">
+    </div>
+
+    <div class="col-12">
+      <label for="i-location" class="form-label">Location <span class="text-muted small">— optional</span></label>
+      <input id="i-location" name="location" type="text" class="form-control"
+             value="{{ form.get('location', '') }}"
+             placeholder="Piazza del Colosseo, Rome" maxlength="300">
+    </div>
+
+    <div class="col-12">
+      <label for="i-notes" class="form-label">Notes <span class="text-muted small">— optional</span></label>
+      <textarea id="i-notes" name="notes" class="form-control" rows="3"
+                placeholder="Reservation details, dress code, what to bring…">{{ form.get('notes', '') }}</textarea>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-vp-primary">
+      {{ "Save changes" if item else "Add item" }}
+    </button>
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
+      Cancel
+    </a>
+  </div>
+</form>
+{% endblock %}

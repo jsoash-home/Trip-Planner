@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_section_tiles.html" import section_tiles %}
+{% block title %}{{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp; {{ trip.name }}
+</div>
+
+<div class="trip-overview-header">
+  <div class="trip-overview-emoji" aria-hidden="true">{{ trip.cover_emoji or '🧳' }}</div>
+  <div class="flex-grow-1">
+    <h1 class="h2 mb-1">{{ trip.name }}</h1>
+    {% if trip.destination %}
+      <div class="text-muted">{{ trip.destination }}</div>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2 align-self-start">
+    {% if is_owner(user_role) %}
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('trip_edit', trip_id=trip.id) }}">
+        <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
+      </a>
+      <form method="post" action="{{ url_for('trip_delete', trip_id=trip.id) }}"
+            class="m-0"
+            onsubmit="return confirm('Delete &quot;{{ trip.name | e }}&quot;? This cannot be undone.');">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-trash me-1" aria-hidden="true"></i> Delete
+        </button>
+      </form>
+    {% elif user_role == 'editor' %}
+      <span class="badge bg-light text-muted border">Editor access</span>
+    {% else %}
+      <span class="badge bg-light text-muted border">View-only</span>
+    {% endif %}
+  </div>
+</div>
+
+{# Step 9: when the trip is in progress, lead with today's schedule. #}
+{% if status == 'in_progress' %}
+  <section class="today-section mt-3">
+    <div class="today-section-header">
+      <span class="today-section-tag">Today</span>
+      <span class="today-section-day">
+        Day {{ today_day_number }} of {{ duration_days }}
+        &middot; {{ today_date.strftime('%a, %b %d') }}
+      </span>
+    </div>
+    {% if today_items %}
+      <ul class="today-section-list">
+        {% for it in today_items %}
+          <li class="today-section-item {{ category_css(it.category) }}">
+            <span class="today-section-time">{{ format_time_range(it.start_time, it.end_time) }}</span>
+            <div class="today-section-body">
+              <div class="today-section-title">
+                <span aria-hidden="true">{{ category_emoji(it.category) }}</span>
+                {{ it.title }}
+                {% if it.linked_booking_id %}
+                  <i class="bi bi-link-45deg text-muted" aria-label="Linked to a booking" title="Linked to a booking"></i>
+                {% endif %}
+              </div>
+              {% if it.location %}
+                <div class="today-section-meta">📍 {{ it.location }}</div>
+              {% endif %}
+              {% if it.notes %}
+                <div class="today-section-meta">{{ it.notes }}</div>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="today-section-empty">
+        Nothing on today's schedule yet.
+        {% if can_edit(user_role) %}
+          <a href="{{ url_for('itinerary_new', trip_id=trip.id, day=today_date.isoformat()) }}">
+            Add something to today &rarr;
+          </a>
+        {% endif %}
+      </p>
+    {% endif %}
+    <a class="today-section-cta" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
+      View full itinerary &rarr;
+    </a>
+  </section>
+{% endif %}
+
+<div class="row g-3 mt-3">
+  <div class="col-md-6">
+    <div class="vp-card h-100">
+      <div class="text-muted small">Dates</div>
+      <div class="fs-5 fw-semibold">
+        {{ trip.start_date.strftime('%b %d, %Y') }} – {{ trip.end_date.strftime('%b %d, %Y') }}
+      </div>
+      <div class="text-muted small mt-1">{{ duration_days }} day{{ '' if duration_days == 1 else 's' }}</div>
+      <span class="trip-card-countdown {{ countdown_cls }} mt-3">{{ countdown }}</span>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="vp-card h-100">
+      <div class="text-muted small">Status</div>
+      <div class="fs-5 fw-semibold">{{ status_label }}</div>
+      <div class="text-muted small mt-2">
+        Primary currency: <strong>{{ trip.primary_currency }}</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="vp-section-title">Plan</h2>
+{{ section_tiles(tiles) }}
+
+{% if trip.notes %}
+  <div class="vp-card mt-4">
+    <div class="text-muted small mb-2">Notes</div>
+    <div class="trip-notes">{{ trip.notes | markdown | safe }}</div>
+  </div>
+{% endif %}
+{% endblock %}

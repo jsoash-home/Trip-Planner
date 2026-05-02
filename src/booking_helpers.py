@@ -1,0 +1,381 @@
+"""
+src/booking_helpers.py
+
+Pure helpers for bookings — booking-type metadata, form parsing, grouping
+for display, totals for rollups, and a friendly date/time range
+formatter. No DB, no Flask imports.
+"""
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+# (code, label, emoji) — order here is the display order on the bookings list.
+BOOKING_TYPES: Tuple[Tuple[str, str, str], ...] = (
+    ("flight",     "Flights",     "✈️"),
+    ("hotel",      "Hotels",      "🏨"),
+    ("car",        "Car rentals", "🚗"),
+    ("transport",  "Transport",   "🚆"),
+    ("activity",   "Activities",  "🎟️"),
+    ("restaurant", "Restaurants", "🍽️"),
+    ("other",      "Other",       "📌"),
+)
+
+BOOKING_TYPE_CODES = frozenset(t[0] for t in BOOKING_TYPES)
+BOOKING_TYPE_LABELS = {code: label for code, label, _ in BOOKING_TYPES}
+BOOKING_TYPE_EMOJIS = {code: emoji for code, _, emoji in BOOKING_TYPES}
+
+
+def booking_type_label(code: str) -> str:
+    """Human label for a booking type code. Falls back to the code itself."""
+    return BOOKING_TYPE_LABELS.get(code, code)
+
+
+def booking_type_emoji(code: str) -> str:
+    """Display emoji for a booking type. Falls back to a generic pin."""
+    return BOOKING_TYPE_EMOJIS.get(code, "📌")
+
+
+def _parse_datetime_local(s: str) -> datetime:
+    """
+    Parse the value emitted by <input type="datetime-local">.
+
+    The browser produces "YYYY-MM-DDTHH:MM" (and sometimes adds seconds).
+    We use strptime instead of fromisoformat because Python 3.9's
+    fromisoformat is stricter about formats than 3.11's.
+    """
+    s = s.strip()
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Could not parse datetime-local string: {s!r}")
+
+
+def parse_booking_form(
+    form: Mapping[str, str],
+    default_currency: str = "USD",
+) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Pull and validate booking fields from a submitted HTML form.
+
+    Returns (cleaned_data, errors). On success, cleaned_data is suitable
+    for `Booking(trip_id=..., **cleaned_data)`. On failure, errors is a
+    list of human-readable strings.
+    """
+    errors: List[str] = []
+
+    type_ = (form.get("type") or "").strip().lower()
+    if type_ not in BOOKING_TYPE_CODES:
+        errors.append("Booking type is not valid.")
+        type_ = "other"
+
+    title = (form.get("title") or "").strip()
+    if not title:
+        errors.append("Title is required.")
+
+    vendor = (form.get("vendor") or "").strip() or None
+    confirmation_number = (form.get("confirmation_number") or "").strip() or None
+    location = (form.get("location") or "").strip() or None
+    url = (form.get("url") or "").strip() or None
+    notes = (form.get("notes") or "").strip() or None
+
+    currency = (form.get("currency") or default_currency).strip().upper() or default_currency
+
+    cost: Optional[float] = None
+    cost_str = (form.get("cost") or "").strip()
+    if cost_str:
+        try:
+            cost = float(cost_str)
+        except ValueError:
+            errors.append("Cost must be a number (or blank).")
+            cost = None
+        else:
+            if cost < 0:
+                errors.append("Cost can't be negative.")
+                cost = None
+
+    start_dt: Optional[datetime] = None
+    end_dt: Optional[datetime] = None
+    start_str = (form.get("start_datetime") or "").strip()
+    end_str = (form.get("end_datetime") or "").strip()
+
+    if start_str:
+        try:
+            start_dt = _parse_datetime_local(start_str)
+        except ValueError:
+            errors.append("Start date/time is not valid.")
+    if end_str:
+        try:
+            end_dt = _parse_datetime_local(end_str)
+        except ValueError:
+            errors.append("End date/time is not valid.")
+
+    if start_dt and end_dt and end_dt < start_dt:
+        errors.append("End date/time must be on or after start.")
+
+    data: Dict[str, Any] = {
+        "type": type_,
+        "title": title,
+        "vendor": vendor,
+        "confirmation_number": confirmation_number,
+        "start_datetime": start_dt,
+        "end_datetime": end_dt,
+        "location": location,
+        "cost": cost,
+        "currency": currency,
+        "url": url,
+        "notes": notes,
+    }
+    return data, errors
+
+
+def booking_form_values(booking) -> Dict[str, str]:
+    """
+    Convert a Booking row into form field strings for the edit page.
+
+    Datetimes are rendered as "YYYY-MM-DDTHH:MM" (the format
+    <input type="datetime-local"> expects). Returns an empty dict when
+    booking is None, so the create form can use the same `form.get(...)`
+    template API.
+    """
+    if booking is None:
+        return {}
+    return {
+        "type": booking.type or "other",
+        "title": booking.title or "",
+        "vendor": booking.vendor or "",
+        "confirmation_number": booking.confirmation_number or "",
+        "start_datetime": booking.start_datetime.strftime("%Y-%m-%dT%H:%M") if booking.start_datetime else "",
+        "end_datetime": booking.end_datetime.strftime("%Y-%m-%dT%H:%M") if booking.end_datetime else "",
+        "location": booking.location or "",
+        "cost": "" if booking.cost is None else f"{booking.cost:g}",
+        "currency": booking.currency or "USD",
+        "url": booking.url or "",
+        "notes": booking.notes or "",
+    }
+
+
+def group_bookings_by_type(bookings: Iterable) -> List[Tuple[str, str, str, List]]:
+    """
+    Split bookings into display groups in canonical type order.
+
+    Returns a list of tuples: (type_code, label, emoji, items_in_group).
+    Empty types are omitted. Within each group, bookings are sorted by
+    start_datetime ascending (None goes last).
+    """
+    by_type: Dict[str, List] = {}
+    for b in bookings:
+        by_type.setdefault(b.type or "other", []).append(b)
+
+    out: List[Tuple[str, str, str, List]] = []
+    for code, label, emoji in BOOKING_TYPES:
+        items = by_type.get(code)
+        if not items:
+            continue
+        items.sort(key=lambda b: (b.start_datetime is None, b.start_datetime))
+        out.append((code, label, emoji, items))
+    return out
+
+
+def total_cost_by_currency(bookings: Iterable) -> Dict[str, float]:
+    """
+    Sum booking costs grouped by currency code.
+
+    Bookings with cost=None are skipped. Returned dict is keyed by
+    upper-case ISO code; an empty dict means no costed bookings.
+    """
+    totals: Dict[str, float] = {}
+    for b in bookings:
+        if b.cost is None:
+            continue
+        cur = (b.currency or "USD").upper()
+        totals[cur] = totals.get(cur, 0.0) + float(b.cost)
+    return totals
+
+
+def _strip_leading_zero_hour(time_str: str) -> str:
+    """`09:30 AM` → `9:30 AM`. Helper for format_datetime_range."""
+    if time_str.startswith("0"):
+        return time_str[1:]
+    return time_str
+
+
+def _auto_title(prefix: str, label: str, sep: str = " ") -> str:
+    """Compose an auto-generated itinerary title; drops the separator if no label."""
+    if not label:
+        return prefix
+    return f"{prefix}{sep}{label}"
+
+
+def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
+    """
+    Given a booking-shaped object (or row), return the list of itinerary
+    item field dicts that should be auto-created and linked back to it.
+
+    Each returned dict is shaped for `ItineraryItem(trip_id=...,
+    linked_booking_id=..., **out)`. Required fields a caller still needs
+    to fill: `trip_id`, `linked_booking_id`, and `order_within_day`.
+
+    Mapping:
+      flight     → "Depart <vendor>" on dep day, "Arrive <vendor>" on arr day  (transit)
+      hotel      → "Check in: <vendor>" / "Check out: <vendor>"                (other)
+      car        → "Pick up car: <vendor>" / "Return car: <vendor>"            (transit)
+      restaurant → booking.title at the booked time                            (meal)
+      activity   → booking.title at the booked time                            (sightseeing)
+      transport  → none
+      other      → none
+
+    Items with a missing required datetime are skipped (a flight with no
+    departure datetime emits no "Depart" item, etc.). The caller is
+    responsible for filtering items whose `day_date` falls outside the
+    trip's date range — this helper stays pure and date-range-agnostic.
+    """
+    type_ = (getattr(booking, "type", None) or "").lower()
+    vendor = getattr(booking, "vendor", None) or ""
+    title = getattr(booking, "title", None) or ""
+    start_dt: Optional[datetime] = getattr(booking, "start_datetime", None)
+    end_dt: Optional[datetime] = getattr(booking, "end_datetime", None)
+    location = getattr(booking, "location", None) or None
+
+    label = vendor or title  # vendor wins; fall back to the booking title
+    out: List[Dict[str, Any]] = []
+
+    if type_ == "flight":
+        if start_dt is not None:
+            out.append({
+                "title": _auto_title("Depart", label),
+                "category": "transit",
+                "day_date": start_dt.date(),
+                "start_time": start_dt.time(),
+                "end_time": None,
+                "location": location,
+                "notes": None,
+            })
+        if end_dt is not None:
+            out.append({
+                "title": _auto_title("Arrive", label),
+                "category": "transit",
+                "day_date": end_dt.date(),
+                "start_time": end_dt.time(),
+                "end_time": None,
+                "location": None,
+                "notes": None,
+            })
+
+    elif type_ == "hotel":
+        if start_dt is not None:
+            out.append({
+                "title": _auto_title("Check in:", label, sep=" "),
+                "category": "other",
+                "day_date": start_dt.date(),
+                "start_time": start_dt.time(),
+                "end_time": None,
+                "location": location,
+                "notes": None,
+            })
+        if end_dt is not None:
+            out.append({
+                "title": _auto_title("Check out:", label, sep=" "),
+                "category": "other",
+                "day_date": end_dt.date(),
+                "start_time": end_dt.time(),
+                "end_time": None,
+                "location": None,
+                "notes": None,
+            })
+
+    elif type_ == "car":
+        if start_dt is not None:
+            out.append({
+                "title": _auto_title("Pick up car:", label, sep=" "),
+                "category": "transit",
+                "day_date": start_dt.date(),
+                "start_time": start_dt.time(),
+                "end_time": None,
+                "location": location,
+                "notes": None,
+            })
+        if end_dt is not None:
+            out.append({
+                "title": _auto_title("Return car:", label, sep=" "),
+                "category": "transit",
+                "day_date": end_dt.date(),
+                "start_time": end_dt.time(),
+                "end_time": None,
+                "location": None,
+                "notes": None,
+            })
+
+    elif type_ == "restaurant":
+        if start_dt is not None:
+            # Use end_time only when it's on the same day (avoid "ends 12 hours later"
+            # weirdness if the user mistakenly sets a far-future end).
+            same_day_end_time = (
+                end_dt.time() if end_dt and end_dt.date() == start_dt.date() else None
+            )
+            out.append({
+                "title": title or label or "Reservation",
+                "category": "meal",
+                "day_date": start_dt.date(),
+                "start_time": start_dt.time(),
+                "end_time": same_day_end_time,
+                "location": location,
+                "notes": None,
+            })
+
+    elif type_ == "activity":
+        if start_dt is not None:
+            same_day_end_time = (
+                end_dt.time() if end_dt and end_dt.date() == start_dt.date() else None
+            )
+            out.append({
+                "title": title or label or "Activity",
+                "category": "sightseeing",
+                "day_date": start_dt.date(),
+                "start_time": start_dt.time(),
+                "end_time": same_day_end_time,
+                "location": location,
+                "notes": None,
+            })
+
+    # transport / other: no auto-link. (Falls through to the empty list.)
+
+    return out
+
+
+def format_datetime_range(
+    start: Optional[datetime],
+    end: Optional[datetime],
+) -> str:
+    """
+    Friendly display of a datetime range. Examples:
+
+      both, same day:  "Jun 1, 2026 · 9:30 AM – 11:45 AM"
+      both, two days:  "Jun 1 · 9:30 AM – Jun 10, 2026 · 2:15 PM"
+      start only:      "Jun 1, 2026 · 9:30 AM"
+      end only:        "→ Jun 10, 2026 · 2:15 PM"
+      neither:         ""
+    """
+    if start is None and end is None:
+        return ""
+
+    if start and end is None:
+        return start.strftime("%b %d, %Y · ") + _strip_leading_zero_hour(start.strftime("%I:%M %p"))
+
+    if end and start is None:
+        return "→ " + end.strftime("%b %d, %Y · ") + _strip_leading_zero_hour(end.strftime("%I:%M %p"))
+
+    # Both present
+    start_time = _strip_leading_zero_hour(start.strftime("%I:%M %p"))
+    end_time = _strip_leading_zero_hour(end.strftime("%I:%M %p"))
+    if start.date() == end.date():
+        return start.strftime("%b %d, %Y · ") + start_time + " – " + end_time
+    return (
+        start.strftime("%b %d · ") + start_time + " – "
+        + end.strftime("%b %d, %Y · ") + end_time
+    )

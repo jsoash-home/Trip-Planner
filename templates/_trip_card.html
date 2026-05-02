@@ -1,0 +1,23 @@
+{# Reusable trip card for the dashboard.
+   `today` is a date passed in from the route so we don't recompute it per card. #}
+{% macro trip_card(trip, today) %}
+  {% set status = derive_status(trip.start_date, trip.end_date, today) %}
+  {% set countdown = countdown_label(trip.start_date, trip.end_date, today) %}
+  {% set countdown_cls = ('is-active' if status == 'in_progress' else ('is-past' if status == 'completed' else '')) %}
+  <a class="trip-card" href="{{ url_for('trip_overview', trip_id=trip.id) }}">
+    <div class="trip-card-emoji" aria-hidden="true">{{ trip.cover_emoji or '🧳' }}</div>
+    <div class="trip-card-name">{{ trip.name }}</div>
+    {% if trip.destination %}
+      <div class="trip-card-destination">{{ trip.destination }}</div>
+    {% endif %}
+    <div class="trip-card-dates">
+      {{ trip.start_date.strftime('%b %d') }} – {{ trip.end_date.strftime('%b %d, %Y') }}
+    </div>
+    {% if current_user.is_authenticated and trip.owner_id != current_user.id %}
+      <div class="trip-card-shared-by">
+        Shared by {{ trip.owner.name or trip.owner.email }}
+      </div>
+    {% endif %}
+    <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
+  </a>
+{% endmacro %}

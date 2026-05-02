@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_trip_card.html" import trip_card with context %}
+{% block title %}My trips — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">My trips</h1>
+  <a class="btn btn-vp-primary" href="{{ url_for('trip_new') }}">
+    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+    New trip
+  </a>
+</div>
+
+{% if not has_any_trips %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">🧳</div>
+    <div class="vp-empty-title">No trips yet</div>
+    <p class="vp-empty-body">
+      Plan your first vacation to see it here. You can add bookings,
+      build a day-by-day itinerary, and invite travel partners by email.
+    </p>
+    <a class="btn btn-vp-primary" href="{{ url_for('trip_new') }}">
+      Plan a trip
+    </a>
+  </div>
+{% else %}
+  {% if grouped.active %}
+    <h2 class="vp-section-title">Active now</h2>
+    <div class="row g-3">
+      {% for t in grouped.active %}
+        <div class="col-md-6 col-lg-4">{{ trip_card(t, today) }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if grouped.upcoming %}
+    <h2 class="vp-section-title">Upcoming</h2>
+    <div class="row g-3">
+      {% for t in grouped.upcoming %}
+        <div class="col-md-6 col-lg-4">{{ trip_card(t, today) }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if grouped.past %}
+    <h2 class="vp-section-title">Past</h2>
+    <div class="row g-3">
+      {% for t in grouped.past %}
+        <div class="col-md-6 col-lg-4">{{ trip_card(t, today) }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

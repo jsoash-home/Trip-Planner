@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Itinerary — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Itinerary
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Itinerary</h1>
+  {% if can_edit(user_role) %}
+    <a class="btn btn-vp-primary" href="{{ url_for('itinerary_new', trip_id=trip.id) }}">
+      <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+      Add item
+    </a>
+  {% endif %}
+</div>
+
+{% if not days %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">⚠️</div>
+    <div class="vp-empty-title">Trip dates look wrong</div>
+    <p class="vp-empty-body">
+      Edit the trip so the start date is on or before the end date.
+    </p>
+  </div>
+{% else %}
+  <div class="day-columns">
+    {% for day_date, items in days %}
+      {% set day_index = loop.index %}
+      <div class="day-column">
+        <div class="day-column-header">
+          <div class="day-column-num">Day {{ day_index }}</div>
+          <div class="day-column-date">{{ day_date.strftime('%a, %b %d') }}</div>
+        </div>
+
+        <div class="day-column-body">
+          {% if not items %}
+            <div class="day-column-empty">No items yet</div>
+          {% endif %}
+          {% for it in items %}
+            <div class="itin-chip {{ category_css(it.category) }}">
+              <div class="itin-chip-time">{{ format_time_range(it.start_time, it.end_time) }}</div>
+              <div class="itin-chip-title">
+                <span class="itin-chip-emoji" aria-hidden="true">{{ category_emoji(it.category) }}</span>
+                {{ it.title }}
+                {% if it.linked_booking_id %}
+                  <span class="itin-chip-link" title="Linked to a booking" aria-label="Linked to a booking">
+                    <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                  </span>
+                {% endif %}
+              </div>
+              {% if it.location %}
+                <div class="itin-chip-meta">📍 {{ it.location }}</div>
+              {% endif %}
+              {% if it.notes %}
+                <div class="itin-chip-notes">{{ it.notes }}</div>
+              {% endif %}
+              {% if can_edit(user_role) %}
+                <div class="itin-chip-actions">
+                  <a class="btn btn-xs btn-outline-secondary"
+                     href="{{ url_for('itinerary_edit', trip_id=trip.id, item_id=it.id) }}"
+                     aria-label="Edit item">
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                  </a>
+                  <form method="post"
+                        class="d-inline m-0"
+                        action="{{ url_for('itinerary_delete', trip_id=trip.id, item_id=it.id) }}"
+                        onsubmit="return confirm('Delete &quot;{{ it.title | e }}&quot;?');">
+                    <button type="submit" class="btn btn-xs btn-outline-danger" aria-label="Delete item">
+                      <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                  </form>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          {% if can_edit(user_role) %}
+            <a class="day-column-add"
+               href="{{ url_for('itinerary_new', trip_id=trip.id, day=day_date.isoformat()) }}">
+              <i class="bi bi-plus-lg" aria-hidden="true"></i> Add to this day
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

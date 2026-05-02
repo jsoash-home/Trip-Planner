@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Bookings — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Bookings
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Bookings</h1>
+  {% if can_edit(user_role) %}
+    <a class="btn btn-vp-primary" href="{{ url_for('booking_new', trip_id=trip.id) }}">
+      <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+      Add booking
+    </a>
+  {% endif %}
+</div>
+
+{% if not grouped %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">🎫</div>
+    <div class="vp-empty-title">No bookings yet</div>
+    <p class="vp-empty-body">
+      {% if can_edit(user_role) %}
+        Add flights, hotels, car rentals, restaurant reservations, and
+        activities. Each booking can include a confirmation number, cost,
+        and a link to the email or vendor page.
+      {% else %}
+        The trip owner hasn't added any bookings to this trip yet.
+      {% endif %}
+    </p>
+    {% if can_edit(user_role) %}
+      <a class="btn btn-vp-primary" href="{{ url_for('booking_new', trip_id=trip.id) }}">
+        Add your first booking
+      </a>
+    {% endif %}
+  </div>
+{% else %}
+  {% if total_label %}
+    <div class="vp-card mb-3">
+      <div class="text-muted small">Total cost across all bookings</div>
+      <div class="fs-4 fw-semibold">{{ total_label }}</div>
+    </div>
+  {% endif %}
+
+  {% for code, label, emoji, items in grouped %}
+    <div class="bookings-group">
+      <h2 class="bookings-group-title">
+        <span class="bookings-group-emoji" aria-hidden="true">{{ emoji }}</span>
+        {{ label }}
+        <span class="bookings-group-count">{{ items | length }}</span>
+      </h2>
+
+      {% for b in items %}
+        <div class="booking-row">
+          <div class="booking-row-main">
+            <div class="booking-row-title">
+              {% if b.url %}
+                <a href="{{ b.url }}" target="_blank" rel="noopener noreferrer">{{ b.title }}</a>
+              {% else %}
+                {{ b.title }}
+              {% endif %}
+            </div>
+            <div class="booking-row-meta">
+              {% set when = format_datetime_range(b.start_datetime, b.end_datetime) %}
+              {% if when %}<span>{{ when }}</span>{% endif %}
+              {% if b.location %}<span>{{ b.location }}</span>{% endif %}
+              {% if b.vendor %}<span>{{ b.vendor }}</span>{% endif %}
+              {% if b.confirmation_number %}<span class="font-monospace">#{{ b.confirmation_number }}</span>{% endif %}
+            </div>
+            {% if b.notes %}
+              <div class="booking-row-notes">{{ b.notes }}</div>
+            {% endif %}
+          </div>
+          <div class="booking-row-right">
+            <div class="booking-row-cost">
+              {% if b.cost is not none %}
+                {{ format_money(b.cost, b.currency) }}
+              {% else %}
+                <span class="text-muted small">no cost</span>
+              {% endif %}
+            </div>
+            {% if can_edit(user_role) %}
+              <div class="booking-row-actions">
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="{{ url_for('booking_edit', trip_id=trip.id, booking_id=b.id) }}"
+                   aria-label="Edit booking">
+                  <i class="bi bi-pencil" aria-hidden="true"></i>
+                </a>
+                <form method="post"
+                      class="d-inline m-0"
+                      action="{{ url_for('booking_delete', trip_id=trip.id, booking_id=b.id) }}"
+                      onsubmit="return confirm('Delete &quot;{{ b.title | e }}&quot;?');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Delete booking">
+                    <i class="bi bi-trash" aria-hidden="true"></i>
+                  </button>
+                </form>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

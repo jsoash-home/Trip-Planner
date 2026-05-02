@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Packing — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Packing
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Packing</h1>
+  {% if can_edit(user_role) %}
+    <a class="btn btn-vp-primary" href="{{ url_for('packing_new', trip_id=trip.id) }}">
+      <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+      Add item
+    </a>
+  {% endif %}
+</div>
+
+{% if total == 0 %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">🧳</div>
+    <div class="vp-empty-title">Empty packing list</div>
+    <p class="vp-empty-body">
+      You've cleared everything from your packing list. Add an item to
+      start over, or trust that you really do remember everything.
+    </p>
+    {% if can_edit(user_role) %}
+      <a class="btn btn-vp-primary" href="{{ url_for('packing_new', trip_id=trip.id) }}">
+        Add an item
+      </a>
+    {% endif %}
+  </div>
+{% else %}
+  {# Progress hero #}
+  <div class="vp-card mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="flex-grow-1">
+        <div class="text-muted small">Progress</div>
+        <div class="fs-5 fw-semibold">{{ packed_count }} / {{ total }} packed</div>
+      </div>
+      <div class="packing-progress-pct">{{ percent }}%</div>
+    </div>
+    <div class="packing-progress-bar mt-2">
+      <div class="packing-progress-fill" style="width: {{ percent }}%"></div>
+    </div>
+  </div>
+
+  {# Per-category lists #}
+  {% for code, label, emoji, items in grouped %}
+    <div class="packing-group">
+      <h2 class="packing-group-title">
+        <span class="packing-group-emoji" aria-hidden="true">{{ emoji }}</span>
+        {{ label }}
+        <span class="packing-group-count">{{ items | length }}</span>
+      </h2>
+      {% for it in items %}
+        <div class="packing-row {% if it.packed %}is-packed{% endif %}">
+          {% if can_edit(user_role) %}
+            <form method="post"
+                  action="{{ url_for('packing_toggle', trip_id=trip.id, item_id=it.id) }}"
+                  class="packing-row-toggle m-0">
+              <input type="checkbox"
+                     class="form-check-input packing-checkbox"
+                     {% if it.packed %}checked{% endif %}
+                     onchange="this.form.submit()"
+                     aria-label="Toggle packed for {{ it.name }}">
+            </form>
+          {% else %}
+            {# Viewers see a read-only checkbox state. #}
+            <div class="packing-row-toggle">
+              <input type="checkbox"
+                     class="form-check-input packing-checkbox"
+                     {% if it.packed %}checked{% endif %}
+                     disabled
+                     aria-label="Packed status for {{ it.name }}">
+            </div>
+          {% endif %}
+          <div class="packing-row-main">
+            <div class="packing-row-name">{{ it.name }}</div>
+            {% if it.notes %}
+              <div class="packing-row-notes">{{ it.notes }}</div>
+            {% endif %}
+          </div>
+          {% if can_edit(user_role) %}
+            <div class="packing-row-actions">
+              <a class="btn btn-xs btn-outline-secondary"
+                 href="{{ url_for('packing_edit', trip_id=trip.id, item_id=it.id) }}"
+                 aria-label="Edit item">
+                <i class="bi bi-pencil" aria-hidden="true"></i>
+              </a>
+              <form method="post"
+                    class="d-inline m-0"
+                    action="{{ url_for('packing_delete', trip_id=trip.id, item_id=it.id) }}"
+                    onsubmit="return confirm('Delete &quot;{{ it.name | e }}&quot;?');">
+                <button type="submit" class="btn btn-xs btn-outline-danger" aria-label="Delete item">
+                  <i class="bi bi-trash" aria-hidden="true"></i>
+                </button>
+              </form>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

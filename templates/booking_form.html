@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit booking" if booking else "Add booking" }} — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('bookings_list', trip_id=trip.id) }}">Bookings</a>
+  &nbsp;›&nbsp; {{ "Edit" if booking else "New" }}
+</div>
+
+<h1 class="h3 mb-4">{{ "Edit booking" if booking else "Add booking" }}</h1>
+
+{% if errors %}
+  <div class="vp-flash vp-flash--danger">
+    <strong>Please fix:</strong>
+    <ul class="mb-0 mt-1">
+      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+{% if not booking %}
+  <div class="vp-flash vp-flash--info">
+    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    Saving this booking will auto-create matching entries in your itinerary
+    (a hotel becomes Check in / Check out, a flight becomes Depart / Arrive,
+    etc.). You can edit or remove those entries individually afterward.
+  </div>
+{% else %}
+  <div class="vp-flash vp-flash--info">
+    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    Editing here doesn't change items already in your itinerary — update those
+    separately if you need to. Deleting this booking will remove its linked
+    itinerary items.
+  </div>
+{% endif %}
+
+<form method="post" class="vp-card" novalidate>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label for="b-type" class="form-label">Type</label>
+      {% set current_type = form.get('type', 'flight') %}
+      <select id="b-type" name="type" class="form-select">
+        {% for code, label, emoji in booking_types %}
+          <option value="{{ code }}" {% if code == current_type %}selected{% endif %}>
+            {{ emoji }} {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-8">
+      <label for="b-title" class="form-label">Title</label>
+      <input id="b-title" name="title" type="text" class="form-control"
+             value="{{ form.get('title', '') }}"
+             placeholder="e.g. Delta DL104 JFK → FCO" required maxlength="300" autofocus>
+    </div>
+
+    <div class="col-md-6">
+      <label for="b-vendor" class="form-label">Vendor <span class="text-muted small">— optional</span></label>
+      <input id="b-vendor" name="vendor" type="text" class="form-control"
+             value="{{ form.get('vendor', '') }}"
+             placeholder="Delta, Marriott, Hertz…" maxlength="200">
+    </div>
+
+    <div class="col-md-6">
+      <label for="b-conf" class="form-label">Confirmation number <span class="text-muted small">— optional</span></label>
+      <input id="b-conf" name="confirmation_number" type="text" class="form-control font-monospace"
+             value="{{ form.get('confirmation_number', '') }}"
+             placeholder="ABC123" maxlength="120">
+    </div>
+
+    <div class="col-md-6">
+      <label for="b-start" class="form-label">Start <span class="text-muted small">— optional</span></label>
+      <input id="b-start" name="start_datetime" type="datetime-local" class="form-control"
+             value="{{ form.get('start_datetime', '') }}">
+      <div class="form-text">Departure / check-in / reservation time.</div>
+    </div>
+
+    <div class="col-md-6">
+      <label for="b-end" class="form-label">End <span class="text-muted small">— optional</span></label>
+      <input id="b-end" name="end_datetime" type="datetime-local" class="form-control"
+             value="{{ form.get('end_datetime', '') }}">
+      <div class="form-text">Arrival / check-out time.</div>
+    </div>
+
+    <div class="col-12">
+      <label for="b-location" class="form-label">Location <span class="text-muted small">— optional</span></label>
+      <input id="b-location" name="location" type="text" class="form-control"
+             value="{{ form.get('location', '') }}"
+             placeholder="JFK Terminal 4, or 1234 Via del Corso, Rome" maxlength="300">
+    </div>
+
+    <div class="col-md-4">
+      <label for="b-cost" class="form-label">Cost <span class="text-muted small">— optional</span></label>
+      <input id="b-cost" name="cost" type="number" step="0.01" min="0"
+             class="form-control"
+             value="{{ form.get('cost', '') }}"
+             placeholder="0.00">
+    </div>
+
+    <div class="col-md-4">
+      <label for="b-currency" class="form-label">Currency</label>
+      {% set current_cur = form.get('currency', trip.primary_currency) %}
+      <select id="b-currency" name="currency" class="form-select">
+        {% for code, label in supported_currencies %}
+          <option value="{{ code }}" {% if code == current_cur %}selected{% endif %}>
+            {{ code }} — {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label for="b-url" class="form-label">Link <span class="text-muted small">— optional</span></label>
+      <input id="b-url" name="url" type="url" class="form-control"
+             value="{{ form.get('url', '') }}"
+             placeholder="https://…" maxlength="500">
+    </div>
+
+    <div class="col-12">
+      <label for="b-notes" class="form-label">Notes <span class="text-muted small">— optional</span></label>
+      <textarea id="b-notes" name="notes" class="form-control" rows="3"
+                placeholder="Seat number, room preference, dress code…">{{ form.get('notes', '') }}</textarea>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-vp-primary">
+      {{ "Save changes" if booking else "Add booking" }}
+    </button>
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('bookings_list', trip_id=trip.id) }}">
+      Cancel
+    </a>
+  </div>
+</form>
+{% endblock %}

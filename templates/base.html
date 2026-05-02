@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Vacation Planner{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <nav class="vp-navbar">
+    <div class="container">
+      <a class="vp-brand" href="{{ url_for('trips_list') if current_user.is_authenticated else url_for('index') }}">
+        <span class="vp-brand-logo" aria-hidden="true">
+          <i class="bi bi-suitcase-lg-fill"></i>
+        </span>
+        <span>Vacation Planner</span>
+      </a>
+
+      {% if current_user.is_authenticated %}
+        {% set ep = request.endpoint %}
+        <div class="vp-nav">
+          <a class="vp-navlink {% if ep == 'trips_list' %}is-active{% endif %}"
+             href="{{ url_for('trips_list') }}">
+            <i class="bi bi-collection" aria-hidden="true"></i>
+            <span>My trips</span>
+          </a>
+          <a class="vp-navlink {% if ep == 'trip_new' %}is-active{% endif %}"
+             href="{{ url_for('trip_new') }}">
+            <i class="bi bi-plus-circle" aria-hidden="true"></i>
+            <span>New trip</span>
+          </a>
+        </div>
+
+        <div class="vp-user ms-auto">
+          <span class="vp-avatar" aria-hidden="true">
+            {% if current_user.avatar_url %}
+              <img src="{{ current_user.avatar_url }}" alt="" referrerpolicy="no-referrer">
+            {% else %}
+              {{ (current_user.name or '?')[0] | upper }}
+            {% endif %}
+          </span>
+          <span>{{ current_user.name }}</span>
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('logout') }}">Log out</a>
+        </div>
+      {% endif %}
+    </div>
+  </nav>
+
+  <main id="main-content" class="container" tabindex="-1">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div class="vp-flash vp-flash--{{ category if category in ['info','success','warning','danger'] else 'info' }}">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

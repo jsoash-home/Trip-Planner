@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Budget — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Budget
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Budget</h1>
+  <a class="btn btn-outline-secondary" href="{{ url_for('bookings_list', trip_id=trip.id) }}">
+    <i class="bi bi-arrow-up-right me-1" aria-hidden="true"></i>
+    Manage bookings
+  </a>
+</div>
+
+{% if categories | length == 0 %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">💰</div>
+    <div class="vp-empty-title">No costs to show yet</div>
+    <p class="vp-empty-body">
+      Add bookings with cost values and they'll roll up here grouped by
+      type. The budget page derives entirely from your bookings — no
+      separate data entry.
+    </p>
+    <a class="btn btn-vp-primary" href="{{ url_for('booking_new', trip_id=trip.id) }}">
+      Add a booking
+    </a>
+  </div>
+{% else %}
+  {# Hero card — grand total + booking summary #}
+  <div class="budget-hero vp-card mb-3">
+    <div class="row align-items-center g-3">
+      <div class="col-md-7">
+        <div class="text-muted small">Estimated total</div>
+        <div class="budget-hero-amount">{{ grand_total_label }}</div>
+      </div>
+      <div class="col-md-5">
+        <div class="d-flex flex-column gap-1 small">
+          <div>
+            <strong>{{ total_bookings }}</strong>
+            booking{{ '' if total_bookings == 1 else 's' }} on this trip
+          </div>
+          {% if total_uncosted > 0 %}
+            <div class="text-warning">
+              <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+              <strong>{{ total_uncosted }}</strong> without a cost set
+            </div>
+          {% endif %}
+          <div class="text-muted">
+            Currencies aren't converted — totals are kept separate per currency.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Per-category rollup #}
+  <div class="budget-table">
+    {% for cat in categories %}
+      <div class="budget-row">
+        <div class="budget-row-emoji" aria-hidden="true">{{ cat.emoji }}</div>
+        <div class="budget-row-main">
+          <div class="budget-row-label">{{ cat.label }}</div>
+          <div class="budget-row-meta">
+            {{ cat.count }} booking{{ '' if cat.count == 1 else 's' }}
+            {% if cat.uncosted_count > 0 %}
+              · <span class="text-warning">{{ cat.uncosted_count }} without cost</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="budget-row-total">
+          {{ format_money_totals(cat.totals_by_currency, empty='no cost yet') }}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

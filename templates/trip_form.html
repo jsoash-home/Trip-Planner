@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit trip" if trip else "Plan a new trip" }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <a class="text-muted text-decoration-none small" href="{{ url_for('trip_overview', trip_id=trip.id) if trip else url_for('trips_list') }}">
+    <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+    {{ trip.name if trip else "My trips" }}
+  </a>
+</div>
+
+<h1 class="h3 mb-4">{{ "Edit trip" if trip else "Plan a new trip" }}</h1>
+
+{% if errors %}
+  <div class="vp-flash vp-flash--danger">
+    <strong>Please fix:</strong>
+    <ul class="mb-0 mt-1">
+      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<form method="post" class="vp-card" novalidate>
+  <div class="row g-3">
+    <div class="col-12">
+      <label for="trip-name" class="form-label">Trip name</label>
+      <input id="trip-name" name="name" type="text" class="form-control"
+             value="{{ form.get('name', '') }}"
+             placeholder="e.g. Italy Honeymoon 2026" required maxlength="200" autofocus>
+    </div>
+
+    <div class="col-12">
+      <label for="trip-destination" class="form-label">Destination <span class="text-muted small">— optional</span></label>
+      <input id="trip-destination" name="destination" type="text" class="form-control"
+             value="{{ form.get('destination', '') }}"
+             placeholder="Rome, Florence, Venice" maxlength="300">
+    </div>
+
+    <div class="col-md-6">
+      <label for="trip-start" class="form-label">Start date</label>
+      <input id="trip-start" name="start_date" type="date" class="form-control"
+             value="{{ form.get('start_date', '') }}" required>
+    </div>
+
+    <div class="col-md-6">
+      <label for="trip-end" class="form-label">End date</label>
+      <input id="trip-end" name="end_date" type="date" class="form-control"
+             value="{{ form.get('end_date', '') }}" required>
+    </div>
+
+    <div class="col-md-6">
+      <label for="trip-emoji" class="form-label">Cover emoji <span class="text-muted small">— optional</span></label>
+      <input id="trip-emoji" name="cover_emoji" type="text" class="form-control"
+             value="{{ form.get('cover_emoji', '') }}"
+             placeholder="🏝️" maxlength="10">
+      <div class="emoji-picks mt-2">
+        {% for e in suggested_emojis %}
+          <button type="button" class="emoji-pick" data-emoji="{{ e }}" aria-label="Use {{ e }}">{{ e }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <label for="trip-currency" class="form-label">Primary currency</label>
+      {% set current_cur = form.get('primary_currency', 'USD') %}
+      <select id="trip-currency" name="primary_currency" class="form-select">
+        {% for code, label in supported_currencies %}
+          <option value="{{ code }}" {% if code == current_cur %}selected{% endif %}>
+            {{ code }} — {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="form-text">Used as the default for booking costs and budget rollups.</div>
+    </div>
+
+    <div class="col-12">
+      <label for="trip-notes" class="form-label">Notes <span class="text-muted small">— optional, supports markdown</span></label>
+      <textarea id="trip-notes" name="notes" class="form-control" rows="4"
+                placeholder="Anything you want to remember — links, who's coming, ideas.">{{ form.get('notes', '') }}</textarea>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-vp-primary">
+      {{ "Save changes" if trip else "Plan trip" }}
+    </button>
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('trip_overview', trip_id=trip.id) if trip else url_for('trips_list') }}">
+      Cancel
+    </a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Emoji quick-pick: clicking a preset fills the cover-emoji field.
+  document.querySelectorAll(".emoji-pick").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var input = document.getElementById("trip-emoji");
+      if (input) { input.value = btn.dataset.emoji; }
+    });
+  });
+</script>
+{% endblock %}
