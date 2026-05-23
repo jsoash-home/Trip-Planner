@@ -255,6 +255,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": None,
                 "location": location,
                 "notes": None,
+                "auto_kind": "depart",
             })
         if end_dt is not None:
             out.append({
@@ -265,6 +266,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": None,
                 "location": None,
                 "notes": None,
+                "auto_kind": "arrive",
             })
 
     elif type_ == "hotel":
@@ -277,6 +279,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": None,
                 "location": location,
                 "notes": None,
+                "auto_kind": "check_in",
             })
         if end_dt is not None:
             out.append({
@@ -287,6 +290,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": None,
                 "location": None,
                 "notes": None,
+                "auto_kind": "check_out",
             })
 
     elif type_ == "car":
@@ -299,6 +303,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": None,
                 "location": location,
                 "notes": None,
+                "auto_kind": "pickup",
             })
         if end_dt is not None:
             out.append({
@@ -309,6 +314,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": None,
                 "location": None,
                 "notes": None,
+                "auto_kind": "return",
             })
 
     elif type_ == "restaurant":
@@ -326,6 +332,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": same_day_end_time,
                 "location": location,
                 "notes": None,
+                "auto_kind": "single",
             })
 
     elif type_ == "activity":
@@ -341,6 +348,7 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "end_time": same_day_end_time,
                 "location": location,
                 "notes": None,
+                "auto_kind": "single",
             })
 
     # transport / other: no auto-link. (Falls through to the empty list.)
