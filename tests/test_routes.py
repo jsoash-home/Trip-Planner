@@ -15,7 +15,6 @@ def app():
     """Bind the app to an in-memory SQLite DB for this test."""
     flask_app.config["TESTING"] = True
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    flask_app.config["WTF_CSRF_ENABLED"] = False
     with flask_app.app_context():
         db.drop_all()
         db.create_all()
@@ -70,4 +69,4 @@ def test_delete_booking_cascades_linked_items(app, trip):
     remaining = ItineraryItem.query.filter_by(trip_id=trip.id).all()
     assert len(remaining) == 1
     assert remaining[0].title == "Coffee"
-    assert Booking.query.get(b.id) is None
+    assert db.session.get(Booking, b.id) is None
