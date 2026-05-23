@@ -761,7 +761,19 @@ def booking_edit(trip_id, booking_id):
             setattr(booking, field, value)
         db.session.commit()
         logger.info("Edited booking id=%s title=%r", booking.id, booking.title)
-        flash("Booking updated.", "success")
+
+        linked_count = ItineraryItem.query.filter_by(
+            linked_booking_id=booking.id
+        ).count()
+        if linked_count > 0:
+            noun = "item" if linked_count == 1 else "items"
+            flash(
+                f"Booking updated. {linked_count} linked itinerary {noun} may now "
+                f"be out of sync — check the Itinerary page.",
+                "success",
+            )
+        else:
+            flash("Booking updated.", "success")
         return redirect(url_for("bookings_list", trip_id=trip.id))
 
     return render_template(
