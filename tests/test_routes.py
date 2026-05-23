@@ -70,3 +70,41 @@ def test_delete_booking_cascades_linked_items(app, trip):
     assert len(remaining) == 1
     assert remaining[0].title == "Coffee"
     assert db.session.get(Booking, b.id) is None
+
+
+def test_itinerary_edit_marks_customized(app, trip, owner):
+    """Editing a linked itinerary item flips customized_by_user to True."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 2, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="check_in", day_date=date(2026, 6, 2),
+                         title="Check in: Hilton", category="other")
+    db.session.add(item)
+    db.session.commit()
+    assert item.customized_by_user is False
+
+    with flask_app.test_client() as client:
+        # Bypass login by stuffing the session.
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(owner.id)
+            sess["_fresh"] = True
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/{item.id}/edit",
+            data={
+                "title": "Check in: Hilton (front desk)",
+                "category": "other",
+                "day_date": "2026-06-02",
+                "start_time": "15:00",
+                "end_time": "",
+                "location": "",
+                "notes": "",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    db.session.refresh(item)
+    assert item.customized_by_user is True
+    assert item.title == "Check in: Hilton (front desk)"

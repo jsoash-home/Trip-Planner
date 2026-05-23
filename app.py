@@ -893,6 +893,8 @@ def itinerary_edit(trip_id, item_id):
             data["order_within_day"] = _next_order_within_day(trip.id, data["day_date"])
         for field, value in data.items():
             setattr(item, field, value)
+        if item.linked_booking_id is not None:
+            item.customized_by_user = True
         db.session.commit()
         logger.info("Edited itinerary item id=%s title=%r", item.id, item.title)
         flash("Itinerary item updated.", "success")
