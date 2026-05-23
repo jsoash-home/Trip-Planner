@@ -143,22 +143,23 @@ os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 def _ensure_drift_columns() -> None:
     """
     Add the auto_kind + customized_by_user columns to itinerary_item if
-    they don't exist yet. SQLite + Postgres both accept the ANSI
-    ``ALTER TABLE ... ADD COLUMN`` for these column types. We swallow
-    OperationalError so a re-run on already-migrated DBs is a no-op.
+    they don't exist yet. SQLite raises OperationalError when a column
+    already exists; Postgres raises ProgrammingError. We catch both so
+    a re-run on already-migrated DBs is a silent no-op, while real
+    bugs in the migration SQL still surface.
     """
     from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError, ProgrammingError
     statements = [
         "ALTER TABLE itinerary_item ADD COLUMN auto_kind VARCHAR(20)",
-        "ALTER TABLE itinerary_item ADD COLUMN customized_by_user BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE itinerary_item ADD COLUMN customized_by_user BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     with db.engine.begin() as conn:
         for stmt in statements:
             try:
                 conn.execute(text(stmt))
                 logger.info("Migration: applied %s", stmt)
-            except Exception as e:
-                # Column already exists, or DB is mid-create — both fine.
+            except (OperationalError, ProgrammingError) as e:
                 logger.debug("Migration skipped (%s): %s", stmt, e)
 
 
