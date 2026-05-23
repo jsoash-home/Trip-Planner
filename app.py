@@ -951,6 +951,32 @@ def itinerary_delete(trip_id, item_id):
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
 
+@app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/drift")
+@login_required
+def itinerary_drift(trip_id, item_id):
+    """Show the drift report for a linked itinerary item. Viewer+ access."""
+    trip, item, user_role = _itinerary_item_with_access_or_404(
+        trip_id, item_id, role="viewer"
+    )
+    if item.linked_booking_id is None:
+        flash("This item isn't linked to a booking.", "warning")
+        return redirect(url_for("trip_itinerary", trip_id=trip.id))
+    booking = db.session.get(Booking, item.linked_booking_id)
+    if booking is None:
+        flash("The linked booking is gone — try Unlink instead.", "warning")
+        return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+    drift = detect_drift(item, booking)
+    return render_template(
+        "itinerary_drift.html",
+        trip=trip,
+        item=item,
+        booking=booking,
+        drift=drift,
+        user_role=user_role,
+    )
+
+
 @app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/resync", methods=["POST"])
 @login_required
 def itinerary_resync(trip_id, item_id):
