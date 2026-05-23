@@ -44,6 +44,7 @@ from models import Booking, ItineraryItem, PackingItem, Trip, TripCollaborator, 
 from src.booking_helpers import (
     BOOKING_TYPES,
     DRIFT_FIELDS,
+    DriftReport,
     auto_itinerary_items_for_booking,
     booking_form_values,
     detect_drift,
@@ -819,10 +820,18 @@ def trip_itinerary(trip_id):
     drift_count = 0
     for it in items:
         it.drift = None
-        if it.linked_booking_id and it.linked_booking_id in bookings_by_id:
-            it.drift = detect_drift(it, bookings_by_id[it.linked_booking_id])
-            if it.drift is not None:
-                drift_count += 1
+        if not it.linked_booking_id:
+            continue
+        booking = bookings_by_id.get(it.linked_booking_id)
+        if booking is None:
+            # Booking row is gone but the cascade didn't clean this item up.
+            # Treat as orphaned so the UI can prompt the user to unlink.
+            it.drift = DriftReport(is_orphaned=True)
+            drift_count += 1
+            continue
+        it.drift = detect_drift(it, booking)
+        if it.drift is not None:
+            drift_count += 1
 
     days = group_items_by_day(items, trip.start_date, trip.end_date)
     return render_template(
