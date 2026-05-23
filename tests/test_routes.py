@@ -108,3 +108,64 @@ def test_itinerary_edit_marks_customized(app, trip, owner):
     db.session.refresh(item)
     assert item.customized_by_user is True
     assert item.title == "Check in: Hilton (front desk)"
+
+
+def _make_flight_with_arrive(trip):
+    """Helper: make a flight booking + its 'arrive' linked item (already drifted).
+
+    The item's title is intentionally stale ('Arrive Delta') so resync
+    has something to do.
+    """
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="arrive", day_date=date(2026, 6, 1),
+                         title="Arrive Delta",  # stale — booking now says United
+                         category="transit")
+    db.session.add(item)
+    db.session.commit()
+    return b, item
+
+
+def _login(client, user):
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(user.id)
+        sess["_fresh"] = True
+
+
+def test_resync_updates_fields_from_booking(app, trip, owner):
+    _, item = _make_flight_with_arrive(trip)
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
+    assert resp.status_code == 302
+    db.session.refresh(item)
+    assert item.title == "Arrive United"
+    assert item.customized_by_user is False
+
+
+def test_keep_mine_marks_customized(app, trip, owner):
+    _, item = _make_flight_with_arrive(trip)
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/keep-mine")
+    assert resp.status_code == 302
+    db.session.refresh(item)
+    assert item.customized_by_user is True
+    assert item.title == "Arrive Delta"  # unchanged
+
+
+def test_unlink_clears_linked_booking(app, trip, owner):
+    b, item = _make_flight_with_arrive(trip)
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/unlink")
+    assert resp.status_code == 302
+    db.session.refresh(item)
+    assert item.linked_booking_id is None
+    assert item.auto_kind is None
+    # The booking still exists.
+    assert db.session.get(Booking, b.id) is not None

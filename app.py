@@ -923,6 +923,78 @@ def itinerary_delete(trip_id, item_id):
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
 
+@app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/resync", methods=["POST"])
+@login_required
+def itinerary_resync(trip_id, item_id):
+    """Re-apply the auto-generated values from the linked booking. Editor+ only.
+
+    Updates the drifting fields, clears customized_by_user (since the item
+    is now back in auto shape), and leaves linked_booking_id intact.
+    """
+    trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
+    if item.linked_booking_id is None:
+        flash("This item isn’t linked to a booking.", "warning")
+        return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+    booking = db.session.get(Booking, item.linked_booking_id)
+    if booking is None:
+        flash("The linked booking is gone — try Unlink instead.", "warning")
+        return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+    would_be_items = auto_itinerary_items_for_booking(booking)
+    matches = [w for w in would_be_items if w.get("auto_kind") == item.auto_kind]
+    if not matches:
+        flash(
+            "The booking no longer suggests this item. Use Unlink or Delete.",
+            "warning",
+        )
+        return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+    would_be = matches[0]
+    for f in ("title", "category", "day_date", "start_time", "end_time", "location"):
+        setattr(item, f, would_be.get(f))
+    item.customized_by_user = False
+    db.session.commit()
+    logger.info("Resynced itinerary item id=%s from booking id=%s",
+                item.id, booking.id)
+    flash(f"Resynced “{item.title}” to the booking.", "success")
+    return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+
+@app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/keep-mine", methods=["POST"])
+@login_required
+def itinerary_keep_mine(trip_id, item_id):
+    """Silence drift detection for this item. Editor+ only.
+
+    Sets customized_by_user=True without changing any fields, so the
+    drift badge disappears but the booking link is preserved.
+    """
+    trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
+    item.customized_by_user = True
+    db.session.commit()
+    logger.info("Marked itinerary item id=%s as customized_by_user", item.id)
+    flash(f"Kept your version of “{item.title}”.", "success")
+    return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+
+@app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/unlink", methods=["POST"])
+@login_required
+def itinerary_unlink(trip_id, item_id):
+    """Sever the booking link. Editor+ only.
+
+    Sets linked_booking_id and auto_kind to NULL. The item becomes a
+    plain stand-alone itinerary entry that no longer drifts.
+    """
+    trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
+    item.linked_booking_id = None
+    item.auto_kind = None
+    item.customized_by_user = False
+    db.session.commit()
+    logger.info("Unlinked itinerary item id=%s from its booking", item.id)
+    flash(f"Unlinked “{item.title}” from its booking.", "success")
+    return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+
 @app.route("/trips/<int:trip_id>/budget")
 @login_required
 def trip_budget(trip_id):
