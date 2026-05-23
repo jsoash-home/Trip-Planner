@@ -59,6 +59,18 @@
               {% if it.notes %}
                 <div class="itin-chip-notes">{{ it.notes }}</div>
               {% endif %}
+              {% if it.drift %}
+                <a class="itin-drift-pill"
+                   href="{{ url_for('itinerary_drift', trip_id=trip.id, item_id=it.id) }}"
+                   title="This item is out of sync with its booking">
+                  <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+                  {% if it.drift.is_orphaned %}
+                    Booking removed this
+                  {% else %}
+                    {{ it.drift.fields | length }} field{{ '' if it.drift.fields|length == 1 else 's' }} drifted
+                  {% endif %}
+                </a>
+              {% endif %}
               {% if can_edit(user_role) %}
                 <div class="itin-chip-actions">
                   <a class="btn btn-xs btn-outline-secondary"

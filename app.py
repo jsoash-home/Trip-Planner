@@ -46,6 +46,7 @@ from src.booking_helpers import (
     DRIFT_FIELDS,
     auto_itinerary_items_for_booking,
     booking_form_values,
+    detect_drift,
     format_datetime_range,
     group_bookings_by_type,
     parse_booking_form,
@@ -807,12 +808,29 @@ def trip_itinerary(trip_id):
     """Day-by-day timeline view. Viewer+ access."""
     trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
     items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+
+    # Annotate each linked item with its drift state (or None).
+    # Pre-fetch all referenced bookings in one query so we don't N+1.
+    linked_booking_ids = {it.linked_booking_id for it in items if it.linked_booking_id}
+    bookings_by_id = {
+        b.id: b for b in Booking.query.filter(Booking.id.in_(linked_booking_ids)).all()
+    } if linked_booking_ids else {}
+
+    drift_count = 0
+    for it in items:
+        it.drift = None
+        if it.linked_booking_id and it.linked_booking_id in bookings_by_id:
+            it.drift = detect_drift(it, bookings_by_id[it.linked_booking_id])
+            if it.drift is not None:
+                drift_count += 1
+
     days = group_items_by_day(items, trip.start_date, trip.end_date)
     return render_template(
         "trip_itinerary.html",
         trip=trip,
         user_role=user_role,
         days=days,
+        drift_count=drift_count,
     )
 
 
