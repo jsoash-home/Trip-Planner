@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from types import SimpleNamespace
 from typing import Optional
 
 from src.booking_helpers import (
@@ -450,43 +449,45 @@ def test_auto_itinerary_restaurant_drops_end_time_on_different_day():
 
 
 def test_auto_kind_set_for_flight():
-    b = SimpleNamespace(type="flight", title="UA101", vendor="United",
-                        start_datetime=datetime(2026, 6, 1, 10, 0),
-                        end_datetime=datetime(2026, 6, 1, 14, 0),
-                        location=None)
+    b = FakeBooking(type="flight", title="UA101", vendor="United",
+                    start_datetime=datetime(2026, 6, 1, 10, 0),
+                    end_datetime=datetime(2026, 6, 1, 14, 0))
     items = auto_itinerary_items_for_booking(b)
     assert [it["auto_kind"] for it in items] == ["depart", "arrive"]
 
 
 def test_auto_kind_set_for_hotel():
-    b = SimpleNamespace(type="hotel", title="Hilton", vendor="Hilton",
-                        start_datetime=datetime(2026, 6, 1, 15, 0),
-                        end_datetime=datetime(2026, 6, 3, 11, 0),
-                        location=None)
+    b = FakeBooking(type="hotel", title="Hilton", vendor="Hilton",
+                    start_datetime=datetime(2026, 6, 1, 15, 0),
+                    end_datetime=datetime(2026, 6, 3, 11, 0))
     items = auto_itinerary_items_for_booking(b)
     assert [it["auto_kind"] for it in items] == ["check_in", "check_out"]
 
 
 def test_auto_kind_set_for_car():
-    b = SimpleNamespace(type="car", title="Hertz", vendor="Hertz",
-                        start_datetime=datetime(2026, 6, 1, 9, 0),
-                        end_datetime=datetime(2026, 6, 5, 17, 0),
-                        location=None)
+    b = FakeBooking(type="car", title="Hertz", vendor="Hertz",
+                    start_datetime=datetime(2026, 6, 1, 9, 0),
+                    end_datetime=datetime(2026, 6, 5, 17, 0))
     items = auto_itinerary_items_for_booking(b)
     assert [it["auto_kind"] for it in items] == ["pickup", "return"]
 
 
 def test_auto_kind_set_for_restaurant():
-    b = SimpleNamespace(type="restaurant", title="Noma", vendor="Noma",
-                        start_datetime=datetime(2026, 6, 1, 19, 0),
-                        end_datetime=None, location=None)
+    b = FakeBooking(type="restaurant", title="Noma", vendor="Noma",
+                    start_datetime=datetime(2026, 6, 1, 19, 0))
     items = auto_itinerary_items_for_booking(b)
     assert items[0]["auto_kind"] == "single"
 
 
 def test_auto_kind_set_for_activity():
-    b = SimpleNamespace(type="activity", title="Museum", vendor=None,
-                        start_datetime=datetime(2026, 6, 1, 10, 0),
-                        end_datetime=None, location=None)
+    b = FakeBooking(type="activity", title="Museum",
+                    start_datetime=datetime(2026, 6, 1, 10, 0))
     items = auto_itinerary_items_for_booking(b)
     assert items[0]["auto_kind"] == "single"
+
+
+def test_auto_kind_transport_returns_no_items():
+    b = FakeBooking(type="transport", title="Train",
+                    start_datetime=datetime(2026, 6, 1, 10, 0),
+                    end_datetime=datetime(2026, 6, 1, 12, 0))
+    assert auto_itinerary_items_for_booking(b) == []
