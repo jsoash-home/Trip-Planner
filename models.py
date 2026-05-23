@@ -165,6 +165,17 @@ class ItineraryItem(db.Model):
         db.Integer, db.ForeignKey("booking.id"), nullable=True, index=True
     )
 
+    # When this item was auto-spawned from a booking, this records which
+    # "slot" it was: depart/arrive/check_in/check_out/pickup/return/single.
+    # NULL for stand-alone items and for legacy linked items predating
+    # this column.
+    auto_kind = db.Column(db.String(20), nullable=True)
+
+    # Flips to True the first time a user edits this item via the
+    # itinerary form, or when they click "Keep mine" on the drift card.
+    # When True, drift detection is silenced for this item.
+    customized_by_user = db.Column(db.Boolean, nullable=False, default=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
