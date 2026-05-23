@@ -9,6 +9,16 @@
   &nbsp;›&nbsp; Itinerary
 </div>
 
+{% if drift_count > 0 %}
+  <div class="alert alert-warning d-flex align-items-center justify-content-between" role="alert">
+    <div>
+      <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+      {{ drift_count }} itinerary item{{ '' if drift_count == 1 else 's' }} out of sync with {{ 'its' if drift_count == 1 else 'their' }} booking{{ '' if drift_count == 1 else 's' }}.
+    </div>
+    <small class="text-muted">Click the warning pill on each item to review.</small>
+  </div>
+{% endif %}
+
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h1 class="h3 mb-0">Itinerary</h1>
   {% if can_edit(user_role) %}
