@@ -7,6 +7,7 @@ formatter. No DB, no Flask imports.
 """
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
@@ -387,3 +388,73 @@ def format_datetime_range(
         start.strftime("%b %d · ") + start_time + " – "
         + end.strftime("%b %d, %Y · ") + end_time
     )
+
+
+# ────────────────────────────────────────────────────────────────────
+# Drift detection — compares a stored ItineraryItem to what its linked
+# booking would auto-generate now. Pure: no DB, no Flask.
+# ────────────────────────────────────────────────────────────────────
+
+# Fields we compare between a stored item and the auto-generated would-be.
+_DRIFT_FIELDS: Tuple[str, ...] = (
+    "title", "category", "day_date", "start_time", "end_time", "location",
+)
+
+
+@dataclass
+class FieldDrift:
+    """One field that disagrees between the stored item and the booking."""
+    field: str
+    current: Any   # value currently on the stored ItineraryItem
+    would_be: Any  # value the auto-generator would produce now
+
+
+@dataclass
+class DriftReport:
+    """Aggregate drift result for a single linked itinerary item."""
+    fields: List[FieldDrift] = field(default_factory=list)
+    is_orphaned: bool = False  # True when the booking no longer generates this slot
+
+    @property
+    def has_drift(self) -> bool:
+        return self.is_orphaned or bool(self.fields)
+
+
+def detect_drift(item, booking) -> Optional[DriftReport]:
+    """
+    Compare a stored ItineraryItem to the auto-generated would-be item
+    from its linked booking. Returns:
+
+      - None when the item is in sync, has no linked booking, has been
+        marked customized_by_user, or is a legacy item without auto_kind.
+      - DriftReport(is_orphaned=True) when the booking no longer
+        generates an item of this auto_kind.
+      - DriftReport(fields=[...]) listing every field that disagrees.
+
+    Pure: takes any object exposing the required attributes; no DB call.
+    """
+    if getattr(item, "linked_booking_id", None) is None:
+        return None
+    if getattr(item, "customized_by_user", False):
+        return None
+
+    kind = getattr(item, "auto_kind", None)
+    if kind is None:
+        return None  # legacy linked item — drift not tracked
+
+    would_be_items = auto_itinerary_items_for_booking(booking)
+    matches = [w for w in would_be_items if w.get("auto_kind") == kind]
+    if not matches:
+        return DriftReport(fields=[], is_orphaned=True)
+
+    would_be = matches[0]
+    drifts: List[FieldDrift] = []
+    for f in _DRIFT_FIELDS:
+        current = getattr(item, f, None)
+        proposed = would_be.get(f)
+        if current != proposed:
+            drifts.append(FieldDrift(field=f, current=current, would_be=proposed))
+
+    if not drifts:
+        return None
+    return DriftReport(fields=drifts, is_orphaned=False)
