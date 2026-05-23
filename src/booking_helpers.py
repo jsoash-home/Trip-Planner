@@ -396,7 +396,7 @@ def format_datetime_range(
 # ────────────────────────────────────────────────────────────────────
 
 # Fields we compare between a stored item and the auto-generated would-be.
-_DRIFT_FIELDS: Tuple[str, ...] = (
+DRIFT_FIELDS: Tuple[str, ...] = (
     "title", "category", "day_date", "start_time", "end_time", "location",
 )
 
@@ -449,7 +449,7 @@ def detect_drift(item, booking) -> Optional[DriftReport]:
 
     would_be = matches[0]
     drifts: List[FieldDrift] = []
-    for f in _DRIFT_FIELDS:
+    for f in DRIFT_FIELDS:
         current = getattr(item, f, None)
         proposed = would_be.get(f)
         if current != proposed:

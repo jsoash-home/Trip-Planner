@@ -43,6 +43,7 @@ from flask_login import (
 from models import Booking, ItineraryItem, PackingItem, Trip, TripCollaborator, User, db
 from src.booking_helpers import (
     BOOKING_TYPES,
+    DRIFT_FIELDS,
     auto_itinerary_items_for_booking,
     booking_form_values,
     format_datetime_range,
@@ -951,7 +952,7 @@ def itinerary_resync(trip_id, item_id):
         return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
     would_be = matches[0]
-    for f in ("title", "category", "day_date", "start_time", "end_time", "location"):
+    for f in DRIFT_FIELDS:
         setattr(item, f, would_be.get(f))
     item.customized_by_user = False
     db.session.commit()
