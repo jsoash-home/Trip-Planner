@@ -404,7 +404,7 @@ _DRIFT_FIELDS: Tuple[str, ...] = (
 @dataclass
 class FieldDrift:
     """One field that disagrees between the stored item and the booking."""
-    field: str
+    field_name: str
     current: Any   # value currently on the stored ItineraryItem
     would_be: Any  # value the auto-generator would produce now
 
@@ -453,7 +453,7 @@ def detect_drift(item, booking) -> Optional[DriftReport]:
         current = getattr(item, f, None)
         proposed = would_be.get(f)
         if current != proposed:
-            drifts.append(FieldDrift(field=f, current=current, would_be=proposed))
+            drifts.append(FieldDrift(field_name=f, current=current, would_be=proposed))
 
     if not drifts:
         return None

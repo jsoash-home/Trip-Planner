@@ -4,7 +4,7 @@ what its linked booking would auto-generate now."""
 from datetime import date, datetime, time
 from types import SimpleNamespace
 
-from src.booking_helpers import DriftReport, detect_drift
+from src.booking_helpers import DriftReport, FieldDrift, detect_drift
 
 
 def _item(**overrides):
@@ -57,14 +57,14 @@ def test_day_change_detected():
     report = detect_drift(item, _flight())
     assert isinstance(report, DriftReport)
     assert report.is_orphaned is False
-    fields = {f.field: (f.current, f.would_be) for f in report.fields}
+    fields = {f.field_name: (f.current, f.would_be) for f in report.fields}
     assert fields["day_date"] == (date(2026, 6, 2), date(2026, 6, 1))
 
 
 def test_title_change_detected():
     item = _item(title="Depart Delta")  # booking says United
     report = detect_drift(item, _flight())
-    fields = {f.field for f in report.fields}
+    fields = {f.field_name for f in report.fields}
     assert "title" in fields
 
 
@@ -86,3 +86,7 @@ def test_orphaned_when_booking_no_longer_generates_kind():
 def test_has_drift_property():
     assert DriftReport(fields=[], is_orphaned=True).has_drift is True
     assert DriftReport(fields=[], is_orphaned=False).has_drift is False
+    assert DriftReport(
+        fields=[FieldDrift(field_name="title", current="a", would_be="b")],
+        is_orphaned=False,
+    ).has_drift is True
