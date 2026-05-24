@@ -167,7 +167,7 @@ def _ensure_drift_columns() -> None:
                 logger.info("Migration: applied %s", stmt)
             except Exception as e:
                 # Column already exists, or DB is mid-create — both fine.
-                logger.debug("Migration skipped (%s): %s", stmt, e)
+                logger.warning("Migration skipped (%s): %s", stmt, e)
 
         # One-time backfill: translate the deprecated customized_by_user
         # flag into the equivalent "all fields touched" state. The
@@ -183,7 +183,7 @@ def _ensure_drift_columns() -> None:
             ))
             logger.info("Migration: backfilled auto_fields_touched from customized_by_user")
         except Exception as e:
-            logger.debug("Migration backfill skipped: %s", e)
+            logger.warning("Migration backfill skipped: %s", e)
 
 
 db.init_app(app)

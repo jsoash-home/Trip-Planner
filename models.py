@@ -171,9 +171,9 @@ class ItineraryItem(db.Model):
     # this column.
     auto_kind = db.Column(db.String(20), nullable=True)
 
-    # DEPRECATED in phase 3: replaced by auto_fields_touched. No longer
-    # read or written by application code. Column left in place for one
-    # release before being dropped.
+    # DEPRECATED in phase 3: will be replaced by auto_fields_touched.
+    # Still read and written by some routes until Tasks 3–6 of the
+    # phase-3 plan land. Column will be dropped in a later phase.
     customized_by_user = db.Column(db.Boolean, nullable=False, default=False)
 
     # Set of DRIFT_FIELDS the user has personally edited on this item.
