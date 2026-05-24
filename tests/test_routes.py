@@ -297,3 +297,120 @@ def test_drift_review_wizard_redirects_when_item_not_drifting(app, trip, owner):
     assert resp.status_code == 302
     assert "/drift-review" in resp.headers["Location"]
     assert f"/item/{item.id}" not in resp.headers["Location"]
+
+
+def test_wizard_resync_redirects_to_next_drifting(app, trip, owner):
+    """Resync with ?from=wizard advances to the next drifting item's wizard."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 1, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    a = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_in", day_date=date(2026, 6, 1),
+                      title="WRONG check-in", category="other")
+    z = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_out", day_date=date(2026, 6, 5),
+                      title="WRONG check-out", category="other")
+    db.session.add_all([a, z])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/{a.id}/resync?from=wizard"
+        )
+    assert resp.status_code == 302
+    assert f"/drift-review/item/{z.id}" in resp.headers["Location"]
+
+
+def test_wizard_resync_redirects_to_landing_when_no_more_drift(app, trip, owner):
+    """Resync the last drifting item with ?from=wizard → land on review home."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="arrive", day_date=date(2026, 6, 1),
+                         title="Arrive Delta", category="transit")
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/{item.id}/resync?from=wizard"
+        )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(f"/trips/{trip.id}/itinerary/drift-review")
+
+
+def test_wizard_keep_mine_redirects_to_next_drifting(app, trip, owner):
+    """Keep mine with ?from=wizard advances to the next drifting item."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 1, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    a = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_in", day_date=date(2026, 6, 1),
+                      title="WRONG check-in", category="other")
+    z = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_out", day_date=date(2026, 6, 5),
+                      title="WRONG check-out", category="other")
+    db.session.add_all([a, z])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/{a.id}/keep-mine?from=wizard"
+        )
+    assert resp.status_code == 302
+    assert f"/drift-review/item/{z.id}" in resp.headers["Location"]
+
+
+def test_wizard_unlink_redirects_to_next_drifting(app, trip, owner):
+    """Unlink with ?from=wizard advances to the next drifting item."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 1, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    a = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_in", day_date=date(2026, 6, 1),
+                      title="WRONG check-in", category="other")
+    z = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_out", day_date=date(2026, 6, 5),
+                      title="WRONG check-out", category="other")
+    db.session.add_all([a, z])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/{a.id}/unlink?from=wizard"
+        )
+    assert resp.status_code == 302
+    assert f"/drift-review/item/{z.id}" in resp.headers["Location"]
+
+
+def test_non_wizard_resync_still_redirects_to_itinerary(app, trip, owner):
+    """Phase-1 behavior preserved: no ?from=wizard → redirect to itinerary."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="arrive", day_date=date(2026, 6, 1),
+                         title="Arrive Delta", category="transit")
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(f"/trips/{trip.id}/itinerary")

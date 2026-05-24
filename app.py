@@ -1069,6 +1069,34 @@ def itinerary_drift(trip_id, item_id):
     )
 
 
+def _redirect_after_wizard_action(trip_id: int, current_item_id: int):
+    """After a wizard-originated action, redirect to the next drifting
+    item's wizard step — or to the landing page if no more drift.
+
+    The "next" is computed against the chronological position of
+    `current_item_id` in the full trip, which works even after the
+    action has cleared drift on the current item.
+    """
+    items = ItineraryItem.query.filter_by(trip_id=trip_id).all()
+    _annotate_drift_for_items(items)
+    all_ordered = chronological_order(items)
+    current_pos = next(
+        (i for i, it in enumerate(all_ordered) if it.id == current_item_id),
+        -1,
+    )
+    next_item = next(
+        (it for i, it in enumerate(all_ordered)
+         if i > current_pos and it.drift is not None),
+        None,
+    )
+    if next_item is not None:
+        return redirect(url_for(
+            "itinerary_drift_review_item",
+            trip_id=trip_id, item_id=next_item.id,
+        ))
+    return redirect(url_for("itinerary_drift_review", trip_id=trip_id))
+
+
 @app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/resync", methods=["POST"])
 @login_required
 def itinerary_resync(trip_id, item_id):
@@ -1104,6 +1132,8 @@ def itinerary_resync(trip_id, item_id):
     logger.info("Resynced itinerary item id=%s from booking id=%s",
                 item.id, booking.id)
     flash(f"Resynced “{item.title}” to the booking.", "success")
+    if request.args.get("from") == "wizard":
+        return _redirect_after_wizard_action(trip.id, item.id)
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
 
@@ -1120,6 +1150,8 @@ def itinerary_keep_mine(trip_id, item_id):
     db.session.commit()
     logger.info("Marked itinerary item id=%s as customized_by_user", item.id)
     flash(f"Kept your version of “{item.title}”.", "success")
+    if request.args.get("from") == "wizard":
+        return _redirect_after_wizard_action(trip.id, item.id)
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
 
@@ -1138,6 +1170,8 @@ def itinerary_unlink(trip_id, item_id):
     db.session.commit()
     logger.info("Unlinked itinerary item id=%s from its booking", item.id)
     flash(f"Unlinked “{item.title}” from its booking.", "success")
+    if request.args.get("from") == "wizard":
+        return _redirect_after_wizard_action(trip.id, item.id)
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
 
