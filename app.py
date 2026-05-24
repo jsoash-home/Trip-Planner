@@ -17,7 +17,7 @@ import os
 import subprocess
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import markdown as md_lib
 from dotenv import load_dotenv
@@ -45,11 +45,13 @@ from src.booking_helpers import (
     BOOKING_TYPES,
     DRIFT_FIELDS,
     DriftReport,
+    NewItemSuggestion,
     auto_itinerary_items_for_booking,
     booking_form_values,
     detect_drift,
     format_datetime_range,
     group_bookings_by_type,
+    missing_auto_kinds_for_booking,
     parse_booking_form,
     parse_touched,
     serialize_touched,
@@ -866,6 +868,36 @@ def _annotate_drift_for_items(items):
     return drift_count
 
 
+def _annotate_new_items_for_trip(trip) -> List["NewItemSuggestion"]:
+    """Return every NewItemSuggestion across all bookings for the trip.
+
+    Pre-fetches all bookings and their linked items in two queries to
+    avoid N+1.
+    """
+    bookings = Booking.query.filter_by(trip_id=trip.id).all()
+    if not bookings:
+        return []
+    booking_ids = [b.id for b in bookings]
+    items = ItineraryItem.query.filter(
+        ItineraryItem.linked_booking_id.in_(booking_ids)
+    ).all()
+    existing_by_booking: dict = {}
+    for it in items:
+        if it.auto_kind:
+            existing_by_booking.setdefault(it.linked_booking_id, set()).add(it.auto_kind)
+
+    out: List[NewItemSuggestion] = []
+    for b in bookings:
+        existing = existing_by_booking.get(b.id, set())
+        for w in missing_auto_kinds_for_booking(
+            b, existing, trip.start_date, trip.end_date,
+        ):
+            out.append(NewItemSuggestion(
+                booking=b, auto_kind=w["auto_kind"], item_data=w,
+            ))
+    return out
+
+
 @app.route("/trips/<int:trip_id>/itinerary")
 @login_required
 def trip_itinerary(trip_id):
@@ -873,6 +905,7 @@ def trip_itinerary(trip_id):
     trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
     items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
     drift_count = _annotate_drift_for_items(items)
+    new_items_count = len(_annotate_new_items_for_trip(trip))
     days = group_items_by_day(items, trip.start_date, trip.end_date)
     return render_template(
         "trip_itinerary.html",
@@ -880,6 +913,7 @@ def trip_itinerary(trip_id):
         user_role=user_role,
         days=days,
         drift_count=drift_count,
+        new_items_count=new_items_count,
     )
 
 
@@ -1019,6 +1053,7 @@ def itinerary_drift_review(trip_id):
     drifting = [it for it in chronological_order(items) if it.drift is not None]
     resyncable = [it for it in drifting if not it.drift.is_orphaned]
     orphans = [it for it in drifting if it.drift.is_orphaned]
+    new_items = _annotate_new_items_for_trip(trip)
     return render_template(
         "drift_review.html",
         trip=trip,
@@ -1027,6 +1062,7 @@ def itinerary_drift_review(trip_id):
         resyncable_count=len(resyncable),
         orphans=orphans,
         first_drifting_id=drifting[0].id if drifting else None,
+        new_items=new_items,
     )
 
 

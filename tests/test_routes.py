@@ -643,3 +643,32 @@ def test_resync_skips_touched_fields_and_preserves_touched_set(app, trip, owner)
     assert item.title == "Arrive at JFK gate B22"   # preserved (touched)
     assert item.day_date == date(2026, 6, 1)         # updated (not touched)
     assert item.auto_fields_touched == "title"       # preserved
+
+
+def test_drift_review_lists_new_item_suggestions(app, trip, owner):
+    """After a booking edit that adds a previously-missing auto-slot, the
+    drift review landing page lists the suggestion."""
+    # Flight that started with only a depart datetime (so only the depart
+    # item exists). Now end_datetime is filled in → 'arrive' is missing.
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))  # newly added
+    db.session.add(b)
+    db.session.commit()
+    # Only the depart item exists — no arrive yet.
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="depart",
+        day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/itinerary/drift-review")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    # Suggestion text appears.
+    assert "Arrive United" in body
+    assert "New items the booking would create" in body
