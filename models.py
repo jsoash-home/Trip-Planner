@@ -171,10 +171,15 @@ class ItineraryItem(db.Model):
     # this column.
     auto_kind = db.Column(db.String(20), nullable=True)
 
-    # Flips to True the first time a user edits this item via the
-    # itinerary form, or when they click "Keep mine" on the drift card.
-    # When True, drift detection is silenced for this item.
+    # DEPRECATED in phase 3: replaced by auto_fields_touched. No longer
+    # read or written by application code. Column left in place for one
+    # release before being dropped.
     customized_by_user = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Set of DRIFT_FIELDS the user has personally edited on this item.
+    # Stored as a sorted comma-separated string (e.g. "day_date,title").
+    # Empty string means nothing touched. Replaces customized_by_user.
+    auto_fields_touched = db.Column(db.String(255), nullable=False, default="")
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

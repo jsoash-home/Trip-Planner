@@ -146,25 +146,44 @@ os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 def _ensure_drift_columns() -> None:
     """
-    Add the auto_kind + customized_by_user columns to itinerary_item if
-    they don't exist yet. SQLite raises OperationalError when a column
-    already exists; Postgres raises ProgrammingError. We catch both so
-    a re-run on already-migrated DBs is a silent no-op, while real
-    bugs in the migration SQL still surface.
+    Add the drift-tracking columns to itinerary_item if they don't exist
+    yet. SQLite + Postgres both accept the ANSI ``ALTER TABLE ... ADD
+    COLUMN`` since the versions we support. We swallow OperationalError
+    so a re-run on already-migrated DBs is a no-op.
+
+    Also backfills auto_fields_touched from the deprecated
+    customized_by_user flag — see the phase-3 design doc.
     """
     from sqlalchemy import text
-    from sqlalchemy.exc import OperationalError, ProgrammingError
     statements = [
         "ALTER TABLE itinerary_item ADD COLUMN auto_kind VARCHAR(20)",
         "ALTER TABLE itinerary_item ADD COLUMN customized_by_user BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE itinerary_item ADD COLUMN auto_fields_touched VARCHAR(255) NOT NULL DEFAULT ''",
     ]
     with db.engine.begin() as conn:
         for stmt in statements:
             try:
                 conn.execute(text(stmt))
                 logger.info("Migration: applied %s", stmt)
-            except (OperationalError, ProgrammingError) as e:
+            except Exception as e:
+                # Column already exists, or DB is mid-create — both fine.
                 logger.debug("Migration skipped (%s): %s", stmt, e)
+
+        # One-time backfill: translate the deprecated customized_by_user
+        # flag into the equivalent "all fields touched" state. The
+        # `auto_fields_touched = ''` guard makes the UPDATE a no-op on
+        # re-run. Sort order matches what serialize_touched(DRIFT_FIELDS)
+        # produces.
+        try:
+            conn.execute(text(
+                "UPDATE itinerary_item "
+                "SET auto_fields_touched = 'category,day_date,end_time,location,start_time,title' "
+                "WHERE customized_by_user = 1 "
+                "AND (auto_fields_touched = '' OR auto_fields_touched IS NULL)"
+            ))
+            logger.info("Migration: backfilled auto_fields_touched from customized_by_user")
+        except Exception as e:
+            logger.debug("Migration backfill skipped: %s", e)
 
 
 db.init_app(app)
