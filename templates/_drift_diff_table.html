@@ -1,0 +1,20 @@
+{# Renders the field-level diff for one item's drift report.
+   Expects: drift (DriftReport with .fields). #}
+<table class="table table-sm align-middle mb-3">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Current</th>
+      <th>Booking says</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in drift.fields %}
+      <tr>
+        <td class="text-muted">{{ f.field_name }}</td>
+        <td>{{ f.current if f.current is not none else '—' }}</td>
+        <td><strong>{{ f.would_be if f.would_be is not none else '—' }}</strong></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

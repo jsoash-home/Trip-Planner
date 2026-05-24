@@ -31,44 +31,12 @@
     </p>
     <p class="mb-0">You can keep the item as a stand-alone entry, or delete it.</p>
   {% else %}
-    <table class="table table-sm align-middle mb-3">
-      <thead>
-        <tr>
-          <th>Field</th>
-          <th>Current</th>
-          <th>Booking says</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in drift.fields %}
-          <tr>
-            <td class="text-muted">{{ f.field_name }}</td>
-            <td>{{ f.current if f.current is not none else '—' }}</td>
-            <td><strong>{{ f.would_be if f.would_be is not none else '—' }}</strong></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {% include "_drift_diff_table.html" %}
   {% endif %}
 
-  {% if can_edit(user_role) %}
-    <div class="d-flex gap-2 flex-wrap mt-3 pt-3 border-top">
-      {% if drift is not none and not drift.is_orphaned %}
-        <form method="post" action="{{ url_for('itinerary_resync', trip_id=trip.id, item_id=item.id) }}" class="m-0">
-          <button class="btn btn-vp-primary" type="submit">
-            <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
-            Resync to booking
-          </button>
-        </form>
-        <form method="post" action="{{ url_for('itinerary_keep_mine', trip_id=trip.id, item_id=item.id) }}" class="m-0">
-          <button class="btn btn-outline-secondary" type="submit">Keep mine</button>
-        </form>
-      {% endif %}
-      <form method="post" action="{{ url_for('itinerary_unlink', trip_id=trip.id, item_id=item.id) }}" class="m-0">
-        <button class="btn btn-outline-secondary" type="submit">Unlink from booking</button>
-      </form>
-      <a class="btn btn-link ms-auto" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Back to itinerary</a>
-    </div>
-  {% endif %}
+  <div class="mt-3 pt-3 border-top d-flex gap-2 flex-wrap align-items-center">
+    {% include "_drift_actions.html" %}
+    <a class="btn btn-link ms-auto" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Back to itinerary</a>
+  </div>
 </div>
 {% endblock %}
