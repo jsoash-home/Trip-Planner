@@ -4,7 +4,7 @@ what its linked booking would auto-generate now."""
 from datetime import date, datetime, time
 from types import SimpleNamespace
 
-from src.booking_helpers import DriftReport, FieldDrift, detect_drift
+from src.booking_helpers import DriftReport, FieldDrift, detect_drift, serialize_touched
 
 
 def _item(**overrides):
@@ -13,6 +13,7 @@ def _item(**overrides):
         linked_booking_id=1,
         auto_kind="depart",
         customized_by_user=False,
+        auto_fields_touched="",
         title="Depart United",
         category="transit",
         day_date=date(2026, 6, 1),
@@ -41,10 +42,14 @@ def test_no_linked_booking_returns_none():
     assert detect_drift(_item(linked_booking_id=None), _flight()) is None
 
 
-def test_customized_by_user_returns_none():
-    # Booking dates changed, but user has marked the item as customized.
+def test_customized_by_user_flag_is_ignored_under_per_field_model():
+    """The deprecated customized_by_user flag no longer silences drift.
+    Silencing is expressed by populating auto_fields_touched instead."""
     item = _item(customized_by_user=True, day_date=date(2026, 1, 1))
-    assert detect_drift(item, _flight()) is None
+    report = detect_drift(item, _flight())
+    assert report is not None
+    fields = {f.field_name for f in report.fields}
+    assert "day_date" in fields
 
 
 def test_legacy_item_without_auto_kind_returns_none():
@@ -90,3 +95,42 @@ def test_has_drift_property():
         fields=[FieldDrift(field_name="title", current="a", would_be="b")],
         is_orphaned=False,
     ).has_drift is True
+
+
+def test_touched_field_is_silently_ignored():
+    """If the user has touched the title, a title drift should not be flagged."""
+    item = _item(title="Depart Delta",
+                 auto_fields_touched=serialize_touched({"title"}))
+    # Booking still says United, but user has touched the title — no drift.
+    assert detect_drift(item, _flight()) is None
+
+
+def test_partial_touched_still_flags_untouched_fields():
+    """Touched=title; day_date differs → report has only day_date."""
+    item = _item(
+        title="Depart Delta",
+        day_date=date(2026, 6, 5),  # booking says Jun 1
+        auto_fields_touched=serialize_touched({"title"}),
+    )
+    report = detect_drift(item, _flight())
+    assert report is not None
+    fields = {f.field_name for f in report.fields}
+    assert fields == {"day_date"}
+
+
+def test_all_touched_returns_none():
+    """auto_fields_touched contains every DRIFT_FIELD → silenced."""
+    from src.booking_helpers import DRIFT_FIELDS
+    item = _item(
+        title="Depart Delta",
+        day_date=date(2026, 1, 1),
+        auto_fields_touched=serialize_touched(DRIFT_FIELDS),
+    )
+    assert detect_drift(item, _flight()) is None
+
+
+def test_touched_set_without_actual_drift_returns_none():
+    """Touched but no drifted untouched field → returns None."""
+    item = _item(auto_fields_touched=serialize_touched({"title"}))
+    # All fields match the booking → no drift even though title is touched.
+    assert detect_drift(item, _flight()) is None

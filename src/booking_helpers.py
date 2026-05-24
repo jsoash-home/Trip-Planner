@@ -446,17 +446,15 @@ def detect_drift(item, booking) -> Optional[DriftReport]:
     Compare a stored ItineraryItem to the auto-generated would-be item
     from its linked booking. Returns:
 
-      - None when the item is in sync, has no linked booking, has been
-        marked customized_by_user, or is a legacy item without auto_kind.
+      - None when the item is in sync, has no linked booking, is a legacy
+        item without auto_kind, or every drifted field is in auto_fields_touched.
       - DriftReport(is_orphaned=True) when the booking no longer
         generates an item of this auto_kind.
-      - DriftReport(fields=[...]) listing every field that disagrees.
+      - DriftReport(fields=[...]) listing every untouched field that disagrees.
 
     Pure: takes any object exposing the required attributes; no DB call.
     """
     if getattr(item, "linked_booking_id", None) is None:
-        return None
-    if getattr(item, "customized_by_user", False):
         return None
 
     kind = getattr(item, "auto_kind", None)
@@ -468,9 +466,12 @@ def detect_drift(item, booking) -> Optional[DriftReport]:
     if not matches:
         return DriftReport(fields=[], is_orphaned=True)
 
+    touched = parse_touched(getattr(item, "auto_fields_touched", ""))
     would_be = matches[0]
     drifts: List[FieldDrift] = []
     for f in DRIFT_FIELDS:
+        if f in touched:
+            continue
         current = getattr(item, f, None)
         proposed = would_be.get(f)
         if current != proposed:
