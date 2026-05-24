@@ -1036,10 +1036,13 @@ def itinerary_drift_review_item(trip_id, item_id):
     )
 
 
-@app.route("/trips/<int:trip_id>/itinerary/drift-review/bulk-resync")
+@app.route(
+    "/trips/<int:trip_id>/itinerary/drift-review/bulk-resync",
+    methods=["GET", "POST"],
+)
 @login_required
 def itinerary_drift_review_bulk_resync(trip_id):
-    """Confirmation page for the bulk-resync action. Editor+ access.
+    """Confirmation page (GET) + bulk apply (POST). Editor+ access.
 
     Lists every eligible item (drifting + not orphaned) with its diff.
     Flags the count of orphaned items being skipped. Redirects back to
@@ -1055,6 +1058,27 @@ def itinerary_drift_review_bulk_resync(trip_id):
     if not eligible:
         flash("Nothing to bulk-resync — all drifting items need individual review.",
               "info")
+        return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+    if request.method == "POST":
+        # Re-fetch each item's booking (avoid trusting stale objects),
+        # then apply resync. Single commit covers all items.
+        updated = 0
+        for it in eligible:
+            booking = db.session.get(Booking, it.linked_booking_id)
+            if booking is None:
+                continue
+            if _apply_resync_to_item(it, booking):
+                updated += 1
+        db.session.commit()
+        logger.info("Bulk-resynced %d itinerary items for trip_id=%s",
+                    updated, trip.id)
+        flash(
+            f"Resynced {updated} item{'' if updated == 1 else 's'} to "
+            f"{'its' if updated == 1 else 'their'} booking"
+            f"{'' if updated == 1 else 's'}.",
+            "success",
+        )
         return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
 
     return render_template(

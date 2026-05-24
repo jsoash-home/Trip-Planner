@@ -488,3 +488,87 @@ def test_bulk_resync_confirm_redirects_when_nothing_eligible(app, trip, owner):
     assert resp.headers["Location"].endswith(
         f"/trips/{trip.id}/itinerary/drift-review"
     )
+
+
+def test_bulk_resync_post_updates_all_eligible(app, trip, owner):
+    """POST resyncs every eligible item in one transaction."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 1, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    a = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_in", day_date=date(2026, 6, 1),
+                      title="WRONG check-in", category="other")
+    z = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_out", day_date=date(2026, 6, 5),
+                      title="WRONG check-out", category="other")
+    db.session.add_all([a, z])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/drift-review/bulk-resync"
+        )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(
+        f"/trips/{trip.id}/itinerary/drift-review"
+    )
+    db.session.refresh(a)
+    db.session.refresh(z)
+    assert a.title == "Check in: Hilton"
+    assert z.title == "Check out: Hilton"
+    assert a.customized_by_user is False
+    assert z.customized_by_user is False
+
+
+def test_bulk_resync_post_skips_orphans(app, trip, owner):
+    """Orphans in the mix don't break the resync of eligible items."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    eligible_item = ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id,
+        auto_kind="arrive", day_date=date(2026, 6, 1),
+        title="Arrive Delta", category="transit",
+    )
+    db.session.add(eligible_item)
+    b2 = Booking(trip_id=trip.id, type="flight", title="DL200", vendor="Delta",
+                 start_datetime=None,
+                 end_datetime=datetime(2026, 6, 2, 14, 0))
+    db.session.add(b2)
+    db.session.commit()
+    orphan = ItineraryItem(trip_id=trip.id, linked_booking_id=b2.id,
+                           auto_kind="depart", day_date=date(2026, 6, 2),
+                           title="Depart Delta", category="transit")
+    db.session.add(orphan)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/drift-review/bulk-resync"
+        )
+    assert resp.status_code == 302
+    db.session.refresh(eligible_item)
+    db.session.refresh(orphan)
+    # Eligible was resynced.
+    assert eligible_item.title == "Arrive United"
+    # Orphan untouched.
+    assert orphan.title == "Depart Delta"
+
+
+def test_bulk_resync_post_redirects_when_nothing_eligible(app, trip, owner):
+    """POST with no eligible items → flash + redirect, no DB change."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/drift-review/bulk-resync"
+        )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(
+        f"/trips/{trip.id}/itinerary/drift-review"
+    )
