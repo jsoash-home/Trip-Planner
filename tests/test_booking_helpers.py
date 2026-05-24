@@ -1,8 +1,9 @@
 """Unit tests for src/booking_helpers.py."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
+from types import SimpleNamespace
 
 from src.booking_helpers import (
     BOOKING_TYPES,
@@ -551,3 +552,80 @@ def test_serialize_touched_all_drift_fields_matches_backfill_string():
     from src.booking_helpers import DRIFT_FIELDS
     expected = "category,day_date,end_time,location,start_time,title"
     assert serialize_touched(DRIFT_FIELDS) == expected
+
+
+# ──────────────────────  missing_auto_kinds_for_booking  ──────────────────────
+
+from src.booking_helpers import NewItemSuggestion, missing_auto_kinds_for_booking
+
+
+def test_missing_auto_kinds_returns_empty_when_all_exist():
+    b = SimpleNamespace(type="flight", title="UA101", vendor="United",
+                        start_datetime=datetime(2026, 6, 1, 10, 0),
+                        end_datetime=datetime(2026, 6, 1, 14, 0),
+                        location=None)
+    result = missing_auto_kinds_for_booking(
+        b, existing_kinds={"depart", "arrive"},
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+    )
+    assert result == []
+
+
+def test_missing_auto_kinds_returns_both_when_none_exist():
+    b = SimpleNamespace(type="flight", title="UA101", vendor="United",
+                        start_datetime=datetime(2026, 6, 1, 10, 0),
+                        end_datetime=datetime(2026, 6, 1, 14, 0),
+                        location=None)
+    result = missing_auto_kinds_for_booking(
+        b, existing_kinds=set(),
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+    )
+    kinds = [w["auto_kind"] for w in result]
+    assert sorted(kinds) == ["arrive", "depart"]
+
+
+def test_missing_auto_kinds_returns_only_missing_when_one_exists():
+    b = SimpleNamespace(type="flight", title="UA101", vendor="United",
+                        start_datetime=datetime(2026, 6, 1, 10, 0),
+                        end_datetime=datetime(2026, 6, 1, 14, 0),
+                        location=None)
+    result = missing_auto_kinds_for_booking(
+        b, existing_kinds={"depart"},
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+    )
+    kinds = [w["auto_kind"] for w in result]
+    assert kinds == ["arrive"]
+
+
+def test_missing_auto_kinds_excludes_items_outside_trip_range():
+    """A suggestion whose day_date is outside [trip_start, trip_end] is filtered."""
+    b = SimpleNamespace(type="flight", title="UA101", vendor="United",
+                        start_datetime=datetime(2026, 7, 1, 10, 0),  # after end
+                        end_datetime=datetime(2026, 7, 1, 14, 0),
+                        location=None)
+    result = missing_auto_kinds_for_booking(
+        b, existing_kinds=set(),
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+    )
+    assert result == []
+
+
+def test_missing_auto_kinds_empty_for_non_spawning_booking_types():
+    """Transport and 'other' bookings generate no auto-slots."""
+    b = SimpleNamespace(type="transport", title="Subway", vendor=None,
+                        start_datetime=datetime(2026, 6, 1, 10, 0),
+                        end_datetime=None, location=None)
+    result = missing_auto_kinds_for_booking(
+        b, existing_kinds=set(),
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+    )
+    assert result == []
+
+
+def test_new_item_suggestion_carries_booking_kind_and_data():
+    """Dataclass smoke test — fields and attribute access."""
+    s = NewItemSuggestion(booking="booking-stand-in", auto_kind="arrive",
+                          item_data={"title": "X"})
+    assert s.booking == "booking-stand-in"
+    assert s.auto_kind == "arrive"
+    assert s.item_data == {"title": "X"}

@@ -480,3 +480,40 @@ def detect_drift(item, booking) -> Optional[DriftReport]:
     if not drifts:
         return None
     return DriftReport(fields=drifts, is_orphaned=False)
+
+
+@dataclass
+class NewItemSuggestion:
+    """A would-be itinerary item that a booking could generate but doesn't
+    have linked yet. Used by the drift review landing page to offer
+    'Add' buttons for newly-available auto-slots after a booking edit."""
+    booking: Any            # a Booking row — generic to keep this module Flask-free
+    auto_kind: str
+    item_data: Dict[str, Any]
+
+
+def missing_auto_kinds_for_booking(
+    booking,
+    existing_kinds: Iterable[str],
+    trip_start_date,
+    trip_end_date,
+) -> List[Dict[str, Any]]:
+    """
+    Return the list of would-be itinerary item dicts (from
+    auto_itinerary_items_for_booking) whose auto_kind is NOT in
+    `existing_kinds` AND whose day_date falls within
+    [trip_start_date, trip_end_date].
+
+    Pure: no DB, no Flask. Caller pre-fetches `existing_kinds`.
+    """
+    existing = set(existing_kinds)
+    out: List[Dict[str, Any]] = []
+    for w in auto_itinerary_items_for_booking(booking):
+        kind = w.get("auto_kind")
+        day = w.get("day_date")
+        if kind in existing:
+            continue
+        if day is None or day < trip_start_date or day > trip_end_date:
+            continue
+        out.append(w)
+    return out
