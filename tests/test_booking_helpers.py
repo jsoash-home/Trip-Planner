@@ -491,3 +491,63 @@ def test_auto_kind_transport_returns_no_items():
                     start_datetime=datetime(2026, 6, 1, 10, 0),
                     end_datetime=datetime(2026, 6, 1, 12, 0))
     assert auto_itinerary_items_for_booking(b) == []
+
+
+# ─────────────────────────────  parse_touched and serialize_touched  ────────
+
+from src.booking_helpers import parse_touched, serialize_touched
+
+
+def test_parse_touched_empty_returns_empty_set():
+    assert parse_touched("") == set()
+
+
+def test_parse_touched_none_returns_empty_set():
+    assert parse_touched(None) == set()
+
+
+def test_parse_touched_single_field():
+    assert parse_touched("title") == {"title"}
+
+
+def test_parse_touched_multiple_fields():
+    assert parse_touched("title,day_date") == {"title", "day_date"}
+
+
+def test_parse_touched_drops_unknown_field_names():
+    # 'frobnicate' isn't in DRIFT_FIELDS — should be silently dropped.
+    assert parse_touched("title,frobnicate,day_date") == {"title", "day_date"}
+
+
+def test_parse_touched_handles_whitespace():
+    assert parse_touched("title, day_date") == {"title", "day_date"}
+
+
+def test_serialize_touched_empty_returns_empty_string():
+    assert serialize_touched(set()) == ""
+
+
+def test_serialize_touched_single_field():
+    assert serialize_touched({"title"}) == "title"
+
+
+def test_serialize_touched_sorts_output():
+    # Input set order is non-deterministic; output must be sorted.
+    assert serialize_touched({"title", "day_date"}) == "day_date,title"
+
+
+def test_serialize_touched_drops_unknown_field_names():
+    assert serialize_touched({"title", "frobnicate"}) == "title"
+
+
+def test_serialize_touched_round_trips_with_parse():
+    fields = {"title", "day_date", "location"}
+    assert parse_touched(serialize_touched(fields)) == fields
+
+
+def test_serialize_touched_all_drift_fields_matches_backfill_string():
+    """Spec invariant: serialize_touched(DRIFT_FIELDS) must equal the
+    string used by the migration backfill UPDATE."""
+    from src.booking_helpers import DRIFT_FIELDS
+    expected = "category,day_date,end_time,location,start_time,title"
+    assert serialize_touched(DRIFT_FIELDS) == expected

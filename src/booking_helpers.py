@@ -9,7 +9,7 @@ formatter. No DB, no Flask imports.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -399,6 +399,27 @@ def format_datetime_range(
 DRIFT_FIELDS: Tuple[str, ...] = (
     "title", "category", "day_date", "start_time", "end_time", "location",
 )
+
+
+def parse_touched(s: Optional[str]) -> Set[str]:
+    """Parse a comma-separated touched-fields string into a set.
+
+    Unknown field names (not in DRIFT_FIELDS) are silently dropped so a
+    later shrink of DRIFT_FIELDS doesn't break existing DB rows.
+    """
+    if not s:
+        return set()
+    parts = (p.strip() for p in s.split(","))
+    return {p for p in parts if p in DRIFT_FIELDS}
+
+
+def serialize_touched(fields: Iterable[str]) -> str:
+    """Serialize a set of field names to sorted CSV. Unknown names dropped.
+
+    Sorted output is stable for tests and human-readable in `sqlite3`.
+    """
+    valid = sorted(f for f in fields if f in DRIFT_FIELDS)
+    return ",".join(valid)
 
 
 @dataclass
