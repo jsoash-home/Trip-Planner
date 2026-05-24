@@ -78,8 +78,8 @@ def test_delete_booking_cascades_linked_items(app, trip):
     assert db.session.get(Booking, b.id) is None
 
 
-def test_itinerary_edit_marks_customized(app, trip, owner):
-    """Editing a linked itinerary item flips customized_by_user to True."""
+def test_itinerary_edit_records_changed_fields_only(app, trip, owner):
+    """Editing only the title flips just `title` in auto_fields_touched."""
     b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
                 start_datetime=datetime(2026, 6, 2, 15, 0),
                 end_datetime=datetime(2026, 6, 5, 11, 0))
@@ -87,20 +87,55 @@ def test_itinerary_edit_marks_customized(app, trip, owner):
     db.session.commit()
     item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
                          auto_kind="check_in", day_date=date(2026, 6, 2),
+                         start_time=datetime(2026, 6, 2, 15, 0).time(),
                          title="Check in: Hilton", category="other")
     db.session.add(item)
     db.session.commit()
-    assert item.customized_by_user is False
+    assert item.auto_fields_touched == ""
 
     with flask_app.test_client() as client:
-        # Bypass login by stuffing the session.
-        with client.session_transaction() as sess:
-            sess["_user_id"] = str(owner.id)
-            sess["_fresh"] = True
+        _login(client, owner)
         resp = client.post(
             f"/trips/{trip.id}/itinerary/{item.id}/edit",
             data={
-                "title": "Check in: Hilton (front desk)",
+                "title": "Check in: Hilton (front desk)",  # CHANGED
+                "category": "other",                       # unchanged
+                "day_date": "2026-06-02",                  # unchanged
+                "start_time": "15:00",                     # unchanged
+                "end_time": "",                            # unchanged
+                "location": "",                            # unchanged
+                "notes": "",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    db.session.refresh(item)
+    assert item.auto_fields_touched == "title"
+    assert item.title == "Check in: Hilton (front desk)"
+
+
+def test_itinerary_edit_no_op_does_not_change_touched_set(app, trip, owner):
+    """Submitting the edit form without changing anything leaves the
+    auto_fields_touched set untouched."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 2, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="check_in", day_date=date(2026, 6, 2),
+                         start_time=datetime(2026, 6, 2, 15, 0).time(),
+                         title="Check in: Hilton", category="other",
+                         auto_fields_touched="day_date")  # pre-existing touch
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/{item.id}/edit",
+            data={
+                "title": "Check in: Hilton",
                 "category": "other",
                 "day_date": "2026-06-02",
                 "start_time": "15:00",
@@ -112,8 +147,8 @@ def test_itinerary_edit_marks_customized(app, trip, owner):
         )
     assert resp.status_code == 302
     db.session.refresh(item)
-    assert item.customized_by_user is True
-    assert item.title == "Check in: Hilton (front desk)"
+    # No change → touched set untouched.
+    assert item.auto_fields_touched == "day_date"
 
 
 def _make_flight_with_arrive(trip):

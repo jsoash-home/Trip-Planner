@@ -51,6 +51,8 @@ from src.booking_helpers import (
     format_datetime_range,
     group_bookings_by_type,
     parse_booking_form,
+    parse_touched,
+    serialize_touched,
     total_cost_by_currency,
 )
 from src.budget import format_money_totals, rollup_bookings_by_category
@@ -957,10 +959,23 @@ def itinerary_edit(trip_id, item_id):
         # If the day moved, give the item a fresh sort key on the new day.
         if data["day_date"] != item.day_date:
             data["order_within_day"] = _next_order_within_day(trip.id, data["day_date"])
+
+        # Compute which DRIFT_FIELDS actually changed value, BEFORE writing.
+        # parse_itinerary_form returns a dict with all DRIFT_FIELDS keys
+        # (title, category, day_date, start_time, end_time, location) plus
+        # `notes` — so data.get(f) is safe to compare for every f in DRIFT_FIELDS.
+        changed_fields: set = set()
+        if item.linked_booking_id is not None:
+            for f in DRIFT_FIELDS:
+                if data.get(f) != getattr(item, f):
+                    changed_fields.add(f)
+
         for field, value in data.items():
             setattr(item, field, value)
-        if item.linked_booking_id is not None:
-            item.customized_by_user = True
+
+        if item.linked_booking_id is not None and changed_fields:
+            prior = parse_touched(item.auto_fields_touched)
+            item.auto_fields_touched = serialize_touched(prior | changed_fields)
         db.session.commit()
         logger.info("Edited itinerary item id=%s title=%r", item.id, item.title)
         flash("Itinerary item updated.", "success")
