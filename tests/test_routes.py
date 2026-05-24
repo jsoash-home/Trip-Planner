@@ -185,7 +185,8 @@ def test_resync_updates_fields_from_booking(app, trip, owner):
     assert resp.status_code == 302
     db.session.refresh(item)
     assert item.title == "Arrive United"
-    assert item.customized_by_user is False
+    # No touches to start → resync updates the field, touched set stays empty.
+    assert item.auto_fields_touched == ""
 
 
 def test_keep_mine_marks_customized(app, trip, owner):
@@ -607,3 +608,33 @@ def test_bulk_resync_post_redirects_when_nothing_eligible(app, trip, owner):
     assert resp.headers["Location"].endswith(
         f"/trips/{trip.id}/itinerary/drift-review"
     )
+
+
+def test_resync_skips_touched_fields_and_preserves_touched_set(app, trip, owner):
+    """Partial-touched item: untouched fields update, touched fields stay,
+    touched set is preserved."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    # User has touched title (renamed it) AND day differs (booking moved).
+    # On resync, title should stay, day should update, touched stays "title".
+    item = ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="arrive",
+        day_date=date(2026, 6, 5),     # stale; booking says Jun 1
+        title="Arrive at JFK gate B22",  # user-touched
+        category="transit",
+        auto_fields_touched="title",
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
+    assert resp.status_code == 302
+    db.session.refresh(item)
+    assert item.title == "Arrive at JFK gate B22"   # preserved (touched)
+    assert item.day_date == date(2026, 6, 1)         # updated (not touched)
+    assert item.auto_fields_touched == "title"       # preserved

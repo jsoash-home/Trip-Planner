@@ -1154,6 +1154,11 @@ def itinerary_drift(trip_id, item_id):
 def _apply_resync_to_item(item, booking) -> bool:
     """Apply the booking's auto-generated values to one item.
 
+    Only overwrites fields that the user hasn't personally touched
+    (auto_fields_touched). The touched set itself is preserved, so a
+    user who touched `title` will continue to keep their title across
+    future resyncs — by design, per the phase-3 spec.
+
     Returns True if the item was updated, False if the booking no
     longer generates an item of this auto_kind (orphaned). Caller is
     responsible for committing the session.
@@ -1163,9 +1168,12 @@ def _apply_resync_to_item(item, booking) -> bool:
     if not matches:
         return False
     would_be = matches[0]
+    touched = parse_touched(item.auto_fields_touched)
     for f in DRIFT_FIELDS:
+        if f in touched:
+            continue
         setattr(item, f, would_be.get(f))
-    item.customized_by_user = False
+    # auto_fields_touched preserved intentionally.
     return True
 
 
