@@ -189,19 +189,24 @@ def test_resync_updates_fields_from_booking(app, trip, owner):
     assert item.auto_fields_touched == ""
 
 
-def test_keep_mine_marks_customized(app, trip, owner):
+def test_keep_mine_sets_all_touched(app, trip, owner):
+    """Keep mine fills auto_fields_touched with every DRIFT_FIELD."""
     _, item = _make_flight_with_arrive(trip)
     with flask_app.test_client() as client:
         _login(client, owner)
         resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/keep-mine")
     assert resp.status_code == 302
     db.session.refresh(item)
-    assert item.customized_by_user is True
-    assert item.title == "Arrive Delta"  # unchanged
+    assert item.auto_fields_touched == "category,day_date,end_time,location,start_time,title"
+    assert item.title == "Arrive Delta"  # field values unchanged
 
 
-def test_unlink_clears_linked_booking(app, trip, owner):
+def test_unlink_clears_linked_booking_and_touched_set(app, trip, owner):
+    """Unlink severs the link AND clears auto_fields_touched."""
     b, item = _make_flight_with_arrive(trip)
+    # Pretend the user had touched something before unlinking.
+    item.auto_fields_touched = "title"
+    db.session.commit()
     with flask_app.test_client() as client:
         _login(client, owner)
         resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/unlink")
@@ -209,8 +214,8 @@ def test_unlink_clears_linked_booking(app, trip, owner):
     db.session.refresh(item)
     assert item.linked_booking_id is None
     assert item.auto_kind is None
-    # The booking still exists.
-    assert db.session.get(Booking, b.id) is not None
+    assert item.auto_fields_touched == ""
+    assert Booking.query.get(b.id) is not None
 
 
 def test_drift_review_landing_empty(app, trip, owner):

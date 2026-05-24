@@ -1241,15 +1241,12 @@ def itinerary_resync(trip_id, item_id):
 @app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/keep-mine", methods=["POST"])
 @login_required
 def itinerary_keep_mine(trip_id, item_id):
-    """Silence drift detection for this item. Editor+ only.
-
-    Sets customized_by_user=True without changing any fields, so the
-    drift badge disappears but the booking link is preserved.
-    """
+    """Silence drift detection for this item by marking every field as
+    user-touched. Editor+ only."""
     trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
-    item.customized_by_user = True
+    item.auto_fields_touched = serialize_touched(DRIFT_FIELDS)
     db.session.commit()
-    logger.info("Marked itinerary item id=%s as customized_by_user", item.id)
+    logger.info("Marked itinerary item id=%s as fully touched (keep mine)", item.id)
     flash(f"Kept your version of “{item.title}”.", "success")
     if request.args.get("from") == "wizard":
         return _redirect_after_wizard_action(trip.id, item.id)
@@ -1261,20 +1258,19 @@ def itinerary_keep_mine(trip_id, item_id):
 def itinerary_unlink(trip_id, item_id):
     """Sever the booking link. Editor+ only.
 
-    Sets linked_booking_id and auto_kind to NULL. The item becomes a
-    plain stand-alone itinerary entry that no longer drifts.
+    Sets linked_booking_id and auto_kind to NULL and clears the touched
+    set — the item becomes a plain stand-alone itinerary entry.
     """
     trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
     item.linked_booking_id = None
     item.auto_kind = None
-    item.customized_by_user = False
+    item.auto_fields_touched = ""
     db.session.commit()
     logger.info("Unlinked itinerary item id=%s from its booking", item.id)
     flash(f"Unlinked “{item.title}” from its booking.", "success")
     if request.args.get("from") == "wizard":
         return _redirect_after_wizard_action(trip.id, item.id)
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
-
 
 @app.route("/trips/<int:trip_id>/budget")
 @login_required
