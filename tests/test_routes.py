@@ -12,9 +12,15 @@ from models import Booking, ItineraryItem, Trip, User, db
 
 @pytest.fixture
 def app():
-    """Bind the app to an in-memory SQLite DB for this test."""
+    """Reset the in-memory DB schema before each test for clean state.
+
+    The engine is already bound to in-memory SQLite via conftest.py's
+    DATABASE_URL override, which runs at pytest load time (before
+    app.py is imported). Setting SQLALCHEMY_DATABASE_URI here would
+    NOT rebind the engine — earlier versions of this fixture did that
+    and silently wiped the real vacation.db on every pytest run.
+    """
     flask_app.config["TESTING"] = True
-    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     with flask_app.app_context():
         db.drop_all()
         db.create_all()
