@@ -1069,6 +1069,24 @@ def itinerary_drift(trip_id, item_id):
     )
 
 
+def _apply_resync_to_item(item, booking) -> bool:
+    """Apply the booking's auto-generated values to one item.
+
+    Returns True if the item was updated, False if the booking no
+    longer generates an item of this auto_kind (orphaned). Caller is
+    responsible for committing the session.
+    """
+    would_be_items = auto_itinerary_items_for_booking(booking)
+    matches = [w for w in would_be_items if w.get("auto_kind") == item.auto_kind]
+    if not matches:
+        return False
+    would_be = matches[0]
+    for f in DRIFT_FIELDS:
+        setattr(item, f, would_be.get(f))
+    item.customized_by_user = False
+    return True
+
+
 def _redirect_after_wizard_action(trip_id: int, current_item_id: int):
     """After a wizard-originated action, redirect to the next drifting
     item's wizard step — or to the landing page if no more drift.
@@ -1115,19 +1133,12 @@ def itinerary_resync(trip_id, item_id):
         flash("The linked booking is gone — try Unlink instead.", "warning")
         return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
-    would_be_items = auto_itinerary_items_for_booking(booking)
-    matches = [w for w in would_be_items if w.get("auto_kind") == item.auto_kind]
-    if not matches:
+    if not _apply_resync_to_item(item, booking):
         flash(
             "The booking no longer suggests this item. Use Unlink or Delete.",
             "warning",
         )
         return redirect(url_for("trip_itinerary", trip_id=trip.id))
-
-    would_be = matches[0]
-    for f in DRIFT_FIELDS:
-        setattr(item, f, would_be.get(f))
-    item.customized_by_user = False
     db.session.commit()
     logger.info("Resynced itinerary item id=%s from booking id=%s",
                 item.id, booking.id)
