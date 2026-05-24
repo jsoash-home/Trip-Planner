@@ -874,3 +874,28 @@ html, body {
   border-top: 3px solid var(--vp-success);
   padding-top: calc(1.5rem - 2px); /* keep content vertical center stable */
 }
+
+/* Drift pill — appears on itinerary chips whose linked booking has changed. */
+.itin-drift-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #8a4a00;
+  background-color: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 999px;
+  text-decoration: none;
+  line-height: 1.3;
+}
+.itin-drift-pill:hover {
+  background-color: #ffe69c;
+  color: #5b3000;
+  text-decoration: none;
+}
+.itin-drift-pill .bi {
+  font-size: 0.8em;
+}
