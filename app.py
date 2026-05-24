@@ -55,6 +55,7 @@ from src.booking_helpers import (
 )
 from src.budget import format_money_totals, rollup_bookings_by_category
 from src.currency import SUPPORTED_CURRENCIES, format_money, is_valid_currency
+from src.drift_review import chronological_order
 from src.itinerary import (
     ITINERARY_CATEGORIES,
     category_css,
@@ -815,15 +816,13 @@ def _placeholder_section(trip_id, *, name, emoji, step_number, description):
     )
 
 
-@app.route("/trips/<int:trip_id>/itinerary")
-@login_required
-def trip_itinerary(trip_id):
-    """Day-by-day timeline view. Viewer+ access."""
-    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
-    items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+def _annotate_drift_for_items(items):
+    """Annotate each item in-place with a `.drift` attribute (DriftReport or None).
 
-    # Annotate each linked item with its drift state (or None).
-    # Pre-fetch all referenced bookings in one query so we don't N+1.
+    Pre-fetches all referenced bookings in one query to avoid N+1.
+    Returns the count of items with non-None drift, so callers that
+    just need the count don't have to re-iterate.
+    """
     linked_booking_ids = {it.linked_booking_id for it in items if it.linked_booking_id}
     bookings_by_id = {
         b.id: b for b in Booking.query.filter(Booking.id.in_(linked_booking_ids)).all()
@@ -837,14 +836,22 @@ def trip_itinerary(trip_id):
         booking = bookings_by_id.get(it.linked_booking_id)
         if booking is None:
             # Booking row is gone but the cascade didn't clean this item up.
-            # Treat as orphaned so the UI can prompt the user to unlink.
             it.drift = DriftReport(is_orphaned=True)
             drift_count += 1
             continue
         it.drift = detect_drift(it, booking)
         if it.drift is not None:
             drift_count += 1
+    return drift_count
 
+
+@app.route("/trips/<int:trip_id>/itinerary")
+@login_required
+def trip_itinerary(trip_id):
+    """Day-by-day timeline view. Viewer+ access."""
+    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
+    items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+    drift_count = _annotate_drift_for_items(items)
     days = group_items_by_day(items, trip.start_date, trip.end_date)
     return render_template(
         "trip_itinerary.html",
@@ -961,6 +968,46 @@ def itinerary_delete(trip_id, item_id):
     logger.info("Deleted itinerary item id=%s title=%r", item_id, title)
     flash(f"Deleted “{title}”.", "success")
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
+
+
+@app.route("/trips/<int:trip_id>/itinerary/drift-review")
+@login_required
+def itinerary_drift_review(trip_id):
+    """Landing page for the drift review wizard. Viewer+ access.
+
+    Shows total / resyncable / orphan counts and two CTAs (Start
+    review, Resync N unchanged). Doubles as the "all done" view when
+    the wizard finishes.
+    """
+    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
+    items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+    _annotate_drift_for_items(items)
+    drifting = [it for it in chronological_order(items) if it.drift is not None]
+    resyncable = [it for it in drifting if not it.drift.is_orphaned]
+    orphans = [it for it in drifting if it.drift.is_orphaned]
+    return render_template(
+        "drift_review.html",
+        trip=trip,
+        user_role=user_role,
+        drift_count=len(drifting),
+        resyncable_count=len(resyncable),
+        orphans=orphans,
+        first_drifting_id=drifting[0].id if drifting else None,
+    )
+
+
+@app.route("/trips/<int:trip_id>/itinerary/drift-review/item/<int:item_id>")
+@login_required
+def itinerary_drift_review_item(trip_id, item_id):
+    """Placeholder — full wizard step lands in Task 4."""
+    abort(404)
+
+
+@app.route("/trips/<int:trip_id>/itinerary/drift-review/bulk-resync")
+@login_required
+def itinerary_drift_review_bulk_resync(trip_id):
+    """Placeholder — bulk-resync GET/POST lands in Tasks 7-8."""
+    abort(404)
 
 
 @app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/drift")

@@ -15,18 +15,29 @@
       <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
       {{ drift_count }} itinerary item{{ '' if drift_count == 1 else 's' }} out of sync with {{ 'its' if drift_count == 1 else 'their' }} booking{{ '' if drift_count == 1 else 's' }}.
     </div>
-    <small class="text-muted">Click the warning pill on each item to review.</small>
+    <a class="alert-link" href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
+      Review all drift →
+    </a>
   </div>
 {% endif %}
 
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h1 class="h3 mb-0">Itinerary</h1>
-  {% if can_edit(user_role) %}
-    <a class="btn btn-vp-primary" href="{{ url_for('itinerary_new', trip_id=trip.id) }}">
-      <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
-      Add item
-    </a>
-  {% endif %}
+  <div class="d-flex gap-2">
+    {% if drift_count > 0 %}
+      <a class="btn btn-outline-warning"
+         href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
+        <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+        Review drift
+      </a>
+    {% endif %}
+    {% if can_edit(user_role) %}
+      <a class="btn btn-vp-primary" href="{{ url_for('itinerary_new', trip_id=trip.id) }}">
+        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+        Add item
+      </a>
+    {% endif %}
+  </div>
 </div>
 
 {% if not days %}

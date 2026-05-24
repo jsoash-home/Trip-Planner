@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Review drift — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Itinerary</a>
+  &nbsp;›&nbsp; Review drift
+</div>
+
+<h1 class="h3 mb-3">
+  <i class="bi bi-exclamation-triangle-fill text-warning me-1" aria-hidden="true"></i>
+  Review drift
+</h1>
+
+<div class="vp-card mb-4">
+  {% if drift_count == 0 %}
+    <p class="mb-3">Nothing's out of sync right now — every linked itinerary item matches its booking.</p>
+    <a class="btn btn-vp-primary" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
+      <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+      Back to itinerary
+    </a>
+  {% else %}
+    <p class="mb-3">
+      <strong>{{ drift_count }}</strong> itinerary item{{ '' if drift_count == 1 else 's' }}
+      {{ 'is' if drift_count == 1 else 'are' }} out of sync with
+      {{ 'its' if drift_count == 1 else 'their' }} booking{{ '' if drift_count == 1 else 's' }}.
+      {% if resyncable_count > 0 and orphans|length > 0 %}
+        {{ resyncable_count }} can be auto-resynced.
+        {{ orphans|length }} need{{ 's' if orphans|length == 1 else '' }} individual review.
+      {% elif resyncable_count > 0 %}
+        All can be auto-resynced.
+      {% else %}
+        These need individual review — their bookings no longer suggest them.
+      {% endif %}
+    </p>
+
+    <div class="d-flex gap-2 flex-wrap">
+      {% if first_drifting_id %}
+        <a class="btn btn-vp-primary"
+           href="{{ url_for('itinerary_drift_review_item', trip_id=trip.id, item_id=first_drifting_id) }}">
+          Start review →
+        </a>
+      {% endif %}
+      {% if can_edit(user_role) and resyncable_count > 0 %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('itinerary_drift_review_bulk_resync', trip_id=trip.id) }}">
+          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+          Resync {{ resyncable_count }} unchanged
+        </a>
+      {% endif %}
+      <a class="btn btn-link ms-auto" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
+        Back to itinerary
+      </a>
+    </div>
+
+    {% if orphans %}
+      <hr>
+      <h2 class="h6 text-muted mb-2">Still needs review</h2>
+      <ul class="list-unstyled small mb-0">
+        {% for it in orphans %}
+          <li class="mb-1">
+            <a href="{{ url_for('itinerary_drift_review_item', trip_id=trip.id, item_id=it.id) }}">
+              {{ it.title }}
+            </a>
+            <span class="text-muted">— {{ it.day_date.strftime('%a, %b %d') }} — booking no longer suggests this</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -175,3 +175,48 @@ def test_unlink_clears_linked_booking(app, trip, owner):
     assert item.auto_kind is None
     # The booking still exists.
     assert db.session.get(Booking, b.id) is not None
+
+
+def test_drift_review_landing_empty(app, trip, owner):
+    """No drift anywhere → landing page shows the all-clear state."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/itinerary/drift-review")
+    assert resp.status_code == 200
+    assert b"Nothing" in resp.data or b"all in sync" in resp.data.lower() or b"0 items" in resp.data
+
+
+def test_drift_review_landing_counts_resyncable_vs_orphan(app, trip, owner):
+    """One resyncable + one orphaned → page shows both counts."""
+    # Booking + a stale linked item (resyncable drift).
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item_a = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                           auto_kind="arrive", day_date=date(2026, 6, 1),
+                           title="Arrive Delta",  # drifted: booking says United
+                           category="transit")
+    db.session.add(item_a)
+    # Booking that no longer suggests "depart" (start_datetime cleared).
+    b2 = Booking(trip_id=trip.id, type="flight", title="DL200", vendor="Delta",
+                 start_datetime=None,
+                 end_datetime=datetime(2026, 6, 2, 14, 0))
+    db.session.add(b2)
+    db.session.commit()
+    item_b = ItineraryItem(trip_id=trip.id, linked_booking_id=b2.id,
+                           auto_kind="depart", day_date=date(2026, 6, 2),
+                           title="Depart Delta", category="transit")
+    db.session.add(item_b)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/itinerary/drift-review")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    # 2 total drifting, 1 resyncable, 1 orphan.
+    assert "2" in body and "1" in body
+    assert "Start review" in body
+    assert "Resync 1 unchanged" in body
