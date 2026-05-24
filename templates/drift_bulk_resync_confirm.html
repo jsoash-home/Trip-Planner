@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Confirm bulk resync — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Itinerary</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">Review drift</a>
+  &nbsp;›&nbsp; Bulk resync
+</div>
+
+<h1 class="h3 mb-3">
+  <i class="bi bi-arrow-clockwise text-warning me-1" aria-hidden="true"></i>
+  Confirm bulk resync
+</h1>
+
+<div class="vp-card mb-4">
+  <p>
+    This will overwrite the following <strong>{{ eligible_count }}</strong>
+    item{{ '' if eligible_count == 1 else 's' }} with
+    {{ 'its' if eligible_count == 1 else 'their' }} booking's current values.
+    {% if orphan_count > 0 %}
+      {{ orphan_count }} item{{ '' if orphan_count == 1 else 's' }} can't be auto-resynced (booking no longer suggests {{ 'it' if orphan_count == 1 else 'them' }}) — review {{ 'it' if orphan_count == 1 else 'them' }} individually after.
+    {% endif %}
+  </p>
+
+  {% for it in eligible %}
+    <div class="border rounded p-3 mb-3">
+      <div class="mb-2">
+        <strong>{{ it.title }}</strong>
+        <span class="text-muted small">— {{ it.day_date.strftime('%a, %b %d') }}</span>
+      </div>
+      {% set drift = it.drift %}
+      {% include "_drift_diff_table.html" %}
+    </div>
+  {% endfor %}
+
+  <form method="post"
+        action="{{ url_for('itinerary_drift_review_bulk_resync', trip_id=trip.id) }}"
+        class="d-flex gap-2 flex-wrap mt-3 pt-3 border-top">
+    <button type="submit" class="btn btn-vp-primary">
+      <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+      Resync these {{ eligible_count }} item{{ '' if eligible_count == 1 else 's' }}
+    </button>
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
+      Cancel
+    </a>
+  </form>
+</div>
+{% endblock %}

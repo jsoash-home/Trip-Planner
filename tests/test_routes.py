@@ -414,3 +414,77 @@ def test_non_wizard_resync_still_redirects_to_itinerary(app, trip, owner):
         resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith(f"/trips/{trip.id}/itinerary")
+
+
+def test_bulk_resync_confirm_lists_eligible_items(app, trip, owner):
+    """GET confirmation page lists each resyncable item with its diff."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="arrive", day_date=date(2026, 6, 1),
+                         title="Arrive Delta", category="transit")
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/bulk-resync"
+        )
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    # Item appears in the list, and the resync button mentions count = 1.
+    assert "Arrive Delta" in body
+    assert "Resync these 1" in body or "Resync these 1 item" in body
+
+
+def test_bulk_resync_confirm_mentions_orphans(app, trip, owner):
+    """When orphans exist alongside eligible items, page notes them."""
+    # Resyncable: a normal flight with drift.
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item_ok = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                            auto_kind="arrive", day_date=date(2026, 6, 1),
+                            title="Arrive Delta", category="transit")
+    db.session.add(item_ok)
+    # Orphan: booking that no longer suggests "depart" (start_datetime cleared).
+    b2 = Booking(trip_id=trip.id, type="flight", title="DL200", vendor="Delta",
+                 start_datetime=None,
+                 end_datetime=datetime(2026, 6, 2, 14, 0))
+    db.session.add(b2)
+    db.session.commit()
+    orphan = ItineraryItem(trip_id=trip.id, linked_booking_id=b2.id,
+                           auto_kind="depart", day_date=date(2026, 6, 2),
+                           title="Depart Delta", category="transit")
+    db.session.add(orphan)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/bulk-resync"
+        )
+    body = resp.data.decode("utf-8")
+    assert "1 orphan" in body or "1 item can't be auto-resynced" in body
+    # Orphan item title NOT in the resync list block.
+    assert "Resync these 1" in body or "Resync these 1 item" in body
+
+
+def test_bulk_resync_confirm_redirects_when_nothing_eligible(app, trip, owner):
+    """No eligible items → flash + redirect to landing."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/bulk-resync",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(
+        f"/trips/{trip.id}/itinerary/drift-review"
+    )

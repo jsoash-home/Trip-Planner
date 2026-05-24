@@ -1039,8 +1039,32 @@ def itinerary_drift_review_item(trip_id, item_id):
 @app.route("/trips/<int:trip_id>/itinerary/drift-review/bulk-resync")
 @login_required
 def itinerary_drift_review_bulk_resync(trip_id):
-    """Placeholder — bulk-resync GET/POST lands in Tasks 7-8."""
-    abort(404)
+    """Confirmation page for the bulk-resync action. Editor+ access.
+
+    Lists every eligible item (drifting + not orphaned) with its diff.
+    Flags the count of orphaned items being skipped. Redirects back to
+    the landing page if no eligible items exist.
+    """
+    trip, user_role = _trip_with_access_or_404(trip_id, role="editor")
+    items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+    _annotate_drift_for_items(items)
+    drifting = [it for it in chronological_order(items) if it.drift is not None]
+    eligible = [it for it in drifting if not it.drift.is_orphaned]
+    orphan_count = sum(1 for it in drifting if it.drift.is_orphaned)
+
+    if not eligible:
+        flash("Nothing to bulk-resync — all drifting items need individual review.",
+              "info")
+        return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+    return render_template(
+        "drift_bulk_resync_confirm.html",
+        trip=trip,
+        user_role=user_role,
+        eligible=eligible,
+        eligible_count=len(eligible),
+        orphan_count=orphan_count,
+    )
 
 
 @app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/drift")
