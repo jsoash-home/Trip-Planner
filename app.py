@@ -999,8 +999,41 @@ def itinerary_drift_review(trip_id):
 @app.route("/trips/<int:trip_id>/itinerary/drift-review/item/<int:item_id>")
 @login_required
 def itinerary_drift_review_item(trip_id, item_id):
-    """Placeholder — full wizard step lands in Task 4."""
-    abort(404)
+    """One wizard step — render one drifting item's diff and actions.
+    Viewer+ access (the action POSTs still require editor).
+
+    Redirects back to the landing page if the item isn't drifting (e.g.,
+    user bookmarked the URL and the drift has since been resolved).
+    """
+    trip, item, user_role = _itinerary_item_with_access_or_404(
+        trip_id, item_id, role="viewer"
+    )
+    items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+    _annotate_drift_for_items(items)
+    drifting = [it for it in chronological_order(items) if it.drift is not None]
+
+    current = next((it for it in drifting if it.id == item_id), None)
+    if current is None:
+        flash("That item isn't out of sync — nothing to review.", "info")
+        return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+    idx = drifting.index(current)
+    next_item = drifting[idx + 1] if idx + 1 < len(drifting) else None
+    booking = (
+        db.session.get(Booking, current.linked_booking_id)
+        if current.linked_booking_id else None
+    )
+    return render_template(
+        "drift_review_item.html",
+        trip=trip,
+        user_role=user_role,
+        item=current,
+        booking=booking,
+        drift=current.drift,
+        next_item=next_item,
+        progress_current=idx + 1,
+        progress_total=len(drifting),
+    )
 
 
 @app.route("/trips/<int:trip_id>/itinerary/drift-review/bulk-resync")

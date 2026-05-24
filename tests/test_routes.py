@@ -220,3 +220,80 @@ def test_drift_review_landing_counts_resyncable_vs_orphan(app, trip, owner):
     assert "2" in body and "1" in body
     assert "Start review" in body
     assert "Resync 1 unchanged" in body
+
+
+def test_drift_review_wizard_renders_first_item(app, trip, owner):
+    """GET wizard step on a drifting item shows the diff + Skip + buttons."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="arrive", day_date=date(2026, 6, 1),
+                         title="Arrive Delta", category="transit")
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/item/{item.id}"
+        )
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "Item 1 of 1" in body
+    assert "Skip" in body
+    assert "Resync to booking" in body
+    assert "Keep mine" in body
+    assert "Unlink from booking" in body
+
+
+def test_drift_review_wizard_progress_counts(app, trip, owner):
+    """Two drifting items → 'Item 1 of 2' on the first, 'Item 2 of 2' on the second."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                start_datetime=datetime(2026, 6, 1, 15, 0),
+                end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    # Two linked items, both drifted on title.
+    a = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_in", day_date=date(2026, 6, 1),
+                      title="WRONG check-in", category="other")
+    z = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                      auto_kind="check_out", day_date=date(2026, 6, 5),
+                      title="WRONG check-out", category="other")
+    db.session.add_all([a, z])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp1 = client.get(f"/trips/{trip.id}/itinerary/drift-review/item/{a.id}")
+        resp2 = client.get(f"/trips/{trip.id}/itinerary/drift-review/item/{z.id}")
+    assert b"Item 1 of 2" in resp1.data
+    assert b"Item 2 of 2" in resp2.data
+
+
+def test_drift_review_wizard_redirects_when_item_not_drifting(app, trip, owner):
+    """GET wizard step on an item that isn't drifting → redirect to landing."""
+    b = Booking(trip_id=trip.id, type="restaurant", title="Noma", vendor="Noma",
+                start_datetime=datetime(2026, 6, 1, 19, 0), end_datetime=None)
+    db.session.add(b)
+    db.session.commit()
+    # In-sync item — no drift.
+    item = ItineraryItem(trip_id=trip.id, linked_booking_id=b.id,
+                         auto_kind="single", day_date=date(2026, 6, 1),
+                         start_time=__import__("datetime").time(19, 0),
+                         title="Noma", category="meal")
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/item/{item.id}",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert "/drift-review" in resp.headers["Location"]
+    assert f"/item/{item.id}" not in resp.headers["Location"]
