@@ -1359,6 +1359,73 @@ def itinerary_add_suggested(trip_id, booking_id, auto_kind):
     return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
 
 
+@app.route("/trips/<int:trip_id>/itinerary/add-all-suggested", methods=["GET"])
+@login_required
+def itinerary_add_all_suggested_confirm(trip_id):
+    """Confirmation page listing every missing item that would be added.
+
+    Viewer+ to view; the submit button only renders for editor+ in the
+    template.
+    """
+    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
+    new_items = _annotate_new_items_for_trip(trip)
+    return render_template(
+        "drift_bulk_add_confirm.html",
+        trip=trip,
+        user_role=user_role,
+        new_items=new_items,
+    )
+
+
+@app.route("/trips/<int:trip_id>/itinerary/add-all-suggested", methods=["POST"])
+@login_required
+def itinerary_add_all_suggested(trip_id):
+    """Add every missing suggested item across all bookings on this trip.
+
+    Editor+ only. Re-derives the missing list per booking to avoid
+    duplicates from concurrent state changes. One commit per request.
+    """
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+    bookings = Booking.query.filter_by(trip_id=trip.id).all()
+    if not bookings:
+        flash("No bookings on this trip.", "info")
+        return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+    booking_ids = [b.id for b in bookings]
+    items = ItineraryItem.query.filter(
+        ItineraryItem.linked_booking_id.in_(booking_ids)
+    ).all()
+    existing_by_booking: dict = {}
+    for it in items:
+        if it.auto_kind:
+            existing_by_booking.setdefault(it.linked_booking_id, set()).add(it.auto_kind)
+
+    added = 0
+    for b in bookings:
+        existing = existing_by_booking.get(b.id, set())
+        for w in missing_auto_kinds_for_booking(
+            b, existing, trip.start_date, trip.end_date,
+        ):
+            w["order_within_day"] = _next_order_within_day(trip.id, w["day_date"])
+            db.session.add(ItineraryItem(
+                trip_id=trip.id,
+                linked_booking_id=b.id,
+                auto_fields_touched="",
+                **w,
+            ))
+            added += 1
+    db.session.commit()
+    logger.info("Bulk-added %d suggested items for trip_id=%s", added, trip.id)
+    if added == 0:
+        flash("No new suggestions to add.", "info")
+    else:
+        flash(
+            f"Added {added} suggested item{'' if added == 1 else 's'}.",
+            "success",
+        )
+    return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+
 @app.route("/trips/<int:trip_id>/budget")
 @login_required
 def trip_budget(trip_id):

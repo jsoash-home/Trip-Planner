@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Add suggested items — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Itinerary</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">Review drift</a>
+  &nbsp;›&nbsp; Add suggested items
+</div>
+
+<h1 class="h3 mb-3">
+  <i class="bi bi-plus-circle me-1 text-primary" aria-hidden="true"></i>
+  Add suggested items
+</h1>
+
+<div class="vp-card mb-4">
+  {% if not new_items %}
+    <p class="mb-3">No new items are currently suggested by your bookings.</p>
+    <a class="btn btn-link" href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
+      <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+      Back to review
+    </a>
+  {% else %}
+    <p class="mb-3">
+      The following {{ new_items|length }} item{{ '' if new_items|length == 1 else 's' }}
+      would be added to your itinerary, linked to the listed booking:
+    </p>
+    <table class="table table-sm align-middle mb-3">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Day</th>
+          <th>Time</th>
+          <th>Category</th>
+          <th>From booking</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in new_items %}
+          <tr>
+            <td><strong>{{ s.item_data.title }}</strong></td>
+            <td>{{ s.item_data.day_date.strftime('%a, %b %d') }}</td>
+            <td>
+              {% if s.item_data.start_time %}
+                {{ s.item_data.start_time.strftime('%H:%M') }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>{{ s.item_data.category }}</td>
+            <td class="text-muted">{{ s.booking.title }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="d-flex gap-2 flex-wrap mt-3 pt-3 border-top">
+      {% if can_edit(user_role) %}
+        <form method="post"
+              action="{{ url_for('itinerary_add_all_suggested', trip_id=trip.id) }}"
+              class="m-0">
+          <button class="btn btn-vp-primary" type="submit">
+            <i class="bi bi-check-lg me-1" aria-hidden="true"></i>
+            Yes, add {{ new_items|length }} item{{ '' if new_items|length == 1 else 's' }}
+          </button>
+        </form>
+      {% endif %}
+      <a class="btn btn-link ms-auto"
+         href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
+        Cancel
+      </a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

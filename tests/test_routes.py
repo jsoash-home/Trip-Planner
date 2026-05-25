@@ -721,3 +721,63 @@ def test_add_suggested_is_idempotent(app, trip, owner):
         linked_booking_id=b.id, auto_kind="arrive"
     ).all()
     assert len(arrive_items) == 1
+
+
+def test_bulk_add_confirm_lists_all_missing_items(app, trip, owner):
+    """GET /add-all-suggested renders the confirmation page with each missing item."""
+    b1 = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                 start_datetime=datetime(2026, 6, 1, 10, 0),
+                 end_datetime=datetime(2026, 6, 1, 14, 0))
+    b2 = Booking(trip_id=trip.id, type="flight", title="DL200", vendor="Delta",
+                 start_datetime=datetime(2026, 6, 2, 8, 0),
+                 end_datetime=datetime(2026, 6, 2, 12, 0))
+    db.session.add_all([b1, b2])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/itinerary/add-all-suggested")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "Depart United" in body
+    assert "Arrive United" in body
+    assert "Depart Delta" in body
+    assert "Arrive Delta" in body
+
+
+def test_bulk_add_creates_all_missing_items(app, trip, owner):
+    """POST /add-all-suggested creates every missing item in one transaction."""
+    b1 = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                 start_datetime=datetime(2026, 6, 1, 10, 0),
+                 end_datetime=datetime(2026, 6, 1, 14, 0))
+    b2 = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                 start_datetime=datetime(2026, 6, 1, 15, 0),
+                 end_datetime=datetime(2026, 6, 3, 11, 0))
+    db.session.add_all([b1, b2])
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
+    assert resp.status_code == 302
+
+    # 4 items total: depart + arrive (flight), check_in + check_out (hotel)
+    all_items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+    kinds = sorted(it.auto_kind for it in all_items)
+    assert kinds == ["arrive", "check_in", "check_out", "depart"]
+    assert all(it.auto_fields_touched == "" for it in all_items)
+
+
+def test_bulk_add_is_idempotent(app, trip, owner):
+    """A second POST after all suggestions are accepted is a safe no-op."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
+        client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
+    assert ItineraryItem.query.filter_by(trip_id=trip.id).count() == 2
