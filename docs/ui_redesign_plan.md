@@ -296,7 +296,7 @@ Each session is its own fresh Claude Code window. The workflow:
 - [x] 1. Heal the token leak
 - [x] 2. Self-host Inter + inline critical CSS
 - [x] 3. Lazy-load canvas-confetti
-- [ ] 4a. Build SVG icon macro + first sweep
+- [x] 4a. Build SVG icon macro + first sweep
 - [ ] 4b. Finish icon sweep + remove Bootstrap Icons font
 - [ ] 5. Tighten heading semantics
 - [ ] 6. Inline form validation

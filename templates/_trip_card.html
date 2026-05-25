@@ -1,6 +1,7 @@
 {# Reusable trip card for the dashboard.
    `today` is a date passed in from the route so we don't recompute it per card.
    `counts` is the {trip_id: (drift_count, new_count)} dict from _drift_counts_for_trips. #}
+{% from "_icon.html" import icon %}
 {% macro trip_card(trip, today, counts=None) %}
   {% set status = derive_status(trip.start_date, trip.end_date, today) %}
   {% set countdown = countdown_label(trip.start_date, trip.end_date, today) %}
@@ -47,13 +48,13 @@
         <div class="trip-card-status-row">
           {% if tc[0] > 0 %}
             <span class="trip-card-pill trip-card-pill--drift">
-              <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+              {{ icon('exclamation-triangle-fill') }}
               {{ tc[0] }} out of sync
             </span>
           {% endif %}
           {% if tc[1] > 0 %}
             <span class="trip-card-pill trip-card-pill--new">
-              <i class="bi bi-plus-circle" aria-hidden="true"></i>
+              {{ icon('plus-circle') }}
               {{ tc[1] }} suggested
             </span>
           {% endif %}

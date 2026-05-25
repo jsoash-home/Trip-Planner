@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}{{ "Edit booking" if booking else "Add booking" }} — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -24,14 +25,14 @@
 
 {% if not booking %}
   <div class="vp-flash vp-flash--info">
-    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    {{ icon('info-circle', class='me-1') }}
     Saving this booking will auto-create matching entries in your itinerary
     (a hotel becomes Check in / Check out, a flight becomes Depart / Arrive,
     etc.). You can edit or remove those entries individually afterward.
   </div>
 {% else %}
   <div class="vp-flash vp-flash--info">
-    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+    {{ icon('info-circle', class='me-1') }}
     Editing here doesn't change items already in your itinerary — update those
     separately if you need to. Deleting this booking will remove its linked
     itinerary items.

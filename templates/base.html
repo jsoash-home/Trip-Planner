@@ -1,3 +1,4 @@
+{%- from "_icon.html" import icon -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,7 +50,7 @@
     <div class="container">
       <a class="vp-brand" href="{{ url_for('trips_list') if current_user.is_authenticated else url_for('index') }}">
         <span class="vp-brand-logo" aria-hidden="true">
-          <i class="bi bi-suitcase-lg-fill"></i>
+          {{ icon('suitcase-lg-fill') }}
         </span>
         <span>Vacation Planner</span>
       </a>
@@ -59,12 +60,12 @@
         <div class="vp-nav">
           <a class="vp-navlink {% if ep == 'trips_list' %}is-active{% endif %}"
              href="{{ url_for('trips_list') }}">
-            <i class="bi bi-collection" aria-hidden="true"></i>
+            {{ icon('collection') }}
             <span>My trips</span>
           </a>
           <a class="vp-navlink {% if ep == 'trip_new' %}is-active{% endif %}"
              href="{{ url_for('trip_new') }}">
-            <i class="bi bi-plus-circle" aria-hidden="true"></i>
+            {{ icon('plus-circle') }}
             <span>New trip</span>
           </a>
         </div>

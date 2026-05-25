@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% from "_trip_card.html" import trip_card with context %}
+{% from "_icon.html" import icon %}
 {% block title %}My trips — Vacation Planner{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h1 class="h3 mb-0">My trips</h1>
   <a class="btn btn-vp-primary" href="{{ url_for('trip_new') }}">
-    <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+    {{ icon('plus-lg', class='me-1') }}
     New trip
   </a>
 </div>

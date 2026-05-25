@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_section_tiles.html" import section_tiles %}
+{% from "_icon.html" import icon %}
 {% block title %}{{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -22,13 +23,13 @@
   <div class="d-flex gap-2 align-self-start">
     {% if is_owner(user_role) %}
       <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('trip_edit', trip_id=trip.id) }}">
-        <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
+        {{ icon('pencil', class='me-1') }} Edit
       </a>
       <form method="post" action="{{ url_for('trip_delete', trip_id=trip.id) }}"
             class="m-0"
             onsubmit="return confirm('Delete &quot;{{ trip.name | e }}&quot;? This cannot be undone.');">
         <button type="submit" class="btn btn-outline-danger btn-sm">
-          <i class="bi bi-trash me-1" aria-hidden="true"></i> Delete
+          {{ icon('trash', class='me-1') }} Delete
         </button>
       </form>
     {% elif user_role == 'editor' %}
@@ -59,7 +60,7 @@
                 <span aria-hidden="true">{{ category_emoji(it.category) }}</span>
                 {{ it.title }}
                 {% if it.linked_booking_id %}
-                  <i class="bi bi-link-45deg text-muted" aria-label="Linked to a booking" title="Linked to a booking"></i>
+                  {{ icon('link-45deg', label='Linked to a booking', class='text-muted') }}
                 {% endif %}
               </div>
               {% if it.location %}
