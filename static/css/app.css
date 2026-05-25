@@ -1,44 +1,14 @@
 /*
- * Vacation Planner — design tokens + custom styles on top of Bootstrap 5.
+ * Vacation Planner — custom styles on top of Bootstrap 5.
+ *
+ * Design tokens (the `:root { --vp-* }` block) and the base html/body
+ * rule live inline in templates/base.html so first paint is already
+ * brand-coloured and not blocked on this file arriving. This is the
+ * single source of truth for tokens — do not redefine them here.
  *
  * The accent palette is a warm coral with a soft sand neutral, designed
- * to feel like a vacation rather than a financial dashboard. All colors
- * defined as CSS custom properties so we can add a dark theme later
- * without re-editing every selector.
+ * to feel like a vacation rather than a financial dashboard.
  */
-
-:root {
-  --vp-bg:           #fbf7f2;
-  --vp-surface:      #ffffff;
-  --vp-surface-2:    #fdf3eb;
-  --vp-border:       #ebe0d3;
-  --vp-text:         #2a241f;
-  --vp-text-muted:   #76695e;
-  --vp-accent:       #e8744f;        /* coral */
-  --vp-accent-hover: #d05c39;
-  --vp-accent-soft:  #fde4d8;
-  --vp-success:      #3a8c70;
-  --vp-warning:      #d39c2a;
-  --vp-danger:       #c1432f;
-  --vp-shadow-sm:    0 1px 2px rgba(34, 24, 18, 0.06);
-  --vp-shadow-md:    0 4px 12px rgba(34, 24, 18, 0.08);
-
-  /* Derived tokens — alias brand values so a future dark-mode block only
-     needs to redefine the base palette above. */
-  --vp-ring-bg:             var(--vp-border);
-  --vp-ring-fg:             var(--vp-accent);
-  --vp-toggle-bg:           var(--vp-surface-2);
-  --vp-toggle-active-bg:    var(--vp-surface);
-  --vp-hero-gradient-start: var(--vp-accent);
-  --vp-hero-gradient-end:   var(--vp-accent-hover);
-  --vp-hero-shadow:         rgba(232, 116, 79, 0.18);
-}
-
-html, body {
-  background: var(--vp-bg);
-  color: var(--vp-text);
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-}
 
 /* Skip-link for keyboard users — hidden until focused. */
 .skip-link {
