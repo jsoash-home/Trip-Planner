@@ -246,3 +246,34 @@ def progress_fraction(start: date, today: date, window_days: int = 90) -> float:
     if days_out >= window_days:
         return 0.0
     return 1.0 - (days_out / window_days)
+
+
+# Emoji → theme phrase fragment used by themed_countdown_label.
+# Returning None means "use plain copy" — applies to unknown emojis and
+# the default 🧳 suitcase.
+_EMOJI_THEME_MAP: Dict[str, str] = {
+    "🏝️": "the beach",
+    "🌴": "the beach",
+    "🌊": "the beach",
+    "✈️": "takeoff",
+    "🏔️": "the mountains",
+    "⛷️": "the mountains",
+    "🍝": "the next great meal",
+    "🍜": "the next great meal",
+    "🏛️": "history",
+    "🚗": "the open road",
+    "🏨": "check-in",
+    "🗽": "the city",
+}
+
+
+def emoji_theme(emoji: Optional[str]) -> Optional[str]:
+    """
+    Map a trip's cover emoji to a theme phrase fragment.
+
+    Returns None for unknown emojis, the default 🧳, None, and empty
+    strings — the caller should fall back to plain copy in those cases.
+    """
+    if not emoji:
+        return None
+    return _EMOJI_THEME_MAP.get(emoji)

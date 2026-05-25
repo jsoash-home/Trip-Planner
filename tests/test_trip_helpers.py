@@ -9,6 +9,7 @@ from src.trip_helpers import (
     days_remaining,
     days_until,
     derive_status,
+    emoji_theme,
     group_trips_by_state,
     is_valid_status,
     parse_trip_form,
@@ -373,3 +374,59 @@ def test_progress_fraction_custom_window():
     # 30-day window, 15 days out → 50%.
     result = progress_fraction(date(2026, 8, 17), date(2026, 8, 2), window_days=30)
     assert abs(result - 0.5) < 0.01
+
+
+# ─────────────────────────────  emoji_theme  ─────────────────────────────
+
+
+def test_emoji_theme_beach_emojis():
+    assert emoji_theme("🏝️") == "the beach"
+    assert emoji_theme("🌴") == "the beach"
+    assert emoji_theme("🌊") == "the beach"
+
+
+def test_emoji_theme_takeoff():
+    assert emoji_theme("✈️") == "takeoff"
+
+
+def test_emoji_theme_mountains():
+    assert emoji_theme("🏔️") == "the mountains"
+    assert emoji_theme("⛷️") == "the mountains"
+
+
+def test_emoji_theme_food():
+    assert emoji_theme("🍝") == "the next great meal"
+    assert emoji_theme("🍜") == "the next great meal"
+
+
+def test_emoji_theme_history():
+    assert emoji_theme("🏛️") == "history"
+
+
+def test_emoji_theme_road():
+    assert emoji_theme("🚗") == "the open road"
+
+
+def test_emoji_theme_hotel():
+    assert emoji_theme("🏨") == "check-in"
+
+
+def test_emoji_theme_city():
+    assert emoji_theme("🗽") == "the city"
+
+
+def test_emoji_theme_default_suitcase_returns_none():
+    # 🧳 is the default fallback emoji — keep it unthemed.
+    assert emoji_theme("🧳") is None
+
+
+def test_emoji_theme_unknown_returns_none():
+    assert emoji_theme("🎉") is None
+
+
+def test_emoji_theme_none_returns_none():
+    assert emoji_theme(None) is None
+
+
+def test_emoji_theme_empty_string_returns_none():
+    assert emoji_theme("") is None
