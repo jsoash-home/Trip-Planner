@@ -202,6 +202,32 @@ html, body {
   background: var(--vp-surface-2);
   color: var(--vp-text-muted);
 }
+.trip-card-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+.trip-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.trip-card-pill--drift {
+  background-color: #fff3cd;
+  color: #8a4a00;
+  border: 1px solid #ffe69c;
+}
+.trip-card-pill--new {
+  background-color: #e0f2fe;
+  color: #075985;
+  border: 1px solid #bae6fd;
+}
 
 /* ─── Section headings on dashboard ────────────────────────── */
 .vp-section-title {

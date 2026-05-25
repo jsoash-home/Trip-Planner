@@ -529,11 +529,13 @@ def trips_list():
 
     grouped = group_trips_by_state(trips, today)
     has_any = any(grouped.values())
+    counts = _drift_counts_for_trips(trips)
     return render_template(
         "trips_list.html",
         grouped=grouped,
         has_any_trips=has_any,
         today=today,
+        counts=counts,
     )
 
 

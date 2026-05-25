@@ -914,3 +914,56 @@ def test_booking_edit_flash_mentions_new_items_available(app, trip, owner):
     body = resp.data.decode("utf-8")
     assert "new item" in body.lower()
     assert "1" in body  # the count
+
+
+# ─── Dashboard pill rendering ───────────────────────────────────────
+
+def test_dashboard_renders_drift_pill(app, trip, owner):
+    """A drifting trip shows the amber drift pill on the dashboard."""
+    b, _ = _make_flight_with_arrive(trip)
+    # Also add the in-sync 'depart' item so the new-items count is 0
+    # — we want to test the drift pill in isolation.
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id,
+        auto_kind="depart", day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"trip-card-pill--drift" in resp.data
+    assert b"1 out of sync" in resp.data
+
+
+def test_dashboard_renders_new_pill(app, trip, owner):
+    """A trip with a missing auto-slot shows the blue 'suggested' pill."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    # Only the in-sync 'depart' item exists; 'arrive' is the missing slot.
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="depart",
+        day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert b"trip-card-pill--new" in resp.data
+    assert b"1 suggested" in resp.data
+
+
+def test_dashboard_no_pills_when_clean(app, trip, owner):
+    """A trip with no drift and no new items renders no status row."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert b"trip-card-pill" not in resp.data
+    assert b"trip-card-status-row" not in resp.data

@@ -28,7 +28,7 @@
     <h2 class="vp-section-title">Active now</h2>
     <div class="row g-3">
       {% for t in grouped.active %}
-        <div class="col-md-6 col-lg-4">{{ trip_card(t, today) }}</div>
+        <div class="col-md-6 col-lg-4">{{ trip_card(t, today, counts) }}</div>
       {% endfor %}
     </div>
   {% endif %}
@@ -37,7 +37,7 @@
     <h2 class="vp-section-title">Upcoming</h2>
     <div class="row g-3">
       {% for t in grouped.upcoming %}
-        <div class="col-md-6 col-lg-4">{{ trip_card(t, today) }}</div>
+        <div class="col-md-6 col-lg-4">{{ trip_card(t, today, counts) }}</div>
       {% endfor %}
     </div>
   {% endif %}
@@ -46,7 +46,7 @@
     <h2 class="vp-section-title">Past</h2>
     <div class="row g-3">
       {% for t in grouped.past %}
-        <div class="col-md-6 col-lg-4">{{ trip_card(t, today) }}</div>
+        <div class="col-md-6 col-lg-4">{{ trip_card(t, today, counts) }}</div>
       {% endfor %}
     </div>
   {% endif %}
