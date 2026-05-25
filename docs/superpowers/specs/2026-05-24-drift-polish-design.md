@@ -49,8 +49,7 @@ column drop, no new dependencies.
 
 | File | Action | Responsibility |
 |---|---|---|
-| `src/drift_review.py` | Modify | Add `drift_counts_for_trips(trips)` pure helper — batched `{trip_id: (drift_count, new_count)}` lookup. |
-| `app.py` | Modify | `trips_list` calls the batched helper and passes counts to the template. `itinerary_resync` adds `?just_synced=<id>` and a `success-celebrate` flash category when the last drift clears. `_apply_resync_to_item` returns `(success, was_last_drift)`. Bulk-resync uses the same celebration check. Add the `customized_by_user` `DROP COLUMN` statement to `_ensure_drift_columns` (gated task). |
+| `app.py` | Modify | Add `_drift_counts_for_trips(trips)` private helper — batched `{trip_id: (drift_count, new_count)}` lookup, alongside the existing `_annotate_drift_for_items` / `_annotate_new_items_for_trip` helpers. `trips_list` calls it and passes counts to the template. `itinerary_resync` adds `?just_synced=<id>` and a `success-celebrate` flash category when the last drift clears. `_apply_resync_to_item` returns `(success, was_last_drift)`. Bulk-resync uses the same celebration check. Add the `customized_by_user` `DROP COLUMN` statement to `_ensure_drift_columns` (gated task). |
 | `models.py` | Modify | Remove the `customized_by_user` column declaration (gated task). |
 | `templates/_trip_card.html` | Modify | Render two pill row when drift/new counts > 0. |
 | `templates/trips_list.html` | Modify | Pass `counts` into the `trip_card` macro. |
@@ -59,8 +58,7 @@ column drop, no new dependencies.
 | `templates/_drift_actions.html` | Modify | Add unconditional `id` attributes on the Resync / Keep / Unlink form buttons (`id="resync-btn"`, etc.). |
 | `templates/base.html` | Modify | Allow new flash category `success-celebrate` in the category whitelist. Add the auto-dismiss JS at the bottom (one block, ~15 lines). |
 | `static/css/app.css` | Modify | Pill styles for the trip card. Flash slide-in keyframe + auto-dismiss class. `data-just-synced` pulse keyframe. `success-celebrate` flash variant. `vp-shortcut-hint` + `kbd` styling. All animations wrapped in `prefers-reduced-motion: no-preference`. |
-| `tests/test_drift_review.py` | Modify | Tests for `drift_counts_for_trips`. |
-| `tests/test_routes.py` | Modify | Tests: dashboard renders pills when drift exists; resync redirect includes `?just_synced`; flash category is `success-celebrate` when last drift clears; wizard renders hint row + action IDs. |
+| `tests/test_routes.py` | Modify | Tests: dashboard renders pills when drift exists and skips completed trips; resync redirect includes `?just_synced`; flash category is `success-celebrate` when last drift clears; wizard renders hint row + action IDs. The `_drift_counts_for_trips` helper is exercised indirectly via the dashboard route test (same pattern as the other private app helpers, which aren't unit-tested in isolation). |
 
 ---
 
@@ -77,12 +75,13 @@ is non-zero, render a small row of pills:
 Each pill is rendered only when its count is `> 0`. When both are zero, the
 entire row is omitted (no whitespace difference vs. today's card).
 
-### Pure helper
+### Private helper in `app.py`
 
-`src/drift_review.py` gains:
+`app.py` gains a private helper alongside `_annotate_drift_for_items` and
+`_annotate_new_items_for_trip`:
 
 ```python
-def drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
+def _drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
     """For each trip, return (drift_count, new_items_count).
 
     Batched: one query for all relevant itinerary items, one for all
@@ -98,15 +97,7 @@ def drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
 Implementation outline (pseudocode):
 
 ```python
-from datetime import date
-from collections import defaultdict
-from typing import Dict, Iterable, Tuple
-
-from models import Booking, ItineraryItem
-from src.booking_helpers import detect_drift, missing_auto_kinds_for_booking
-
-
-def drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
+def _drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
     today = date.today()
     active = [t for t in trips
               if t.status != "completed" and t.end_date >= today]
@@ -249,20 +240,22 @@ Add to `static/css/app.css`:
 
 ### Tests
 
-In `tests/test_drift_review.py`:
+In `tests/test_routes.py` (the helper is private to `app.py`, so it's
+exercised via the dashboard route — same pattern as the existing
+`_annotate_drift_for_items` and `_annotate_new_items_for_trip`):
 
-- Empty trip list → empty dict.
-- Trip with no bookings → not in dict.
-- Trip with bookings and no drift → not in dict.
-- Trip with one drifting item → `{trip.id: (1, 0)}`.
-- Trip with a new auto-slot available → `{trip.id: (0, 1)}`.
-- Completed trip (status='completed') is skipped.
-- Past trip (end_date < today) is skipped.
-- Two trips with different counts return both entries.
+- GET `/trips` for a user with one drifting linked item renders the
+  `trip-card-pill--drift` class containing the count `1`.
+- GET `/trips` for a user with a new auto-slot available renders the
+  `trip-card-pill--new` class.
+- GET `/trips` for a user with both renders both pills.
+- GET `/trips` for a user with neither omits the entire status row.
+- GET `/trips` skips completed trips (their pills aren't rendered even
+  when drift exists).
+- GET `/trips` skips past trips (end_date < today).
 
-In `tests/test_routes.py`:
-
-- GET `/trips` for a user with one drifting trip renders the `trip-card-pill--drift` class. (Use HTML scanning, not full DOM parsing.)
+(HTML scanning via `b"trip-card-pill--drift" in resp.data` style — full
+DOM parsing isn't worth the dependency.)
 
 ---
 
