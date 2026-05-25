@@ -560,8 +560,8 @@ def test_bulk_resync_post_updates_all_eligible(app, trip, owner):
     db.session.refresh(z)
     assert a.title == "Check in: Hilton"
     assert z.title == "Check out: Hilton"
-    assert a.customized_by_user is False
-    assert z.customized_by_user is False
+    assert a.auto_fields_touched == ""
+    assert z.auto_fields_touched == ""
 
 
 def test_bulk_resync_post_skips_orphans(app, trip, owner):

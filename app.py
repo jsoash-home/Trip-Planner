@@ -179,13 +179,16 @@ def _ensure_drift_columns() -> None:
         # re-run. Sort order matches what serialize_touched(DRIFT_FIELDS)
         # produces.
         try:
-            conn.execute(text(
+            result = conn.execute(text(
                 "UPDATE itinerary_item "
                 "SET auto_fields_touched = 'category,day_date,end_time,location,start_time,title' "
-                "WHERE customized_by_user = 1 "
+                "WHERE customized_by_user = TRUE "
                 "AND (auto_fields_touched = '' OR auto_fields_touched IS NULL)"
             ))
-            logger.info("Migration: backfilled auto_fields_touched from customized_by_user")
+            logger.info(
+                "Migration: backfilled auto_fields_touched from customized_by_user (%d rows)",
+                result.rowcount,
+            )
         except Exception as e:
             logger.warning("Migration backfill skipped: %s", e)
 
@@ -1261,8 +1264,9 @@ def _redirect_after_wizard_action(trip_id: int, current_item_id: int):
 def itinerary_resync(trip_id, item_id):
     """Re-apply the auto-generated values from the linked booking. Editor+ only.
 
-    Updates the drifting fields, clears customized_by_user (since the item
-    is now back in auto shape), and leaves linked_booking_id intact.
+    Updates only fields the user hasn't personally touched (auto_fields_touched
+    is preserved across resync — touched fields stay the user's). Leaves
+    linked_booking_id intact.
     """
     trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
     if item.linked_booking_id is None:
