@@ -22,7 +22,7 @@
     {% if status == 'planning' %}
       {% set frac = progress_fraction(trip.start_date, today) %}
       {% set d = days_until(trip.start_date, today) %}
-      <div class="trip-card-ring-wrap" aria-label="{{ d }} days until trip">
+      <div class="trip-card-ring-wrap" aria-label="{{ d }} {% if d == 1 %}day{% else %}days{% endif %} until trip">
         <svg class="trip-card-ring" viewBox="0 0 36 36" aria-hidden="true">
           <circle class="trip-card-ring-bg" cx="18" cy="18" r="15.915"/>
           <circle class="trip-card-ring-fg" cx="18" cy="18" r="15.915"
