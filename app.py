@@ -786,14 +786,29 @@ def booking_edit(trip_id, booking_id):
         db.session.commit()
         logger.info("Edited booking id=%s title=%r", booking.id, booking.title)
 
-        linked_count = ItineraryItem.query.filter_by(
+        linked_items = ItineraryItem.query.filter_by(
             linked_booking_id=booking.id
-        ).count()
+        ).all()
+        linked_count = len(linked_items)
+        existing_kinds = {it.auto_kind for it in linked_items if it.auto_kind}
+        new_items = missing_auto_kinds_for_booking(
+            booking, existing_kinds, trip.start_date, trip.end_date,
+        )
+        new_count = len(new_items)
+
+        parts: list = []
         if linked_count > 0:
-            noun = "item" if linked_count == 1 else "items"
+            parts.append(
+                f"{linked_count} linked itinerary item"
+                f"{'' if linked_count == 1 else 's'} may now be out of sync"
+            )
+        if new_count > 0:
+            parts.append(
+                f"{new_count} new item{'' if new_count == 1 else 's'} available"
+            )
+        if parts:
             flash(
-                f"Booking updated. {linked_count} linked itinerary {noun} may now "
-                f"be out of sync — check the Itinerary page.",
+                f"Booking updated. {', '.join(parts)} — review on the Itinerary page.",
                 "success",
             )
         else:

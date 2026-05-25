@@ -781,3 +781,40 @@ def test_bulk_add_is_idempotent(app, trip, owner):
         client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
         client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
     assert ItineraryItem.query.filter_by(trip_id=trip.id).count() == 2
+
+
+def test_booking_edit_flash_mentions_new_items_available(app, trip, owner):
+    """Editing a flight to add end_datetime creates a new 'arrive' slot;
+    the flash should mention it."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=None)
+    db.session.add(b)
+    db.session.commit()
+    # Existing depart item — no arrive yet (since booking had no end_datetime).
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="depart",
+        day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        # Edit: add end_datetime → arrive slot becomes available as a new suggestion.
+        resp = client.post(
+            f"/trips/{trip.id}/bookings/{b.id}/edit",
+            data={
+                "type": "flight", "title": "UA101", "vendor": "United",
+                "confirmation_number": "", "location": "",
+                "start_datetime": "2026-06-01T10:00",
+                "end_datetime": "2026-06-01T14:00",
+                "cost": "", "currency": "USD", "url": "", "notes": "",
+            },
+            follow_redirects=True,
+        )
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "new item" in body.lower()
+    assert "1" in body  # the count
