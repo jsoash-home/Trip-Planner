@@ -1085,6 +1085,7 @@ def test_dashboard_no_pills_when_clean(app, trip, owner):
         _login(client, owner)
         resp = client.get("/trips")
     assert b"trip-card-pill" not in resp.data
+    assert b"trip-card-status-row" not in resp.data
 
 
 def test_wizard_step_has_action_ids(app, trip, owner):

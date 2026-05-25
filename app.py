@@ -1307,9 +1307,11 @@ def _apply_resync_to_item(item, booking) -> Tuple[bool, bool]:
         to pick the celebration flash variant. False when applied is
         False.
 
-    Caller is responsible for committing the session before reading
-    was_last_drift_on_trip downstream, because the check re-runs
-    detect_drift over freshly-mutated state.
+    was_last_drift_on_trip is computed BEFORE the caller commits, using
+    the in-memory item state after the setattr loop above. detect_drift
+    is pure and reads attributes directly, so it correctly sees the
+    post-resync values on this item even though they haven't been
+    flushed to the DB yet.
     """
     would_be_items = auto_itinerary_items_for_booking(booking)
     matches = [w for w in would_be_items if w.get("auto_kind") == item.auto_kind]
