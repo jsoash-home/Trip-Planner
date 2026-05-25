@@ -1054,3 +1054,11 @@ html, body {
   letter-spacing: 0.05em;
   color: var(--bs-secondary, #6c757d);
 }
+
+.trip-card-themed {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--bs-secondary, #6c757d);
+  font-style: italic;
+}

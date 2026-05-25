@@ -32,6 +32,10 @@
         <span class="trip-card-ring-number">{{ d }}</span>
         <span class="trip-card-ring-unit">{% if d == 1 %}day{% else %}days{% endif %}</span>
       </div>
+      <span class="trip-card-themed" data-countdown-unit>
+        <span data-countdown-form="days">{{ themed_countdown_label(trip.start_date, trip.end_date, today, emoji=trip.cover_emoji, unit='days') }}</span>
+        <span data-countdown-form="sleeps" hidden>{{ themed_countdown_label(trip.start_date, trip.end_date, today, emoji=trip.cover_emoji, unit='sleeps') }}</span>
+      </span>
     {% else %}
       <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
     {% endif %}
