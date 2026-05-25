@@ -1062,3 +1062,39 @@ html, body {
   color: var(--bs-secondary, #6c757d);
   font-style: italic;
 }
+
+/* ───── Days / Sleeps unit toggle (navbar) ───── */
+.vp-unit-toggle {
+  display: inline-flex;
+  background: var(--bs-gray-100, #f8f9fa);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.vp-unit-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--bs-secondary, #6c757d);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.vp-unit-btn[aria-pressed="true"] {
+  background: var(--bs-white, #fff);
+  color: var(--bs-body-color, #212529);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.vp-unit-btn:focus-visible {
+  outline: 2px solid var(--bs-primary, #0d6efd);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vp-unit-btn { transition: none; }
+}
