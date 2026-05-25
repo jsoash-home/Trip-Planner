@@ -14,6 +14,14 @@
  * Toggle:
  *   <button data-countdown-toggle="days"   aria-pressed="…">…</button>
  *   <button data-countdown-toggle="sleeps" aria-pressed="…">…</button>
+ *
+ * Hero ticker target:
+ *   data-countdown-target uses ISO format WITHOUT a timezone (e.g.
+ *   "2026-08-17T00:00:00"). `new Date()` interprets this as local time,
+ *   which is what we want — trips have no time-of-day, so "midnight on
+ *   the trip's start date in the traveler's local time" is the only
+ *   sensible target. Don't add "Z" — that would make it UTC and break
+ *   the countdown for anyone outside UTC.
  */
 (function () {
   'use strict';
@@ -177,7 +185,10 @@
       var now = new Date();
       var diffMs = target - now;
       if (diffMs <= 0) return;
-      var totalDays = Math.ceil(diffMs / 86400000);
+      // Math.floor (not ceil) so the milestone fires the moment the hero
+      // ticker drops to N days — otherwise the celebration lags ~24 hours
+      // behind what the user sees in the big number.
+      var totalDays = Math.floor(diffMs / 86400000);
       for (var i = 0; i < MILESTONES.length; i++) {
         var t = MILESTONES[i];
         if (totalDays === t && !alreadyCelebrated(tripId, t)) {

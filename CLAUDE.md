@@ -16,15 +16,16 @@ packing list, and share trips with travel partners by email.
 |---|---|
 | `app.py` | Flask routes, OAuth, access guards, DB bootstrap |
 | `models.py` | SQLAlchemy: `User`, `Trip`, `TripCollaborator`, `Booking`, `ItineraryItem`, `PackingItem` |
-| `src/trip_helpers.py` | Pure: `derive_status`, `days_until`, `countdown_label`, `parse_trip_form`, `group_trips_by_state` |
+| `src/trip_helpers.py` | Pure: `derive_status`, `days_until`, `countdown_label`, `progress_fraction`, `emoji_theme`, `themed_countdown_label`, `parse_trip_form`, `group_trips_by_state` |
 | `src/booking_helpers.py` | Pure: `parse_booking_form`, `group_bookings_by_type`, `auto_itinerary_items_for_booking`, `format_datetime_range` |
 | `src/itinerary.py` | Pure: `parse_itinerary_form`, `group_items_by_day`, `sort_within_day`, `format_time_range` |
 | `src/budget.py` | Pure: `rollup_bookings_by_category`, `format_money_totals` |
 | `src/packing.py` | Pure: `parse_packing_form`, `group_packing_by_category`, `packing_progress`, `DEFAULT_PACKING_ITEMS` |
 | `src/sharing.py` | Pure: `get_user_role_for_trip`, `role_satisfies`, `can_edit`, `is_owner`, `parse_collaborator_form` |
 | `src/currency.py` | Pure: `format_money`, `is_valid_currency`, `SUPPORTED_CURRENCIES` |
-| `templates/` | Jinja2 — `base.html` is the shared layout |
+| `templates/` | Jinja2 — `base.html` is the shared layout; `_countdown_hero.html` is the trip-overview hero partial |
 | `static/css/app.css` | Custom styles on top of Bootstrap |
+| `static/js/countdown.js` | Vanilla JS for the fun-countdown system: unit toggle, hero ticker, milestone confetti |
 | `tests/test_*.py` | One test file per pure helper module (197 tests at the v1 milestone) |
 
 ## Conventions
@@ -96,6 +97,39 @@ and the day number `(today - trip.start_date).days + 1`. The section
 shows category-coloured items with time, title, location, and notes;
 empty days show a friendly nudge with a deep link to add an item to
 today.
+
+## Fun countdown
+The dashboard cards and trip overview share a "fun countdown" system
+driven by `static/js/countdown.js`. Key invariants:
+
+- **DOM convention.** Any countdown that swaps between day/sleeps forms
+  uses `<span data-countdown-unit>` as the wrapper with two children
+  carrying `data-countdown-form="days"` and `data-countdown-form="sleeps"`.
+  The unit toggle (in the navbar, `data-countdown-toggle`) sets the
+  `hidden` attribute on whichever child doesn't match.
+- **Persistence.** Unit choice lives in `localStorage["vp.countdown.unit"]`;
+  per-trip milestone dedup uses keys like `vp.celebrated.<trip_id>.<thresh>`.
+  Both wrap localStorage access in try/catch (private browsing degrades
+  gracefully — toggle still works for the session).
+- **Trip overview hero.** `_countdown_hero.html` renders three states
+  based on `derive_status`: upcoming trips get a purple gradient with
+  a live-ticking H/M/S; completed trips get a static "Welcomed home N
+  days ago"; in-progress trips render nothing (the existing Today
+  section is the hero). The route passes `today_date` — the include
+  aliases it to `today` for the partial.
+- **Hero ticker target.** `data-countdown-target` is an ISO timestamp
+  WITHOUT a timezone (e.g. `2026-08-17T00:00:00`). The browser parses
+  this as local time, which is correct — trips have no time-of-day.
+  Don't add `Z`.
+- **Milestones.** 30/14/7/3/1 days. Celebrations fire once per trip per
+  threshold. Uses `Math.floor(diffMs / 86400000)` so the celebration
+  matches the day count the user sees in the hero. `prefers-reduced-motion:
+  reduce` skips the confetti burst; the copy overlay still shows.
+
+Three pure helpers in `src/trip_helpers.py` back this:
+`progress_fraction` (dashboard ring), `emoji_theme` (emoji → theme
+phrase lookup), `themed_countdown_label` (wraps `countdown_label` with
+theme + unit).
 
 ## Local port
 Local dev server runs on port **5002** (stock-tracker uses 5001).
