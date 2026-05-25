@@ -154,12 +154,21 @@
 
   function fireConfetti() {
     if (prefersReducedMotion()) return;
-    if (typeof window.confetti !== 'function') return;
-    window.confetti({
-      particleCount: 120,
-      spread: 70,
-      origin: { y: 0.3 }
-    });
+    // Lazy-load canvas-confetti only when a milestone actually fires, so we
+    // don't pay ~10KB on every page load just for the rare celebration.
+    // Reduced-motion already returned above, so we never import for users
+    // who wouldn't see the burst anyway.
+    import('https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.mjs')
+      .then(function (mod) {
+        mod.default({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.3 }
+        });
+      })
+      .catch(function () {
+        // Offline / CDN blocked — overlay still shows, just no burst.
+      });
   }
 
   function showMilestoneOverlay(hero, copy) {
