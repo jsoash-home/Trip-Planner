@@ -277,3 +277,37 @@ def emoji_theme(emoji: Optional[str]) -> Optional[str]:
     if not emoji:
         return None
     return _EMOJI_THEME_MAP.get(emoji)
+
+
+def themed_countdown_label(
+    start: date,
+    end: date,
+    today: date,
+    emoji: Optional[str] = None,
+    unit: str = "days",
+) -> str:
+    """
+    Like countdown_label but with optional themed phrasing and a unit choice.
+
+    Only the "N days to go" upcoming state (N ≥ 2) gets themed. All other
+    states (Tomorrow!, Today!, On day X of Y, Last day, Ended …) pass
+    through countdown_label unchanged — themed phrasing only makes sense
+    when there's a number to attach a unit to.
+
+    `unit` may be "days" or "sleeps". Anything else is treated as "days".
+    `emoji` is looked up via emoji_theme(); None / unknown emoji / 🧳
+    fall back to the plain "N days/sleeps to go" phrasing.
+    """
+    if today >= start:
+        return countdown_label(start, end, today)
+
+    days_out = days_until(start, today)
+    if days_out <= 1:
+        # "Tomorrow!" — leave alone.
+        return countdown_label(start, end, today)
+
+    unit_word = "sleeps" if unit == "sleeps" else "days"
+    theme = emoji_theme(emoji)
+    if theme:
+        return f"{days_out} {unit_word} until {theme}"
+    return f"{days_out} {unit_word} to go"

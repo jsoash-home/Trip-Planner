@@ -15,6 +15,7 @@ from src.trip_helpers import (
     parse_trip_form,
     progress_fraction,
     status_label,
+    themed_countdown_label,
     trip_form_values,
 )
 
@@ -430,3 +431,95 @@ def test_emoji_theme_none_returns_none():
 
 def test_emoji_theme_empty_string_returns_none():
     assert emoji_theme("") is None
+
+
+# ─────────────────────────────  themed_countdown_label  ──────────────────────────
+
+
+def test_themed_label_upcoming_themed_days():
+    # 23 days out, beach emoji, days unit → themed phrasing.
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 7, 25),
+        emoji="🏝️", unit="days",
+    )
+    assert result == "23 days until the beach"
+
+
+def test_themed_label_upcoming_themed_sleeps():
+    # Same trip, sleeps unit.
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 7, 25),
+        emoji="🏝️", unit="sleeps",
+    )
+    assert result == "23 sleeps until the beach"
+
+
+def test_themed_label_upcoming_unthemed_days_falls_back_to_default():
+    # No theme → plain "23 days to go".
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 7, 25),
+        emoji="🧳", unit="days",
+    )
+    assert result == "23 days to go"
+
+
+def test_themed_label_upcoming_unthemed_sleeps():
+    # No theme + sleeps → "23 sleeps to go".
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 7, 25),
+        emoji=None, unit="sleeps",
+    )
+    assert result == "23 sleeps to go"
+
+
+def test_themed_label_tomorrow_passes_through_unchanged():
+    # "Tomorrow!" state stays as-is regardless of theme or unit.
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 8, 16),
+        emoji="🏝️", unit="sleeps",
+    )
+    assert result == "Tomorrow!"
+
+
+def test_themed_label_today_passes_through():
+    # First day of trip — pass through to countdown_label's output.
+    expected = countdown_label(date(2026, 8, 17), date(2026, 8, 27), date(2026, 8, 17))
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 8, 17),
+        emoji="🏝️", unit="sleeps",
+    )
+    assert result == expected
+
+
+def test_themed_label_mid_trip_passes_through():
+    # On day 3 of 7 → unchanged.
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 23), date(2026, 8, 19),
+        emoji="🏝️", unit="sleeps",
+    )
+    assert result == "On day 3 of 7"
+
+
+def test_themed_label_last_day_passes_through():
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 23), date(2026, 8, 23),
+        emoji="🏝️", unit="days",
+    )
+    assert result == "Last day"
+
+
+def test_themed_label_recent_past_passes_through():
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 23), date(2026, 8, 25),
+        emoji="🏝️", unit="sleeps",
+    )
+    assert result == "Ended 2 days ago"
+
+
+def test_themed_label_invalid_unit_defaults_to_days():
+    # Defensive: if a caller passes something weird, treat as days.
+    result = themed_countdown_label(
+        date(2026, 8, 17), date(2026, 8, 27), date(2026, 7, 25),
+        emoji="🏝️", unit="bogus",
+    )
+    assert result == "23 days until the beach"
