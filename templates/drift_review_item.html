@@ -58,5 +58,39 @@
       Back to itinerary
     </a>
   </div>
+
+  <div class="vp-shortcut-hint mt-3 pt-2 border-top">
+    <span><kbd>R</kbd> Resync</span>
+    <span><kbd>K</kbd> Keep mine</span>
+    <span><kbd>U</kbd> Unlink</span>
+    <span><kbd>S</kbd> Skip</span>
+    <span><kbd>Esc</kbd> Back</span>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var map = { r: 'resync-btn', k: 'keep-btn', u: 'unlink-btn', s: 'skip-link' };
+    document.addEventListener('keydown', function (e) {
+      // Skip when the user is typing in a form field.
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      // Skip on modifier keys (don't intercept Cmd-R / Ctrl-R reload).
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        var backLink = document.getElementById('back-link');
+        if (backLink) backLink.click();
+        return;
+      }
+      var id = map[e.key.toLowerCase()];
+      if (!id) return;
+      var el = document.getElementById(id);
+      if (!el) return;  // Button is hidden (orphan case) — do nothing.
+      e.preventDefault();
+      el.click();  // works for both <button type=submit> and <a>
+    });
+  })();
+</script>
 {% endblock %}

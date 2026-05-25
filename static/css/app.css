@@ -974,3 +974,28 @@ html, body {
 .itin-drift-pill .bi {
   font-size: 0.8em;
 }
+
+/* Keyboard-shortcut hint row — shown on the drift review wizard step. */
+.vp-shortcut-hint {
+  font-size: 0.78rem;
+  color: var(--vp-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.vp-shortcut-hint kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0.1rem 0.35rem;
+  margin-right: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--vp-text);
+  background-color: var(--vp-surface-2);
+  border: 1px solid var(--vp-border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  line-height: 1;
+}

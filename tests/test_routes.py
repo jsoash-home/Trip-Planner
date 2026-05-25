@@ -1101,3 +1101,18 @@ def test_wizard_step_has_action_ids(app, trip, owner):
     assert b'id="unlink-btn"' in resp.data
     assert b'id="skip-link"' in resp.data
     assert b'id="back-link"' in resp.data
+
+
+def test_wizard_step_has_shortcut_hint(app, trip, owner):
+    """The wizard step renders the keyboard-shortcut hint row."""
+    _, item = _make_flight_with_arrive(trip)
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/item/{item.id}"
+        )
+    assert resp.status_code == 200
+    assert b"vp-shortcut-hint" in resp.data
+    # Each key is rendered inside a <kbd> tag.
+    assert b"<kbd>R</kbd>" in resp.data
+    assert b"<kbd>Esc</kbd>" in resp.data
