@@ -999,3 +999,58 @@ html, body {
   border-radius: 4px;
   line-height: 1;
 }
+
+/* ───── Dashboard progress ring (upcoming trips) ───── */
+.trip-card-ring-wrap {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trip-card-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.trip-card-ring-bg {
+  fill: none;
+  stroke: var(--bs-gray-200, #e9ecef);
+  stroke-width: 3;
+}
+
+.trip-card-ring-fg {
+  fill: none;
+  stroke: var(--bs-primary, #0d6efd);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trip-card-ring-fg { transition: none; }
+}
+
+.trip-card-ring-number {
+  position: relative;
+  z-index: 1;
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--bs-body-color, #212529);
+}
+
+.trip-card-ring-unit {
+  position: absolute;
+  bottom: 14px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bs-secondary, #6c757d);
+}

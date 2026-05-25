@@ -91,10 +91,14 @@ from src.sharing import (
 from src.trip_helpers import (
     SUGGESTED_TRIP_EMOJIS,
     countdown_label,
+    days_until,
     derive_status,
+    emoji_theme,
     group_trips_by_state,
     parse_trip_form,
+    progress_fraction,
     status_label,
+    themed_countdown_label,
     trip_form_values,
 )
 
@@ -206,7 +210,9 @@ login_manager.login_view = "index"
 # Templates can call these directly: {{ derive_status(...) }} / {{ "**hi**" | markdown }}
 app.jinja_env.globals.update(
     countdown_label=countdown_label,
+    days_until=days_until,
     derive_status=derive_status,
+    emoji_theme=emoji_theme,
     format_datetime_range=format_datetime_range,
     format_money=format_money,
     format_money_totals=format_money_totals,
@@ -215,7 +221,9 @@ app.jinja_env.globals.update(
     category_css=category_css,
     can_edit=can_edit,
     is_owner=is_owner,
+    progress_fraction=progress_fraction,
     share_role_label=lambda code: SHARE_ROLE_LABELS.get(code, code),
+    themed_countdown_label=themed_countdown_label,
 )
 
 

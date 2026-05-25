@@ -19,7 +19,22 @@
         Shared by {{ trip.owner.name or trip.owner.email }}
       </div>
     {% endif %}
-    <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
+    {% if status == 'planning' %}
+      {% set frac = progress_fraction(trip.start_date, today) %}
+      {% set d = days_until(trip.start_date, today) %}
+      <div class="trip-card-ring-wrap" aria-label="{{ d }} days until trip">
+        <svg class="trip-card-ring" viewBox="0 0 36 36" aria-hidden="true">
+          <circle class="trip-card-ring-bg" cx="18" cy="18" r="15.915"/>
+          <circle class="trip-card-ring-fg" cx="18" cy="18" r="15.915"
+                  stroke-dasharray="100 100"
+                  stroke-dashoffset="{{ '%.2f' | format(100 - (frac * 100)) }}"/>
+        </svg>
+        <span class="trip-card-ring-number">{{ d }}</span>
+        <span class="trip-card-ring-unit">{% if d == 1 %}day{% else %}days{% endif %}</span>
+      </div>
+    {% else %}
+      <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
+    {% endif %}
     {% if counts %}
       {% set tc = counts.get(trip.id, (0, 0)) %}
       {% if tc[0] > 0 or tc[1] > 0 %}
