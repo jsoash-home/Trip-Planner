@@ -17,12 +17,18 @@
 </h1>
 
 <div class="vp-card mb-4">
-  {% if drift_count == 0 %}
+  {% if drift_count == 0 and not new_items %}
     <p class="mb-3">Nothing's out of sync right now — every linked itinerary item matches its booking.</p>
     <a class="btn btn-vp-primary" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
       <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
       Back to itinerary
     </a>
+  {% elif drift_count == 0 and new_items %}
+    <p class="mb-3">
+      Every linked item is in sync, but
+      {{ new_items|length }} new item{{ '' if new_items|length == 1 else 's' }}
+      {{ 'is' if new_items|length == 1 else 'are' }} suggested below.
+    </p>
   {% else %}
     <p class="mb-3">
       <strong>{{ drift_count }}</strong> itinerary item{{ '' if drift_count == 1 else 's' }}
@@ -35,6 +41,10 @@
         All can be auto-resynced.
       {% else %}
         These need individual review — their bookings no longer suggest them.
+      {% endif %}
+      {% if new_items %}
+        And {{ new_items|length }} new item{{ '' if new_items|length == 1 else 's' }}
+        {{ 'is' if new_items|length == 1 else 'are' }} suggested below.
       {% endif %}
     </p>
 
@@ -70,6 +80,40 @@
           </li>
         {% endfor %}
       </ul>
+    {% endif %}
+  {% endif %}
+  {% if new_items %}
+    <hr>
+    <h2 class="h6 text-muted mb-2">New items the booking would create</h2>
+    <ul class="list-unstyled small mb-2">
+      {% for s in new_items %}
+        <li class="mb-1 d-flex gap-2 align-items-center">
+          <span>
+            <strong>{{ s.item_data.title }}</strong>
+            — {{ s.item_data.day_date.strftime('%a, %b %d') }}
+            {% if s.item_data.start_time %}
+              at {{ s.item_data.start_time.strftime('%H:%M') }}
+            {% endif %}
+            <span class="text-muted">— from {{ s.booking.title }}</span>
+          </span>
+          {% if can_edit(user_role) %}
+            <form method="post" class="m-0 ms-auto"
+                  action="{{ url_for('itinerary_add_suggested',
+                                      trip_id=trip.id,
+                                      booking_id=s.booking.id,
+                                      auto_kind=s.auto_kind) }}">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">Add</button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    {% if can_edit(user_role) and new_items|length > 1 %}
+      <a class="btn btn-sm btn-vp-primary"
+         href="{{ url_for('itinerary_add_all_suggested_confirm', trip_id=trip.id) }}">
+        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
+        Add all {{ new_items|length }} new items
+      </a>
     {% endif %}
   {% endif %}
 </div>

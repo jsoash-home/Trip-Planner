@@ -9,15 +9,20 @@
   &nbsp;›&nbsp; Itinerary
 </div>
 
-{% if drift_count > 0 %}
+{% if drift_count > 0 or new_items_count > 0 %}
   <div class="alert alert-warning d-flex align-items-center justify-content-between" role="alert">
     <div>
       <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
-      {{ drift_count }} itinerary item{{ '' if drift_count == 1 else 's' }} out of sync with {{ 'its' if drift_count == 1 else 'their' }} booking{{ '' if drift_count == 1 else 's' }}.
+      {% if drift_count > 0 %}
+        {{ drift_count }} itinerary item{{ '' if drift_count == 1 else 's' }} out of sync.
+      {% endif %}
+      {% if new_items_count > 0 %}
+        {{ new_items_count }} new item{{ '' if new_items_count == 1 else 's' }}
+        suggested by booking changes.
+      {% endif %}
     </div>
-    <a class="alert-link" href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
-      Review all drift →
-    </a>
+    <a class="btn btn-sm btn-outline-secondary"
+       href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">Review</a>
   </div>
 {% endif %}
 
