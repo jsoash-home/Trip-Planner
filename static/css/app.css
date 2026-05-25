@@ -304,6 +304,20 @@ html, body {
 .vp-flash--success { background: #d6f1e3;             color: var(--vp-success); }
 .vp-flash--warning { background: #fbeec7;             color: var(--vp-warning); }
 .vp-flash--danger  { background: #f7d8d2;             color: var(--vp-danger); }
+.vp-flash--success-celebrate {
+  background: #d6f1e3;
+  color: var(--vp-success);
+  font-size: 1rem;
+  font-weight: 600;
+  border: 1px solid #86efac;
+}
+.vp-flash--success-celebrate::before {
+  content: "✓";
+  display: inline-block;
+  margin-right: 0.5rem;
+  color: #16a34a;
+  font-weight: 700;
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .vp-flash {

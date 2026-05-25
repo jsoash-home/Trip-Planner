@@ -437,6 +437,87 @@ def test_wizard_unlink_redirects_to_next_drifting(app, trip, owner):
     assert f"/drift-review/item/{z.id}" in resp.headers["Location"]
 
 
+# ─── Celebration flash ─────────────────────────────────────────────
+
+def test_resync_last_drift_uses_celebration_flash(app, trip, owner):
+    """When a resync clears the only drifting item, flash category is
+    success-celebrate."""
+    _, item = _make_flight_with_arrive(trip)
+    # Add the in-sync 'depart' item so resync truly clears all drift
+    # (otherwise the missing depart auto-slot wouldn't matter for drift,
+    # but a stray drift report from a separate orphan would).
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=Booking.query.first().id,
+        auto_kind="depart", day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
+        # Follow redirect to inspect the rendered flash.
+        resp = client.get(f"/trips/{trip.id}/itinerary")
+    assert b"vp-flash--success-celebrate" in resp.data
+    assert b"Everything is in sync" in resp.data
+
+
+def test_resync_with_remaining_drift_uses_regular_flash(app, trip, owner):
+    """When other drift remains after a resync, use the regular success flash."""
+    _, item1 = _make_flight_with_arrive(trip)
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=Booking.query.first().id,
+        auto_kind="depart", day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    # A second drifting item on a different booking.
+    b2 = Booking(trip_id=trip.id, type="hotel", title="Hilton", vendor="Hilton",
+                 start_datetime=datetime(2026, 6, 2, 15, 0),
+                 end_datetime=datetime(2026, 6, 5, 11, 0))
+    db.session.add(b2)
+    db.session.commit()
+    # Add both check_in and check_out items — one drifting, one in-sync.
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b2.id, auto_kind="check_in",
+        day_date=date(2026, 6, 2),
+        start_time=datetime(2026, 6, 2, 15, 0).time(),
+        title="STALE TITLE", category="other",
+    ))
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b2.id, auto_kind="check_out",
+        day_date=date(2026, 6, 5),
+        start_time=datetime(2026, 6, 5, 11, 0).time(),
+        title="Check out: Hilton", category="other",
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/{item1.id}/resync")
+        resp = client.get(f"/trips/{trip.id}/itinerary")
+    assert b"vp-flash--success-celebrate" not in resp.data
+    # Plain success flash should still appear.
+    assert b"vp-flash--success" in resp.data
+
+
+def test_bulk_resync_clearing_all_uses_celebration_flash(app, trip, owner):
+    """Bulk resync that clears all drift uses the celebration flash."""
+    _, _ = _make_flight_with_arrive(trip)
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=Booking.query.first().id,
+        auto_kind="depart", day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/drift-review/bulk-resync")
+        resp = client.get(f"/trips/{trip.id}/itinerary")
+    assert b"vp-flash--success-celebrate" in resp.data
+
+
 def test_non_wizard_resync_still_redirects_to_itinerary(app, trip, owner):
     """Phase-1 behavior preserved: no ?from=wizard → redirect to itinerary."""
     b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",

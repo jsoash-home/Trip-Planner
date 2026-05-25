@@ -1222,23 +1222,33 @@ def itinerary_drift_review_bulk_resync(trip_id):
 
     if request.method == "POST":
         # Re-fetch each item's booking (avoid trusting stale objects),
-        # then apply resync. Single commit covers all items.
+        # then apply resync. Single commit covers all items. We ignore
+        # the per-call was_last flag — see below for the trip-level check.
         updated = 0
         for it in eligible:
             booking = db.session.get(Booking, it.linked_booking_id)
             if booking is None:
                 continue
-            if _apply_resync_to_item(it, booking):
+            applied, _ = _apply_resync_to_item(it, booking)
+            if applied:
                 updated += 1
         db.session.commit()
         logger.info("Bulk-resynced %d itinerary items for trip_id=%s",
                     updated, trip.id)
-        flash(
-            f"Resynced {updated} item{'' if updated == 1 else 's'} to "
-            f"{'its' if updated == 1 else 'their'} booking"
-            f"{'' if updated == 1 else 's'}.",
-            "success",
-        )
+
+        # After the bulk commit, recompute whether any drift remains
+        # on the trip. If not, use the celebration flash.
+        remaining_items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
+        any_drift_left = _annotate_drift_for_items(remaining_items) > 0
+        if updated > 0 and not any_drift_left:
+            flash("Everything is in sync with your bookings ✓", "success-celebrate")
+        else:
+            flash(
+                f"Resynced {updated} item{'' if updated == 1 else 's'} to "
+                f"{'its' if updated == 1 else 'their'} booking"
+                f"{'' if updated == 1 else 's'}.",
+                "success",
+            )
         return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
 
     return render_template(
@@ -1277,7 +1287,7 @@ def itinerary_drift(trip_id, item_id):
     )
 
 
-def _apply_resync_to_item(item, booking) -> bool:
+def _apply_resync_to_item(item, booking) -> Tuple[bool, bool]:
     """Apply the booking's auto-generated values to one item.
 
     Only overwrites fields that the user hasn't personally touched
@@ -1285,14 +1295,26 @@ def _apply_resync_to_item(item, booking) -> bool:
     user who touched `title` will continue to keep their title across
     future resyncs — by design, per the phase-3 spec.
 
-    Returns True if the item was updated, False if the booking no
-    longer generates an item of this auto_kind (orphaned). Caller is
-    responsible for committing the session.
+    Returns:
+        (applied, was_last_drift_on_trip)
+
+        applied is True when the item was updated, False when the
+        booking no longer generates an item of this auto_kind
+        (orphaned slot — caller should suggest Unlink/Delete).
+
+        was_last_drift_on_trip is True when, after this resync, no
+        remaining drifting items exist on the trip. Caller uses this
+        to pick the celebration flash variant. False when applied is
+        False.
+
+    Caller is responsible for committing the session before reading
+    was_last_drift_on_trip downstream, because the check re-runs
+    detect_drift over freshly-mutated state.
     """
     would_be_items = auto_itinerary_items_for_booking(booking)
     matches = [w for w in would_be_items if w.get("auto_kind") == item.auto_kind]
     if not matches:
-        return False
+        return (False, False)
     would_be = matches[0]
     touched = parse_touched(item.auto_fields_touched)
     for f in DRIFT_FIELDS:
@@ -1300,7 +1322,28 @@ def _apply_resync_to_item(item, booking) -> bool:
             continue
         setattr(item, f, would_be.get(f))
     # auto_fields_touched preserved intentionally.
-    return True
+
+    # Compute was_last_drift on the trip by checking every other linked
+    # item against its booking. The item we just resynced is included —
+    # detect_drift on it will return None now, so it doesn't count.
+    remaining = ItineraryItem.query.filter_by(trip_id=item.trip_id).all()
+    booking_ids = {it.linked_booking_id for it in remaining if it.linked_booking_id}
+    bookings_by_id = {
+        b.id: b for b in Booking.query.filter(Booking.id.in_(booking_ids)).all()
+    } if booking_ids else {}
+    was_last = True
+    for it in remaining:
+        if not it.linked_booking_id:
+            continue
+        b = bookings_by_id.get(it.linked_booking_id)
+        if b is None:
+            # Orphan — counts as drift, so this is not the last.
+            was_last = False
+            break
+        if detect_drift(it, b) is not None:
+            was_last = False
+            break
+    return (True, was_last)
 
 
 def _redirect_after_wizard_action(trip_id: int, current_item_id: int):
@@ -1350,7 +1393,8 @@ def itinerary_resync(trip_id, item_id):
         flash("The linked booking is gone — try Unlink instead.", "warning")
         return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
-    if not _apply_resync_to_item(item, booking):
+    applied, was_last = _apply_resync_to_item(item, booking)
+    if not applied:
         flash(
             "The booking no longer suggests this item. Use Unlink or Delete.",
             "warning",
@@ -1359,7 +1403,10 @@ def itinerary_resync(trip_id, item_id):
     db.session.commit()
     logger.info("Resynced itinerary item id=%s from booking id=%s",
                 item.id, booking.id)
-    flash(f"Resynced “{item.title}” to the booking.", "success")
+    if was_last:
+        flash("Everything is in sync with your bookings ✓", "success-celebrate")
+    else:
+        flash(f'Resynced "{item.title}" to the booking.', "success")
     if request.args.get("from") == "wizard":
         return _redirect_after_wizard_action(trip.id, item.id)
     return redirect(url_for("trip_itinerary", trip_id=trip.id))

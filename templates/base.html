@@ -59,7 +59,7 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, msg in messages %}
-          <div class="vp-flash vp-flash--{{ category if category in ['info','success','warning','danger'] else 'info' }}">
+          <div class="vp-flash vp-flash--{{ category if category in ['info','success','success-celebrate','warning','danger'] else 'info' }}">
             {{ msg }}
           </div>
         {% endfor %}
