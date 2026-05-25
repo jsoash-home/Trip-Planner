@@ -1,0 +1,32 @@
+{# Hero countdown block for the trip overview page.
+   Renders nothing while the trip is in progress (the Today section is the hero). #}
+{% set _status = derive_status(trip.start_date, trip.end_date, today) %}
+
+{% if _status == 'planning' %}
+  {% set _d = days_until(trip.start_date, today) %}
+  <section class="countdown-hero" aria-label="Countdown to trip"
+           data-countdown-hero
+           data-trip-id="{{ trip.id }}"
+           data-countdown-target="{{ trip.start_date.isoformat() }}T00:00:00">
+    <div class="countdown-hero-number">
+      <span class="countdown-hero-days" data-countdown-days>{{ _d }}</span>
+      <span class="countdown-hero-days-label">{% if _d == 1 %}day{% else %}days{% endif %}</span>
+    </div>
+    <div class="countdown-hero-ticker" aria-hidden="true">
+      <span data-countdown-h>—</span>h
+      <span data-countdown-m>—</span>m
+      <span data-countdown-s>—</span>s
+    </div>
+    <div class="countdown-hero-themed" data-countdown-unit>
+      <span data-countdown-form="days">{{ themed_countdown_label(trip.start_date, trip.end_date, today, emoji=trip.cover_emoji, unit='days') }}</span>
+      <span data-countdown-form="sleeps" hidden>{{ themed_countdown_label(trip.start_date, trip.end_date, today, emoji=trip.cover_emoji, unit='sleeps') }}</span>
+    </div>
+  </section>
+{% elif _status == 'completed' %}
+  {% set _ago = (today - trip.end_date).days %}
+  <section class="countdown-hero countdown-hero--past" aria-label="Trip recap">
+    <div class="countdown-hero-past-text">
+      Welcomed home {{ _ago }} day{% if _ago != 1 %}s{% endif %} ago
+    </div>
+  </section>
+{% endif %}

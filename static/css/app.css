@@ -1098,3 +1098,65 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .vp-unit-btn { transition: none; }
 }
+
+/* ───── Countdown hero (trip overview page) ───── */
+.countdown-hero {
+  background: linear-gradient(135deg, var(--bs-primary, #0d6efd) 0%, #6610f2 100%);
+  color: #fff;
+  border-radius: 1rem;
+  padding: 2rem 1.5rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(13, 110, 253, 0.15);
+}
+
+.countdown-hero--past {
+  background: var(--bs-gray-100, #f8f9fa);
+  color: var(--bs-secondary, #6c757d);
+  box-shadow: none;
+}
+
+.countdown-hero-number {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.countdown-hero-days {
+  font-size: 4rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.countdown-hero-days-label {
+  font-size: 1.25rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.countdown-hero-ticker {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.75rem;
+}
+
+.countdown-hero-ticker span {
+  display: inline-block;
+  min-width: 1.5em;
+  text-align: right;
+}
+
+.countdown-hero-themed {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.countdown-hero-past-text {
+  font-size: 1.25rem;
+  font-weight: 500;
+}

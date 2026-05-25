@@ -72,9 +72,48 @@
     });
   }
 
+  function pad2(n) {
+    return n < 10 ? '0' + n : '' + n;
+  }
+
+  function tickHero(hero) {
+    var target = new Date(hero.getAttribute('data-countdown-target'));
+    if (isNaN(target.getTime())) return;
+    var now = new Date();
+    var diffMs = target - now;
+    if (diffMs <= 0) {
+      // Trip started — page will refresh and switch to in-progress UI on next visit.
+      return;
+    }
+    var totalSeconds = Math.floor(diffMs / 1000);
+    var days = Math.floor(totalSeconds / 86400);
+    var hours = Math.floor((totalSeconds % 86400) / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+    var seconds = totalSeconds % 60;
+
+    var daysEl = hero.querySelector('[data-countdown-days]');
+    if (daysEl) daysEl.textContent = days;
+    var hEl = hero.querySelector('[data-countdown-h]');
+    if (hEl) hEl.textContent = pad2(hours);
+    var mEl = hero.querySelector('[data-countdown-m]');
+    if (mEl) mEl.textContent = pad2(minutes);
+    var sEl = hero.querySelector('[data-countdown-s]');
+    if (sEl) sEl.textContent = pad2(seconds);
+  }
+
+  function startTickers() {
+    var heroes = document.querySelectorAll('[data-countdown-hero][data-countdown-target]');
+    if (!heroes.length) return;
+    heroes.forEach(tickHero);
+    setInterval(function () {
+      heroes.forEach(tickHero);
+    }, 1000);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     applyUnit(readUnit());
     wireToggle();
     revealToggleIfRelevant();
+    startTickers();
   });
 })();
