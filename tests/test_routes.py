@@ -853,6 +853,32 @@ def test_drift_counts_includes_new_items_only_trip(app, trip):
     assert counts == {trip.id: (0, 1)}
 
 
+def test_drift_counts_treats_orphan_items_as_drift(app, trip, owner):
+    """An itinerary item whose linked booking was force-deleted (bypassing
+    the cascade) still counts as drift, matching _annotate_drift_for_items."""
+    from app import _drift_counts_for_trips
+    # Create a linked item, then force-delete the booking row directly
+    # so the cascade doesn't clean up the item.
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    bid = b.id
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=bid, auto_kind="arrive",
+        day_date=date(2026, 6, 1), title="Arrive United", category="transit",
+    ))
+    db.session.commit()
+    # Use a raw delete to bypass the SQLAlchemy cascade.
+    db.session.execute(
+        Booking.__table__.delete().where(Booking.id == bid)
+    )
+    db.session.commit()
+    counts = _drift_counts_for_trips([trip])
+    assert counts == {trip.id: (1, 0)}
+
+
 def test_booking_edit_flash_mentions_new_items_available(app, trip, owner):
     """Editing a flight to add end_datetime creates a new 'arrive' slot;
     the flash should mention it."""

@@ -886,7 +886,7 @@ def _annotate_drift_for_items(items):
     return drift_count
 
 
-def _drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
+def _drift_counts_for_trips(trips: List["Trip"]) -> Dict[int, Tuple[int, int]]:
     """For each trip, return (drift_count, new_items_count).
 
     Batched: two queries cover all relevant bookings and itinerary items,
@@ -935,6 +935,11 @@ def _drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
                 continue
             booking = bookings_by_id.get(it.linked_booking_id)
             if booking is None:
+                # Orphan: the linked booking is gone but the cascade
+                # didn't clean this item up. Count it as drift so the
+                # dashboard pill matches what the itinerary page shows
+                # via _annotate_drift_for_items.
+                drift += 1
                 continue
             if detect_drift(it, booking) is not None:
                 drift += 1
