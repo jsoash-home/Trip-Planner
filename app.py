@@ -1409,7 +1409,7 @@ def itinerary_resync(trip_id, item_id):
         flash(f'Resynced "{item.title}" to the booking.', "success")
     if request.args.get("from") == "wizard":
         return _redirect_after_wizard_action(trip.id, item.id)
-    return redirect(url_for("trip_itinerary", trip_id=trip.id))
+    return redirect(url_for("trip_itinerary", trip_id=trip.id, just_synced=item.id))
 
 
 @app.route("/trips/<int:trip_id>/itinerary/<int:item_id>/keep-mine", methods=["POST"])

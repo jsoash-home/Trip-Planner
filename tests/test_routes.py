@@ -501,6 +501,43 @@ def test_resync_with_remaining_drift_uses_regular_flash(app, trip, owner):
     assert b"vp-flash--success" in resp.data
 
 
+def test_resync_redirect_includes_just_synced_param(app, trip, owner):
+    """The redirect URL after a successful resync carries ?just_synced=<id>."""
+    _, item = _make_flight_with_arrive(trip)
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=Booking.query.first().id,
+        auto_kind="depart", day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
+    assert resp.status_code == 302
+    assert f"just_synced={item.id}" in resp.headers["Location"]
+
+
+def test_just_synced_param_stamps_data_attribute(app, trip, owner):
+    """The itinerary page renders data-just-synced='true' on the matching chip."""
+    _, item = _make_flight_with_arrive(trip)
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=Booking.query.first().id,
+        auto_kind="depart", day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    # Resync changes the item's title back to "Arrive United" so the chip
+    # exists; we then visit with the query param.
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
+        resp = client.get(f"/trips/{trip.id}/itinerary?just_synced={item.id}")
+    assert resp.status_code == 200
+    assert b'data-just-synced="true"' in resp.data
+
+
 def test_bulk_resync_clearing_all_uses_celebration_flash(app, trip, owner):
     """Bulk resync that clears all drift uses the celebration flash."""
     _, _ = _make_flight_with_arrive(trip)
@@ -535,7 +572,8 @@ def test_non_wizard_resync_still_redirects_to_itinerary(app, trip, owner):
         _login(client, owner)
         resp = client.post(f"/trips/{trip.id}/itinerary/{item.id}/resync")
     assert resp.status_code == 302
-    assert resp.headers["Location"].endswith(f"/trips/{trip.id}/itinerary")
+    assert f"/trips/{trip.id}/itinerary" in resp.headers["Location"]
+    assert f"just_synced={item.id}" in resp.headers["Location"]
 
 
 def test_bulk_resync_confirm_lists_eligible_items(app, trip, owner):

@@ -334,6 +334,26 @@ html, body {
   }
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  [data-just-synced] {
+    animation: vp-pulse-success 1.2s ease-out 1;
+  }
+  @keyframes vp-pulse-success {
+    0%   {
+      background-color: rgba(214, 241, 227, 0.8);
+      box-shadow: 0 0 0 0 rgba(22, 101, 52, 0.4);
+    }
+    60%  {
+      background-color: rgba(214, 241, 227, 0.4);
+      box-shadow: 0 0 0 12px rgba(22, 101, 52, 0);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 0 rgba(22, 101, 52, 0);
+    }
+  }
+}
+
 /* ─── Forms ────────────────────────────────────────────────── */
 .form-control:focus, .form-select:focus {
   border-color: var(--vp-accent);
