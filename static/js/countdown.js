@@ -63,8 +63,18 @@
     });
   }
 
+  function revealToggleIfRelevant() {
+    // The toggle is hidden by default in the navbar; only show it on pages
+    // that actually have something to toggle.
+    if (!document.querySelector('[data-countdown-unit]')) return;
+    document.querySelectorAll('.vp-unit-toggle').forEach(function (el) {
+      el.hidden = false;
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     applyUnit(readUnit());
     wireToggle();
+    revealToggleIfRelevant();
   });
 })();
