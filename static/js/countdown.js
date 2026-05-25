@@ -159,7 +159,7 @@
     overlay.className = 'countdown-hero-milestone';
     overlay.textContent = copy;
     hero.appendChild(overlay);
-    // Slide it out after 4s so the regular hero shows again.
+    // Fade it out after 4s so the regular hero shows again.
     setTimeout(function () {
       overlay.classList.add('countdown-hero-milestone--dismissing');
     }, 4000);

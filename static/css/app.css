@@ -1101,6 +1101,8 @@ html, body {
 
 /* ───── Countdown hero (trip overview page) ───── */
 .countdown-hero {
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(135deg, var(--bs-primary, #0d6efd) 0%, #6610f2 100%);
   color: #fff;
   border-radius: 1rem;
@@ -1160,8 +1162,6 @@ html, body {
   font-size: 1.25rem;
   font-weight: 500;
 }
-
-.countdown-hero { position: relative; overflow: hidden; }
 
 .countdown-hero-milestone {
   position: absolute;
