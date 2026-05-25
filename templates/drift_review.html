@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}Review drift — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -12,7 +13,7 @@
 </div>
 
 <h1 class="h3 mb-3">
-  <i class="bi bi-exclamation-triangle-fill text-warning me-1" aria-hidden="true"></i>
+  {{ icon('exclamation-triangle-fill', class='text-warning me-1') }}
   Review drift
 </h1>
 
@@ -20,7 +21,7 @@
   {% if drift_count == 0 and not new_items %}
     <p class="mb-3">Nothing's out of sync right now — every linked itinerary item matches its booking.</p>
     <a class="btn btn-vp-primary" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
-      <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+      {{ icon('arrow-left', class='me-1') }}
       Back to itinerary
     </a>
   {% elif drift_count == 0 and new_items %}
@@ -58,7 +59,7 @@
       {% if can_edit(user_role) and resyncable_count > 0 %}
         <a class="btn btn-outline-secondary"
            href="{{ url_for('itinerary_drift_review_bulk_resync', trip_id=trip.id) }}">
-          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+          {{ icon('arrow-clockwise', class='me-1') }}
           Resync {{ resyncable_count }} unchanged
         </a>
       {% endif %}
@@ -111,7 +112,7 @@
     {% if can_edit(user_role) and new_items|length > 1 %}
       <a class="btn btn-sm btn-vp-primary"
          href="{{ url_for('itinerary_add_all_suggested_confirm', trip_id=trip.id) }}">
-        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
+        {{ icon('plus-circle', class='me-1') }}
         Add all {{ new_items|length }} new items
       </a>
     {% endif %}

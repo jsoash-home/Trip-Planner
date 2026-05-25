@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}Confirm bulk resync — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -14,7 +15,7 @@
 </div>
 
 <h1 class="h3 mb-3">
-  <i class="bi bi-arrow-clockwise text-warning me-1" aria-hidden="true"></i>
+  {{ icon('arrow-clockwise', class='text-warning me-1') }}
   Confirm bulk resync
 </h1>
 
@@ -43,7 +44,7 @@
         action="{{ url_for('itinerary_drift_review_bulk_resync', trip_id=trip.id) }}"
         class="d-flex gap-2 flex-wrap mt-3 pt-3 border-top">
     <button type="submit" class="btn btn-vp-primary">
-      <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+      {{ icon('arrow-clockwise', class='me-1') }}
       Resync these {{ eligible_count }} item{{ '' if eligible_count == 1 else 's' }}
     </button>
     <a class="btn btn-outline-secondary"

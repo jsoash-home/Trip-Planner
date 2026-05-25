@@ -4,6 +4,7 @@
    the route redirects to the next drifting wizard step).
    The id="..." attrs let the wizard's keyboard handler find each
    button by key. They're harmless on the drift detail page. #}
+{% from "_icon.html" import icon %}
 {% if can_edit(user_role) %}
   {% set qs = {'from': 'wizard'} if from_wizard else {} %}
   <div class="d-flex gap-2 flex-wrap">
@@ -12,7 +13,7 @@
             action="{{ url_for('itinerary_resync', trip_id=trip.id, item_id=item.id, **qs) }}"
             class="m-0">
         <button id="resync-btn" class="btn btn-vp-primary" type="submit">
-          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
+          {{ icon('arrow-clockwise', class='me-1') }}
           Resync to booking
         </button>
       </form>

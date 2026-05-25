@@ -951,8 +951,9 @@
   color: #5b3000;
   text-decoration: none;
 }
-.itin-drift-pill .bi {
-  font-size: 0.8em;
+.itin-drift-pill svg {
+  width: 0.9em;
+  height: 0.9em;
 }
 
 /* Keyboard-shortcut hint row — shown on the drift review wizard step. */

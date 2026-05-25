@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}Itinerary — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -15,7 +16,7 @@
 {% if drift_count > 0 or new_items_count > 0 %}
   <div class="alert alert-warning d-flex align-items-center justify-content-between" role="alert">
     <div>
-      <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+      {{ icon('exclamation-triangle-fill', class='me-2') }}
       {% if drift_count > 0 %}
         {{ drift_count }} itinerary item{{ '' if drift_count == 1 else 's' }} out of sync.
       {% endif %}
@@ -35,13 +36,13 @@
     {% if drift_count > 0 %}
       <a class="btn btn-outline-warning"
          href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
-        <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+        {{ icon('exclamation-triangle-fill', class='me-1') }}
         Review drift
       </a>
     {% endif %}
     {% if can_edit(user_role) %}
       <a class="btn btn-vp-primary" href="{{ url_for('itinerary_new', trip_id=trip.id) }}">
-        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+        {{ icon('plus-lg', class='me-1') }}
         Add item
       </a>
     {% endif %}
@@ -79,7 +80,7 @@
                 {{ it.title }}
                 {% if it.linked_booking_id %}
                   <span class="itin-chip-link" title="Linked to a booking" aria-label="Linked to a booking">
-                    <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                    {{ icon('link-45deg') }}
                   </span>
                 {% endif %}
               </div>
@@ -93,7 +94,7 @@
                 <a class="itin-drift-pill"
                    href="{{ url_for('itinerary_drift', trip_id=trip.id, item_id=it.id) }}"
                    title="This item is out of sync with its booking">
-                  <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+                  {{ icon('exclamation-triangle-fill') }}
                   {% if it.drift.is_orphaned %}
                     Booking removed this
                   {% else %}
@@ -106,14 +107,14 @@
                   <a class="btn btn-xs btn-outline-secondary"
                      href="{{ url_for('itinerary_edit', trip_id=trip.id, item_id=it.id) }}"
                      aria-label="Edit item">
-                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                    {{ icon('pencil') }}
                   </a>
                   <form method="post"
                         class="d-inline m-0"
                         action="{{ url_for('itinerary_delete', trip_id=trip.id, item_id=it.id) }}"
                         onsubmit="return confirm('Delete &quot;{{ it.title | e }}&quot;?');">
                     <button type="submit" class="btn btn-xs btn-outline-danger" aria-label="Delete item">
-                      <i class="bi bi-trash" aria-hidden="true"></i>
+                      {{ icon('trash') }}
                     </button>
                   </form>
                 </div>
@@ -124,7 +125,7 @@
           {% if can_edit(user_role) %}
             <a class="day-column-add"
                href="{{ url_for('itinerary_new', trip_id=trip.id, day=day_date.isoformat()) }}">
-              <i class="bi bi-plus-lg" aria-hidden="true"></i> Add to this day
+              {{ icon('plus-lg') }} Add to this day
             </a>
           {% endif %}
         </div>

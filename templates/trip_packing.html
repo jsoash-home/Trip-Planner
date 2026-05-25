@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}Packing — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -13,7 +14,7 @@
   <h1 class="h3 mb-0">Packing</h1>
   {% if can_edit(user_role) %}
     <a class="btn btn-vp-primary" href="{{ url_for('packing_new', trip_id=trip.id) }}">
-      <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+      {{ icon('plus-lg', class='me-1') }}
       Add item
     </a>
   {% endif %}
@@ -89,14 +90,14 @@
               <a class="btn btn-xs btn-outline-secondary"
                  href="{{ url_for('packing_edit', trip_id=trip.id, item_id=it.id) }}"
                  aria-label="Edit item">
-                <i class="bi bi-pencil" aria-hidden="true"></i>
+                {{ icon('pencil') }}
               </a>
               <form method="post"
                     class="d-inline m-0"
                     action="{{ url_for('packing_delete', trip_id=trip.id, item_id=it.id) }}"
                     onsubmit="return confirm('Delete &quot;{{ it.name | e }}&quot;?');">
                 <button type="submit" class="btn btn-xs btn-outline-danger" aria-label="Delete item">
-                  <i class="bi bi-trash" aria-hidden="true"></i>
+                  {{ icon('trash') }}
                 </button>
               </form>
             </div>

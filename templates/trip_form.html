@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}{{ "Edit trip" if trip else "Plan a new trip" }} — Vacation Planner{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center mb-3">
   <a class="text-muted text-decoration-none small" href="{{ url_for('trip_overview', trip_id=trip.id) if trip else url_for('trips_list') }}">
-    <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+    {{ icon('arrow-left', class='me-1') }}
     {{ trip.name if trip else "My trips" }}
   </a>
 </div>

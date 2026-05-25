@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icon.html" import icon %}
 {% block title %}Budget — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -12,7 +13,7 @@
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h1 class="h3 mb-0">Budget</h1>
   <a class="btn btn-outline-secondary" href="{{ url_for('bookings_list', trip_id=trip.id) }}">
-    <i class="bi bi-arrow-up-right me-1" aria-hidden="true"></i>
+    {{ icon('arrow-up-right', class='me-1') }}
     Manage bookings
   </a>
 </div>
@@ -46,7 +47,7 @@
           </div>
           {% if total_uncosted > 0 %}
             <div class="text-warning">
-              <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+              {{ icon('exclamation-triangle', class='me-1') }}
               <strong>{{ total_uncosted }}</strong> without a cost set
             </div>
           {% endif %}
