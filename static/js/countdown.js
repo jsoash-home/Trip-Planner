@@ -110,10 +110,91 @@
     }, 1000);
   }
 
+  var MILESTONES = [30, 14, 7, 3, 1];
+
+  var MILESTONE_COPY = {
+    30: '🎉 One month to go!',
+    14: '🧳 Two weeks!',
+    7: '⏰ One week!',
+    3: '✨ Just three days!',
+    1: '🛫 Tomorrow!'
+  };
+
+  function celebratedKey(tripId, threshold) {
+    return 'vp.celebrated.' + tripId + '.' + threshold;
+  }
+
+  function alreadyCelebrated(tripId, threshold) {
+    try {
+      return window.localStorage.getItem(celebratedKey(tripId, threshold)) !== null;
+    } catch (e) {
+      return true;  // pretend we already did, to avoid re-firing on every reload
+    }
+  }
+
+  function markCelebrated(tripId, threshold) {
+    try {
+      window.localStorage.setItem(celebratedKey(tripId, threshold), '1');
+    } catch (e) {
+      // best-effort
+    }
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function fireConfetti() {
+    if (prefersReducedMotion()) return;
+    if (typeof window.confetti !== 'function') return;
+    window.confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.3 }
+    });
+  }
+
+  function showMilestoneOverlay(hero, copy) {
+    var overlay = document.createElement('div');
+    overlay.className = 'countdown-hero-milestone';
+    overlay.textContent = copy;
+    hero.appendChild(overlay);
+    // Slide it out after 4s so the regular hero shows again.
+    setTimeout(function () {
+      overlay.classList.add('countdown-hero-milestone--dismissing');
+    }, 4000);
+    setTimeout(function () {
+      overlay.remove();
+    }, 4600);
+  }
+
+  function checkMilestones() {
+    var heroes = document.querySelectorAll('[data-countdown-hero][data-trip-id][data-countdown-target]');
+    heroes.forEach(function (hero) {
+      var tripId = hero.getAttribute('data-trip-id');
+      var target = new Date(hero.getAttribute('data-countdown-target'));
+      if (isNaN(target.getTime())) return;
+      var now = new Date();
+      var diffMs = target - now;
+      if (diffMs <= 0) return;
+      var totalDays = Math.ceil(diffMs / 86400000);
+      for (var i = 0; i < MILESTONES.length; i++) {
+        var t = MILESTONES[i];
+        if (totalDays === t && !alreadyCelebrated(tripId, t)) {
+          showMilestoneOverlay(hero, MILESTONE_COPY[t]);
+          fireConfetti();
+          markCelebrated(tripId, t);
+          break;
+        }
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     applyUnit(readUnit());
     wireToggle();
     revealToggleIfRelevant();
     startTickers();
+    checkMilestones();
   });
 })();
