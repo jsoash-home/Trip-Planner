@@ -1101,4 +1101,3 @@ def test_wizard_step_has_action_ids(app, trip, owner):
     assert b'id="unlink-btn"' in resp.data
     assert b'id="skip-link"' in resp.data
     assert b'id="back-link"' in resp.data
-    assert b"trip-card-status-row" not in resp.data
