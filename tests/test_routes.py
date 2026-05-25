@@ -672,3 +672,52 @@ def test_drift_review_lists_new_item_suggestions(app, trip, owner):
     # Suggestion text appears.
     assert "Arrive United" in body
     assert "New items the booking would create" in body
+
+
+def test_add_suggested_creates_linked_item(app, trip, owner):
+    """POST /add-suggested/<bid>/<kind> creates the missing linked item."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    # Only depart exists.
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="depart",
+        day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    assert ItineraryItem.query.filter_by(linked_booking_id=b.id).count() == 1
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/add-suggested/{b.id}/arrive"
+        )
+    assert resp.status_code == 302
+    arrive_items = ItineraryItem.query.filter_by(
+        linked_booking_id=b.id, auto_kind="arrive"
+    ).all()
+    assert len(arrive_items) == 1
+    assert arrive_items[0].title == "Arrive United"
+    assert arrive_items[0].auto_fields_touched == ""
+
+
+def test_add_suggested_is_idempotent(app, trip, owner):
+    """A second POST for an already-existing slot is a no-op (no duplicate)."""
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/add-suggested/{b.id}/arrive")
+        client.post(f"/trips/{trip.id}/itinerary/add-suggested/{b.id}/arrive")
+    arrive_items = ItineraryItem.query.filter_by(
+        linked_booking_id=b.id, auto_kind="arrive"
+    ).all()
+    assert len(arrive_items) == 1

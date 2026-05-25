@@ -1308,6 +1308,57 @@ def itinerary_unlink(trip_id, item_id):
         return _redirect_after_wizard_action(trip.id, item.id)
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
+
+@app.route(
+    "/trips/<int:trip_id>/itinerary/add-suggested/<int:booking_id>/<string:auto_kind>",
+    methods=["POST"],
+)
+@login_required
+def itinerary_add_suggested(trip_id, booking_id, auto_kind):
+    """Create one new linked itinerary item from a booking's suggestion.
+
+    Editor+ only. Re-derives the missing list to verify the slot really is
+    missing (in case of concurrent state). Redirects to drift review.
+    """
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+    booking = db.session.get(Booking, booking_id)
+    if booking is None or booking.trip_id != trip.id:
+        flash("That booking doesn't exist.", "warning")
+        return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+    existing_kinds = {
+        it.auto_kind for it in ItineraryItem.query.filter_by(
+            linked_booking_id=booking.id
+        ).all() if it.auto_kind
+    }
+    missing = missing_auto_kinds_for_booking(
+        booking, existing_kinds, trip.start_date, trip.end_date,
+    )
+    match = next((w for w in missing if w["auto_kind"] == auto_kind), None)
+    if match is None:
+        flash("That item already exists or is no longer suggested.", "info")
+        return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+    match["order_within_day"] = _next_order_within_day(trip.id, match["day_date"])
+    item = ItineraryItem(
+        trip_id=trip.id,
+        linked_booking_id=booking.id,
+        auto_fields_touched="",
+        **match,
+    )
+    db.session.add(item)
+    db.session.commit()
+    logger.info(
+        "Added suggested item id=%s kind=%s for booking id=%s",
+        item.id, auto_kind, booking.id,
+    )
+    flash(
+        f"Added “{item.title}” to {item.day_date.strftime('%a, %b %d')}.",
+        "success",
+    )
+    return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
+
+
 @app.route("/trips/<int:trip_id>/budget")
 @login_required
 def trip_budget(trip_id):
