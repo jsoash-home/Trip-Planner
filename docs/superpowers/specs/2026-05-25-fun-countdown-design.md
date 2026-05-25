@@ -81,21 +81,25 @@ When themed and unit is `sleeps`: `"23 sleeps until the beach"`. When themed and
 **Files:** `src/trip_helpers.py`, `tests/test_trip_helpers.py`, `templates/_trip_card.html`, `templates/_countdown_hero.html`.
 
 ### Slice 5 — Sleeps mode toggle (G)
-Small pill button in the dashboard header next to the "New trip" button: `"Days · Sleeps"` segmented control. Click writes to `localStorage["vp.countdown.unit"]`, the JS module then updates every `data-countdown-unit` element on the page in place.
+Small `Days · Sleeps` segmented control in the navbar in `templates/base.html` (right side, before the user dropdown), so it's reachable from the dashboard AND the trip overview page. Click writes to `localStorage["vp.countdown.unit"]`; the JS module then updates every countdown element on the page in place.
 
-**Files:** `templates/trips_list.html` (toggle), `static/js/countdown.js` (apply on load + on click), `static/css/app.css` (toggle styles).
+**DOM convention:** Each countdown wrapper carries `data-countdown-unit` as a marker, with two child spans inside: `<span data-countdown-form="days">23 days to go</span>` and `<span data-countdown-form="sleeps">23 sleeps until the beach</span>`. JS sets `hidden` on the one not matching the current unit. Server initially renders both spans; JS picks on load.
+
+**Files:** `templates/base.html` (toggle in navbar), `static/js/countdown.js` (apply on load + on click), `static/css/app.css` (toggle styles).
 
 ## Data flow
 
 ```
 Server render
-  → renders both forms in DOM: data-countdown-days="23" data-countdown-sleeps="23 sleeps until the beach"
-  → JS reads localStorage, sets visibility on the matching span
+  → renders wrapper <span data-countdown-unit> containing
+    <span data-countdown-form="days">23 days to go</span>
+    <span data-countdown-form="sleeps">23 sleeps until the beach</span>
+  → JS reads localStorage, sets hidden on the non-matching child
   → JS starts hero tick (overview page only)
   → JS checks threshold; fires confetti if first time
 Toggle click
   → updates localStorage
-  → JS re-runs the visibility swap
+  → JS re-runs the hidden-swap across all data-countdown-unit elements
 ```
 
 The "brief flash" is acceptable because we start in the default unit (`days`) on both server and JS — only users who toggled away from default see the swap, and it happens on `DOMContentLoaded` before paint stabilizes.
