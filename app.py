@@ -17,7 +17,7 @@ import os
 import subprocess
 from datetime import date
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import markdown as md_lib
 from dotenv import load_dotenv
@@ -884,6 +884,71 @@ def _annotate_drift_for_items(items):
         if it.drift is not None:
             drift_count += 1
     return drift_count
+
+
+def _drift_counts_for_trips(trips) -> Dict[int, Tuple[int, int]]:
+    """For each trip, return (drift_count, new_items_count).
+
+    Batched: two queries cover all relevant bookings and itinerary items,
+    then in-memory grouping. Skips trips whose status is 'completed' or
+    whose end_date is before today (drift on a finished trip isn't
+    actionable).
+
+    Returns a dict keyed by trip.id. Trips not in the result dict
+    implicitly have (0, 0). Used by the dashboard to render per-trip
+    pills.
+    """
+    today = date.today()
+    active = [
+        t for t in trips
+        if t.status != "completed" and t.end_date >= today
+    ]
+    if not active:
+        return {}
+    trip_ids = [t.id for t in active]
+
+    bookings = Booking.query.filter(Booking.trip_id.in_(trip_ids)).all()
+    items = ItineraryItem.query.filter(
+        ItineraryItem.trip_id.in_(trip_ids)
+    ).all()
+
+    bookings_by_trip: Dict[int, list] = {}
+    bookings_by_id: Dict[int, Any] = {}
+    for b in bookings:
+        bookings_by_trip.setdefault(b.trip_id, []).append(b)
+        bookings_by_id[b.id] = b
+
+    items_by_trip: Dict[int, list] = {}
+    existing_kinds_by_booking: Dict[int, set] = {}
+    for it in items:
+        items_by_trip.setdefault(it.trip_id, []).append(it)
+        if it.linked_booking_id and it.auto_kind:
+            existing_kinds_by_booking.setdefault(
+                it.linked_booking_id, set()
+            ).add(it.auto_kind)
+
+    out: Dict[int, Tuple[int, int]] = {}
+    for t in active:
+        drift = 0
+        for it in items_by_trip.get(t.id, []):
+            if not it.linked_booking_id:
+                continue
+            booking = bookings_by_id.get(it.linked_booking_id)
+            if booking is None:
+                continue
+            if detect_drift(it, booking) is not None:
+                drift += 1
+
+        new_count = 0
+        for b in bookings_by_trip.get(t.id, []):
+            existing = existing_kinds_by_booking.get(b.id, set())
+            new_count += len(missing_auto_kinds_for_booking(
+                b, existing, t.start_date, t.end_date,
+            ))
+
+        if drift > 0 or new_count > 0:
+            out[t.id] = (drift, new_count)
+    return out
 
 
 def _annotate_new_items_for_trip(trip) -> List["NewItemSuggestion"]:

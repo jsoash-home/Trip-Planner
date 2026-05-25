@@ -783,6 +783,76 @@ def test_bulk_add_is_idempotent(app, trip, owner):
     assert ItineraryItem.query.filter_by(trip_id=trip.id).count() == 2
 
 
+# ─── Dashboard drift counts ─────────────────────────────────────────
+
+def test_drift_counts_empty_when_no_trips(app, owner):
+    """No trips → helper returns an empty dict."""
+    from app import _drift_counts_for_trips
+    assert _drift_counts_for_trips([]) == {}
+
+
+def test_drift_counts_includes_drifting_trip(app, trip):
+    """A trip with one drifting linked item shows (1, 0)."""
+    from app import _drift_counts_for_trips
+    b, _ = _make_flight_with_arrive(trip)  # 1 drifting 'arrive' item
+    # Also add the in-sync 'depart' item so there are no missing auto-slots.
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="depart",
+        day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    counts = _drift_counts_for_trips([trip])
+    assert counts == {trip.id: (1, 0)}
+
+
+def test_drift_counts_skips_completed_trip(app, owner):
+    """status='completed' trip is omitted from the result dict."""
+    from app import _drift_counts_for_trips
+    t = Trip(owner_id=owner.id, name="Done trip",
+             start_date=date(2026, 1, 1), end_date=date(2026, 1, 7),
+             status="completed")
+    db.session.add(t)
+    db.session.commit()
+    _make_flight_with_arrive(t)  # would drift, but trip is completed
+    counts = _drift_counts_for_trips([t])
+    assert counts == {}
+
+
+def test_drift_counts_skips_past_trip(app, owner):
+    """A trip whose end_date is before today is omitted."""
+    from app import _drift_counts_for_trips
+    t = Trip(owner_id=owner.id, name="Past trip",
+             start_date=date(2020, 1, 1), end_date=date(2020, 1, 7))
+    db.session.add(t)
+    db.session.commit()
+    _make_flight_with_arrive(t)
+    counts = _drift_counts_for_trips([t])
+    assert counts == {}
+
+
+def test_drift_counts_includes_new_items_only_trip(app, trip):
+    """A trip with no drift but a missing auto-slot shows (0, 1)."""
+    from app import _drift_counts_for_trips
+    # Flight booking with both datetimes, but only the 'depart' item exists —
+    # 'arrive' is the missing auto-slot.
+    b = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",
+                start_datetime=datetime(2026, 6, 1, 10, 0),
+                end_datetime=datetime(2026, 6, 1, 14, 0))
+    db.session.add(b)
+    db.session.commit()
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="depart",
+        day_date=date(2026, 6, 1),
+        start_time=datetime(2026, 6, 1, 10, 0).time(),  # matches booking start
+        title="Depart United", category="transit",
+    ))
+    db.session.commit()
+    counts = _drift_counts_for_trips([trip])
+    assert counts == {trip.id: (0, 1)}
+
+
 def test_booking_edit_flash_mentions_new_items_available(app, trip, owner):
     """Editing a flight to add end_datetime creates a new 'arrive' slot;
     the flash should mention it."""
