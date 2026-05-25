@@ -1,7 +1,9 @@
 {# Renders the Resync / Keep mine / Unlink form buttons for one item.
    Expects: trip, item, drift (or None), user_role.
    Optional: from_wizard (truthy → adds ?from=wizard to action URLs so
-   the route redirects to the next drifting wizard step). #}
+   the route redirects to the next drifting wizard step).
+   The id="..." attrs let the wizard's keyboard handler find each
+   button by key. They're harmless on the drift detail page. #}
 {% if can_edit(user_role) %}
   {% set qs = {'from': 'wizard'} if from_wizard else {} %}
   <div class="d-flex gap-2 flex-wrap">
@@ -9,7 +11,7 @@
       <form method="post"
             action="{{ url_for('itinerary_resync', trip_id=trip.id, item_id=item.id, **qs) }}"
             class="m-0">
-        <button class="btn btn-vp-primary" type="submit">
+        <button id="resync-btn" class="btn btn-vp-primary" type="submit">
           <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>
           Resync to booking
         </button>
@@ -17,13 +19,13 @@
       <form method="post"
             action="{{ url_for('itinerary_keep_mine', trip_id=trip.id, item_id=item.id, **qs) }}"
             class="m-0">
-        <button class="btn btn-outline-secondary" type="submit">Keep mine</button>
+        <button id="keep-btn" class="btn btn-outline-secondary" type="submit">Keep mine</button>
       </form>
     {% endif %}
     <form method="post"
           action="{{ url_for('itinerary_unlink', trip_id=trip.id, item_id=item.id, **qs) }}"
           class="m-0">
-      <button class="btn btn-outline-secondary" type="submit">Unlink from booking</button>
+      <button id="unlink-btn" class="btn btn-outline-secondary" type="submit">Unlink from booking</button>
     </form>
   </div>
 {% endif %}

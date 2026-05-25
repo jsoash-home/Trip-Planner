@@ -44,17 +44,17 @@
     {% set from_wizard = True %}
     {% include "_drift_actions.html" %}
     {% if next_item %}
-      <a class="btn btn-outline-secondary"
+      <a id="skip-link" class="btn btn-outline-secondary"
          href="{{ url_for('itinerary_drift_review_item', trip_id=trip.id, item_id=next_item.id) }}">
         Skip →
       </a>
     {% else %}
-      <a class="btn btn-outline-secondary"
+      <a id="skip-link" class="btn btn-outline-secondary"
          href="{{ url_for('itinerary_drift_review', trip_id=trip.id) }}">
         Skip → done
       </a>
     {% endif %}
-    <a class="btn btn-link ms-auto" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
+    <a id="back-link" class="btn btn-link ms-auto" href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">
       Back to itinerary
     </a>
   </div>

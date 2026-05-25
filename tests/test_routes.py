@@ -1085,4 +1085,20 @@ def test_dashboard_no_pills_when_clean(app, trip, owner):
         _login(client, owner)
         resp = client.get("/trips")
     assert b"trip-card-pill" not in resp.data
+
+
+def test_wizard_step_has_action_ids(app, trip, owner):
+    """The wizard step renders id attributes on each action element."""
+    _, item = _make_flight_with_arrive(trip)
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(
+            f"/trips/{trip.id}/itinerary/drift-review/item/{item.id}"
+        )
+    assert resp.status_code == 200
+    assert b'id="resync-btn"' in resp.data
+    assert b'id="keep-btn"' in resp.data
+    assert b'id="unlink-btn"' in resp.data
+    assert b'id="skip-link"' in resp.data
+    assert b'id="back-link"' in resp.data
     assert b"trip-card-status-row" not in resp.data
