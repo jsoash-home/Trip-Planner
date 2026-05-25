@@ -12,6 +12,7 @@ from src.trip_helpers import (
     group_trips_by_state,
     is_valid_status,
     parse_trip_form,
+    progress_fraction,
     status_label,
     trip_form_values,
 )
@@ -331,3 +332,44 @@ def test_trip_form_values_handles_null_optional_fields():
     assert out["destination"] == ""
     assert out["cover_emoji"] == ""
     assert out["notes"] == ""
+
+
+# ─────────────────────────────  progress_fraction  ──────────────────────────
+
+
+def test_progress_fraction_at_start_returns_one():
+    # Day-of trip → ring fully filled.
+    assert progress_fraction(date(2026, 8, 17), date(2026, 8, 17)) == 1.0
+
+
+def test_progress_fraction_after_start_clamps_to_one():
+    # Mid-trip → ring stays full (we don't represent overshoot).
+    assert progress_fraction(date(2026, 8, 17), date(2026, 8, 20)) == 1.0
+
+
+def test_progress_fraction_at_window_boundary_returns_zero():
+    # 90 days out → ring empty.
+    assert progress_fraction(date(2026, 8, 17), date(2026, 5, 19)) == 0.0
+
+
+def test_progress_fraction_beyond_window_clamps_to_zero():
+    # 200 days out → still 0.0, not negative.
+    assert progress_fraction(date(2026, 8, 17), date(2026, 1, 1)) == 0.0
+
+
+def test_progress_fraction_mid_window():
+    # 45 days out → halfway through the 90-day window.
+    result = progress_fraction(date(2026, 8, 17), date(2026, 7, 3))
+    assert abs(result - 0.5) < 0.01
+
+
+def test_progress_fraction_close_to_start():
+    # 9 days out → 90% filled.
+    result = progress_fraction(date(2026, 8, 17), date(2026, 8, 8))
+    assert abs(result - 0.9) < 0.01
+
+
+def test_progress_fraction_custom_window():
+    # 30-day window, 15 days out → 50%.
+    result = progress_fraction(date(2026, 8, 17), date(2026, 8, 2), window_days=30)
+    assert abs(result - 0.5) < 0.01

@@ -227,3 +227,22 @@ def trip_form_values(trip) -> Dict[str, str]:
         "primary_currency": trip.primary_currency or "USD",
         "notes": trip.notes or "",
     }
+
+
+def progress_fraction(start: date, today: date, window_days: int = 90) -> float:
+    """
+    How close today is to `start`, expressed as a 0.0–1.0 fraction.
+
+    A `window_days` window before the start date is the "runway"; `today`
+    at the start of that window returns 0.0 and `today == start` (or
+    later) returns 1.0. Clamps both ways so callers never see a value
+    outside [0.0, 1.0].
+
+    Used by the dashboard progress ring.
+    """
+    if today >= start:
+        return 1.0
+    days_out = (start - today).days
+    if days_out >= window_days:
+        return 0.0
+    return 1.0 - (days_out / window_days)
