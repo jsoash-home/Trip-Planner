@@ -548,6 +548,7 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--vp-text-muted);
+  margin: 0;
 }
 .day-column-date {
   font-size: 1rem;
@@ -853,6 +854,7 @@
   font-size: 1rem;
   font-weight: 600;
   color: var(--vp-text);
+  margin: 0;
 }
 .today-section-list {
   list-style: none;
