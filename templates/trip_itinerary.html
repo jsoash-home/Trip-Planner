@@ -58,10 +58,25 @@
     </p>
   </div>
 {% else %}
+  <nav class="itin-day-chips" aria-label="Itinerary days" data-itin-day-chips>
+    {% for day_date, items in days %}
+      {% set day_index = loop.index %}
+      <a class="itin-day-chip{% if day_index == initial_day %} itin-day-chip--active{% endif %}"
+         href="#day-{{ day_index }}"
+         data-itin-day-target="{{ day_index }}"
+         {% if day_index == initial_day %}aria-current="true"{% endif %}>
+        <span class="itin-day-chip-num">Day {{ day_index }}</span>
+        <span class="itin-day-chip-date">{{ day_date.strftime('%a %b %-d') }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+
   <div class="day-columns">
     {% for day_date, items in days %}
       {% set day_index = loop.index %}
-      <div class="day-column">
+      <div class="day-column{% if day_index == initial_day %} day-column--active{% endif %}"
+           id="day-{{ day_index }}"
+           data-day-index="{{ day_index }}">
         <div class="day-column-header">
           <h2 class="day-column-num">Day {{ day_index }}</h2>
           <div class="day-column-date">{{ day_date.strftime('%a, %b %d') }}</div>
@@ -134,4 +149,8 @@
     {% endfor %}
   </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/itinerary.js') }}" defer></script>
 {% endblock %}

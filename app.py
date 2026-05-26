@@ -69,6 +69,7 @@ from src.itinerary import (
     format_day_items_summary,
     format_time_range,
     group_items_by_day,
+    initial_day_index,
     itinerary_form_values,
     parse_itinerary_form,
     sort_within_day,
@@ -1068,11 +1069,13 @@ def trip_itinerary(trip_id):
     drift_count = _annotate_drift_for_items(items)
     new_items_count = len(_annotate_new_items_for_trip(trip))
     days = group_items_by_day(items, trip.start_date, trip.end_date)
+    initial_day = initial_day_index(trip.start_date, trip.end_date, date.today())
     return render_template(
         "trip_itinerary.html",
         trip=trip,
         user_role=user_role,
         days=days,
+        initial_day=initial_day,
         drift_count=drift_count,
         new_items_count=new_items_count,
     )

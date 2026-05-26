@@ -308,7 +308,7 @@ Each session is its own fresh Claude Code window. The workflow:
 - [x] 12. Per-day itinerary counts
 - [x] 13. Bookings filter chips
 - [x] 14. Trip switcher in nav
-- [ ] 15. Mobile day-picker for itinerary
+- [x] 15. Mobile day-picker for itinerary
 - [ ] 16. Active-trip ribbon
 - [ ] 17. Dark mode
 - [ ] 18. What changed since last visit

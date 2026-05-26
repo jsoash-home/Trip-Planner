@@ -13,6 +13,7 @@ from src.itinerary import (
     format_day_items_summary,
     format_time_range,
     group_items_by_day,
+    initial_day_index,
     itinerary_form_values,
     parse_itinerary_form,
     sort_within_day,
@@ -372,3 +373,52 @@ def test_day_summary_skips_inverted_time_range():
         FakeItem(id=2, title="Good", start_time=time(9, 0), end_time=time(9, 30)),
     ]
     assert format_day_items_summary(items) == "2 items · 30m scheduled"
+
+
+# ── initial_day_index ──────────────────────────────────────────
+
+
+def test_initial_day_index_today_within_trip_returns_today_day_num():
+    """Trip in progress → returns 1-based day number for today."""
+    start = date(2026, 5, 20)
+    end = date(2026, 5, 26)
+    today = date(2026, 5, 23)  # day 4
+    assert initial_day_index(start, end, today) == 4
+
+
+def test_initial_day_index_today_is_first_day_returns_1():
+    start = date(2026, 5, 20)
+    end = date(2026, 5, 26)
+    assert initial_day_index(start, end, date(2026, 5, 20)) == 1
+
+
+def test_initial_day_index_today_is_last_day_returns_n():
+    start = date(2026, 5, 20)
+    end = date(2026, 5, 26)
+    assert initial_day_index(start, end, date(2026, 5, 26)) == 7
+
+
+def test_initial_day_index_today_before_trip_returns_1():
+    start = date(2026, 5, 20)
+    end = date(2026, 5, 26)
+    assert initial_day_index(start, end, date(2026, 5, 19)) == 1
+
+
+def test_initial_day_index_today_after_trip_returns_1():
+    start = date(2026, 5, 20)
+    end = date(2026, 5, 26)
+    assert initial_day_index(start, end, date(2026, 6, 1)) == 1
+
+
+def test_initial_day_index_single_day_trip():
+    start = date(2026, 5, 20)
+    end = date(2026, 5, 20)
+    assert initial_day_index(start, end, date(2026, 5, 20)) == 1
+    assert initial_day_index(start, end, date(2026, 5, 21)) == 1
+
+
+def test_initial_day_index_inverted_dates_returns_1():
+    """Defensive: if start > end, fall back to 1 rather than raising."""
+    start = date(2026, 5, 26)
+    end = date(2026, 5, 20)
+    assert initial_day_index(start, end, date(2026, 5, 23)) == 1

@@ -266,6 +266,23 @@ def format_day_items_summary(items: Iterable) -> str:
     return f"{count_label} · {' '.join(parts)} scheduled"
 
 
+def initial_day_index(start: date, end: date, today: date) -> int:
+    """
+    1-based day index to default-select on the itinerary day-picker.
+
+    If `today` falls within the trip's date range, returns the day number
+    for today (start_date → 1, day after → 2, …). Otherwise returns 1.
+    Inverted ranges (start > end) also fall back to 1 — they're caught
+    upstream by the form, but this stays defensive rather than raising.
+    """
+    if start > end:
+        logger.warning("initial_day_index got start > end: %s > %s", start, end)
+        return 1
+    if today < start or today > end:
+        return 1
+    return (today - start).days + 1
+
+
 def format_time_range(
     start: Optional[time],
     end: Optional[time],
