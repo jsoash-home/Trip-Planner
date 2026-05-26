@@ -106,13 +106,13 @@
   </div>
 
   <div class="d-flex gap-2 mt-4">
-    <button type="submit" class="btn btn-vp-primary">
-      {{ "Save changes" if trip else "Plan trip" }}
-    </button>
     <a class="btn btn-outline-secondary"
        href="{{ url_for('trip_overview', trip_id=trip.id) if trip else url_for('trips_list') }}">
       Cancel
     </a>
+    <button type="submit" class="btn btn-vp-primary">
+      {{ "Save changes" if trip else "Plan trip" }}
+    </button>
   </div>
 </form>
 {% endblock %}

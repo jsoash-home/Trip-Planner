@@ -163,13 +163,13 @@
   </div>
 
   <div class="d-flex gap-2 mt-4">
-    <button type="submit" class="btn btn-vp-primary">
-      {{ "Save changes" if booking else "Add booking" }}
-    </button>
     <a class="btn btn-outline-secondary"
        href="{{ url_for('bookings_list', trip_id=trip.id) }}">
       Cancel
     </a>
+    <button type="submit" class="btn btn-vp-primary">
+      {{ "Save changes" if booking else "Add booking" }}
+    </button>
   </div>
 </form>
 {% endblock %}
