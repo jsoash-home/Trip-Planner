@@ -7,6 +7,11 @@
   {% set countdown = countdown_label(trip.start_date, trip.end_date, today) %}
   {% set countdown_cls = ('is-active' if status == 'in_progress' else ('is-past' if status == 'completed' else '')) %}
   <a class="trip-card" href="{{ url_for('trip_overview', trip_id=trip.id) }}">
+    {% if trip.cover_image_url %}
+      <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
+           alt="" loading="lazy" aria-hidden="true">
+      <div class="vp-cover-overlay" aria-hidden="true"></div>
+    {% endif %}
     <div class="trip-card-emoji" aria-hidden="true">{{ trip.cover_emoji or '🧳' }}</div>
     <div class="trip-card-name">{{ trip.name }}</div>
     {% if trip.destination %}

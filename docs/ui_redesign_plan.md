@@ -312,4 +312,4 @@ Each session is its own fresh Claude Code window. The workflow:
 - [x] 16. Active-trip ribbon
 - [x] 17. Dark mode
 - [x] 18. What changed since last visit
-- [ ] 19. Trip cover photo
+- [x] 19. Trip cover photo

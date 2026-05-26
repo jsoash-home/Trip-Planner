@@ -1,13 +1,21 @@
 {# Hero countdown block for the trip overview page.
-   Renders nothing while the trip is in progress (the Today section is the hero). #}
+   Renders nothing while the trip is in progress (the Today section is the
+   hero), except for a slim cover-photo banner when the trip has one. #}
 {% set _status = derive_status(trip.start_date, trip.end_date, today) %}
+{% set _has_cover = trip.cover_image_url is defined and trip.cover_image_url %}
 
 {% if _status == 'planning' %}
   {% set _d = days_until(trip.start_date, today) %}
-  <section class="countdown-hero" aria-label="Countdown to trip"
+  <section class="countdown-hero{% if _has_cover %} countdown-hero--has-cover{% endif %}"
+           aria-label="Countdown to trip"
            data-countdown-hero
            data-trip-id="{{ trip.id }}"
            data-countdown-target="{{ trip.start_date.isoformat() }}T00:00:00">
+    {% if _has_cover %}
+      <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
+           alt="" loading="lazy" aria-hidden="true">
+      <div class="vp-cover-overlay vp-cover-overlay--hero" aria-hidden="true"></div>
+    {% endif %}
     <div class="countdown-hero-number">
       <span class="countdown-hero-days" data-countdown-days>{{ _d }}</span>
       <span class="countdown-hero-days-label">{% if _d == 1 %}day{% else %}days{% endif %}</span>
@@ -24,9 +32,24 @@
   </section>
 {% elif _status == 'completed' %}
   {% set _ago = (today - trip.end_date).days %}
-  <section class="countdown-hero countdown-hero--past" aria-label="Trip recap">
+  <section class="countdown-hero countdown-hero--past{% if _has_cover %} countdown-hero--has-cover{% endif %}"
+           aria-label="Trip recap">
+    {% if _has_cover %}
+      <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
+           alt="" loading="lazy" aria-hidden="true">
+      <div class="vp-cover-overlay vp-cover-overlay--hero" aria-hidden="true"></div>
+    {% endif %}
     <div class="countdown-hero-past-text">
       Welcomed home {{ _ago }} day{% if _ago != 1 %}s{% endif %} ago
     </div>
   </section>
+{% elif _has_cover %}
+  {# In-progress: keep the existing Today section as the page's hero, but
+     surface the photo as a slim banner above it so the page still has a
+     sense of place. #}
+  <div class="vp-cover-banner" aria-hidden="true">
+    <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
+         alt="" loading="lazy">
+    <div class="vp-cover-overlay"></div>
+  </div>
 {% endif %}

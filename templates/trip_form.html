@@ -96,6 +96,21 @@
     </div>
 
     <div class="col-12">
+      <label for="trip-cover-url" class="form-label">
+        Cover photo URL <span class="text-muted small">— optional</span>
+      </label>
+      <input id="trip-cover-url" name="cover_image_url" type="url"
+             class="form-control{{ invalid_class(field_errors, 'cover_image_url') }}"
+             value="{{ form.get('cover_image_url', '') }}"
+             {% if field_errors and field_errors.get('cover_image_url') %}aria-invalid="true"{% endif %}
+             placeholder="https://images.unsplash.com/..." maxlength="800">
+      {{ field_error(field_errors, 'cover_image_url') }}
+      <div class="form-text">
+        Paste an <code>https://</code> link to a photo (e.g. from Unsplash). It renders softly behind the trip card and overview.
+      </div>
+    </div>
+
+    <div class="col-12">
       <label for="trip-notes" class="form-label">Notes <span class="text-muted small">— optional, supports markdown</span></label>
       <textarea id="trip-notes" name="notes" rows="4"
                 class="form-control{{ invalid_class(field_errors, 'notes') }}"

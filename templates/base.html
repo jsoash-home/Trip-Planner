@@ -85,6 +85,18 @@
       /* Overlays — milestone "celebration" card and confirm-dialog backdrop. */
       --vp-overlay-card:        rgba(255, 255, 255, 0.95);
       --vp-overlay-backdrop:    rgba(34, 24, 18, 0.45);
+
+      /* Trip cover photo overlay — gradient sits on top of the photo so
+         the surface/text underneath stays legible. Bottom is the surface
+         color (more opaque); top fades toward transparent. */
+      --vp-cover-overlay-bottom: rgba(255, 250, 245, 0.92);
+      --vp-cover-overlay-top:    rgba(255, 250, 245, 0.55);
+
+      /* Trip-overview hero: photo backdrop wants a darker overlay so the
+         white hero text reads cleanly. Same values in both modes — the
+         hero text is white regardless of theme. */
+      --vp-cover-hero-overlay-top:    rgba(0, 0, 0, 0.30);
+      --vp-cover-hero-overlay-bottom: rgba(0, 0, 0, 0.55);
     }
 
     /* Dark palette — applied when documentElement has data-theme="dark".
@@ -137,6 +149,17 @@
 
       --vp-overlay-card:        rgba(34, 29, 24, 0.95);
       --vp-overlay-backdrop:    rgba(0, 0, 0, 0.6);
+
+      /* Trip cover photo overlay — darker in dark mode so light text on
+         a bright photo stays readable. */
+      --vp-cover-overlay-bottom: rgba(26, 22, 18, 0.92);
+      --vp-cover-overlay-top:    rgba(26, 22, 18, 0.55);
+
+      /* Hero overlay: shared with light mode (hero text is white in both
+         modes), but slightly darker top stop helps when the photo itself
+         is washed out. */
+      --vp-cover-hero-overlay-top:    rgba(0, 0, 0, 0.40);
+      --vp-cover-hero-overlay-bottom: rgba(0, 0, 0, 0.60);
     }
 
     html, body {

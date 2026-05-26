@@ -267,6 +267,38 @@
   color: var(--vp-text);
   transition: transform 0.12s ease, box-shadow 0.12s ease;
   height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Trip cover photo — optional <img loading="lazy"> rendered behind the
+   card's contents when trip.cover_image_url is set. The overlay above it
+   keeps the existing emoji + text + ring legible. Children inside the
+   card opt into the stacking order via position+z-index below. */
+.vp-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+}
+.vp-cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    var(--vp-cover-overlay-bottom) 0%,
+    var(--vp-cover-overlay-bottom) 55%,
+    var(--vp-cover-overlay-top) 100%
+  );
+  z-index: 1;
+  pointer-events: none;
+}
+.trip-card:has(.vp-cover-img) > *:not(.vp-cover-img):not(.vp-cover-overlay) {
+  position: relative;
+  z-index: 2;
 }
 .trip-card:hover {
   transform: translateY(-2px);
@@ -1410,6 +1442,46 @@
   background: var(--vp-surface-2);
   color: var(--vp-text-muted);
   box-shadow: none;
+}
+
+/* When the trip has a cover_image_url, the hero swaps its coral gradient
+   for a photo backdrop + dark overlay so the white hero text stays readable.
+   Children are positioned above the photo+overlay via z-index. */
+.countdown-hero--has-cover {
+  background: var(--vp-surface-2);
+}
+.countdown-hero--has-cover.countdown-hero--past {
+  color: var(--vp-text);
+}
+.vp-cover-overlay--hero {
+  background: linear-gradient(
+    to bottom,
+    var(--vp-cover-hero-overlay-top) 0%,
+    var(--vp-cover-hero-overlay-bottom) 100%
+  );
+}
+.countdown-hero--has-cover > *:not(.vp-cover-img):not(.vp-cover-overlay) {
+  position: relative;
+  z-index: 2;
+}
+
+/* In-progress trips: a slim photo banner sits above the Today section so
+   the page still has a sense of place even when the hero itself is silent. */
+.vp-cover-banner {
+  position: relative;
+  height: 140px;
+  border-radius: 1rem;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--vp-shadow-sm);
+}
+.vp-cover-banner .vp-cover-img { position: absolute; }
+.vp-cover-banner .vp-cover-overlay {
+  background: linear-gradient(
+    to top,
+    var(--vp-cover-hero-overlay-bottom) 0%,
+    var(--vp-cover-hero-overlay-top) 100%
+  );
 }
 
 .countdown-hero-number {

@@ -52,6 +52,7 @@ class Trip(db.Model):
     status = db.Column(db.String(20), nullable=False, default="planning")
 
     cover_emoji = db.Column(db.String(10), nullable=True)
+    cover_image_url = db.Column(db.String(800), nullable=True)
     primary_currency = db.Column(db.String(3), nullable=False, default="USD")
     notes = db.Column(db.Text, nullable=True)
 

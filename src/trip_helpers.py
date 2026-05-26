@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 VALID_STATUSES = ("planning", "booked", "in_progress", "completed")
 
+# Cover photo URL: free-form https URL up to this many characters. Matches
+# Trip.cover_image_url column length.
+COVER_IMAGE_URL_MAX_LEN = 800
+
 # Suggested cover emojis offered as quick-pick buttons in the trip form.
 SUGGESTED_TRIP_EMOJIS = (
     "🏝️", "✈️", "🏔️", "🏛️", "🌊", "🌴",
@@ -264,6 +268,20 @@ def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], Dict[str, 
     primary_currency = (form.get("primary_currency") or "USD").strip().upper() or "USD"
     notes = (form.get("notes") or "").strip() or None
 
+    cover_image_url_raw = (form.get("cover_image_url") or "").strip()
+    cover_image_url: Optional[str] = None
+    if cover_image_url_raw:
+        if len(cover_image_url_raw) > COVER_IMAGE_URL_MAX_LEN:
+            field_errors["cover_image_url"] = (
+                f"Cover photo URL is too long (max {COVER_IMAGE_URL_MAX_LEN} characters)."
+            )
+        elif not cover_image_url_raw.startswith("https://"):
+            field_errors["cover_image_url"] = (
+                "Cover photo URL must start with https://"
+            )
+        else:
+            cover_image_url = cover_image_url_raw
+
     start_str = (form.get("start_date") or "").strip()
     end_str = (form.get("end_date") or "").strip()
 
@@ -293,6 +311,7 @@ def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], Dict[str, 
         "name": name,
         "destination": destination,
         "cover_emoji": cover_emoji,
+        "cover_image_url": cover_image_url,
         "primary_currency": primary_currency,
         "notes": notes,
         "start_date": start_date,
@@ -315,6 +334,7 @@ def trip_form_values(trip) -> Dict[str, str]:
         "name": trip.name or "",
         "destination": trip.destination or "",
         "cover_emoji": trip.cover_emoji or "",
+        "cover_image_url": getattr(trip, "cover_image_url", None) or "",
         "start_date": trip.start_date.isoformat() if trip.start_date else "",
         "end_date": trip.end_date.isoformat() if trip.end_date else "",
         "primary_currency": trip.primary_currency or "USD",

@@ -401,6 +401,47 @@ def test_parse_trip_form_blank_currency_defaults_to_usd():
     assert data["primary_currency"] == "USD"
 
 
+def test_parse_trip_form_cover_image_url_blank_is_none():
+    data, field_errors = parse_trip_form(_valid_form_dict(cover_image_url=""))
+    assert field_errors == {}
+    assert data["cover_image_url"] is None
+
+
+def test_parse_trip_form_cover_image_url_https_passes():
+    url = "https://images.unsplash.com/photo-1234567890?w=1600"
+    data, field_errors = parse_trip_form(_valid_form_dict(cover_image_url=url))
+    assert field_errors == {}
+    assert data["cover_image_url"] == url
+
+
+def test_parse_trip_form_cover_image_url_http_rejected():
+    _, field_errors = parse_trip_form(
+        _valid_form_dict(cover_image_url="http://example.com/photo.jpg")
+    )
+    assert "cover_image_url" in field_errors
+    assert "https" in field_errors["cover_image_url"].lower()
+
+
+def test_parse_trip_form_cover_image_url_not_a_url_rejected():
+    _, field_errors = parse_trip_form(_valid_form_dict(cover_image_url="just some text"))
+    assert "cover_image_url" in field_errors
+
+
+def test_parse_trip_form_cover_image_url_too_long_rejected():
+    long_url = "https://example.com/" + ("x" * 800)
+    _, field_errors = parse_trip_form(_valid_form_dict(cover_image_url=long_url))
+    assert "cover_image_url" in field_errors
+    assert "long" in field_errors["cover_image_url"].lower() or "800" in field_errors["cover_image_url"]
+
+
+def test_parse_trip_form_cover_image_url_strips_whitespace():
+    data, field_errors = parse_trip_form(
+        _valid_form_dict(cover_image_url="  https://example.com/x.jpg  ")
+    )
+    assert field_errors == {}
+    assert data["cover_image_url"] == "https://example.com/x.jpg"
+
+
 # ─────────────────────────────  trip_form_values  ──────────────────────────
 
 
@@ -418,6 +459,7 @@ def test_trip_form_values_renders_dates_iso():
         end_date: date
         primary_currency: str
         notes: Optional[str]
+        cover_image_url: Optional[str] = None
 
     trip = T(
         name="Italy",
@@ -427,12 +469,14 @@ def test_trip_form_values_renders_dates_iso():
         end_date=date(2026, 6, 10),
         primary_currency="EUR",
         notes="hello",
+        cover_image_url="https://images.unsplash.com/photo-1.jpg",
     )
     out = trip_form_values(trip)
     assert out["start_date"] == "2026-06-01"
     assert out["end_date"] == "2026-06-10"
     assert out["name"] == "Italy"
     assert out["primary_currency"] == "EUR"
+    assert out["cover_image_url"] == "https://images.unsplash.com/photo-1.jpg"
 
 
 def test_trip_form_values_handles_null_optional_fields():
@@ -445,6 +489,7 @@ def test_trip_form_values_handles_null_optional_fields():
         end_date: date
         primary_currency: str
         notes: Optional[str]
+        cover_image_url: Optional[str] = None
 
     trip = T(
         name="Trip",
@@ -459,6 +504,7 @@ def test_trip_form_values_handles_null_optional_fields():
     assert out["destination"] == ""
     assert out["cover_emoji"] == ""
     assert out["notes"] == ""
+    assert out["cover_image_url"] == ""
 
 
 # ─────────────────────────────  progress_fraction  ──────────────────────────

@@ -215,10 +215,31 @@ def _ensure_drift_columns() -> None:
             logger.warning("Migration backfill skipped: %s", e)
 
 
+def _ensure_trip_columns() -> None:
+    """
+    Add trip-level columns that were introduced after the first deploy.
+    SQLite + Postgres both accept ANSI ``ALTER TABLE ... ADD COLUMN``;
+    we swallow OperationalError so re-runs on already-migrated DBs are
+    a no-op (same pattern as _ensure_drift_columns).
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE trip ADD COLUMN cover_image_url VARCHAR(800)",
+    ]
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+                logger.info("Migration: applied %s", stmt)
+            except Exception as e:
+                logger.warning("Migration skipped (%s): %s", stmt, e)
+
+
 db.init_app(app)
 with app.app_context():
     db.create_all()
     _ensure_drift_columns()
+    _ensure_trip_columns()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)
