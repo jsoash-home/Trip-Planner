@@ -233,3 +233,26 @@ class TripCollaborator(db.Model):
     role = db.Column(db.String(20), nullable=False, default="viewer")
 
     added_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TripView(db.Model):
+    """
+    One row per (trip, user) recording the last time that user opened the
+    trip overview. Used to drive the "what changed since your last visit"
+    banner — the route compares Booking / ItineraryItem `created_at` against
+    `last_seen_at`, then bumps `last_seen_at` to now.
+
+    Both the owner and collaborators get tracked here uniformly. First
+    visit creates the row with `last_seen_at = now` so no banner appears.
+    """
+
+    __tablename__ = "trip_view"
+    __table_args__ = (
+        db.UniqueConstraint("trip_id", "user_id", name="uq_trip_view_trip_user"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    trip_id = db.Column(db.Integer, db.ForeignKey("trip.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+
+    last_seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

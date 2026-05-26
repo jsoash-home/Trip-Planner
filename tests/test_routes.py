@@ -7,7 +7,7 @@ from datetime import date, datetime
 import pytest
 
 from app import app as flask_app
-from models import Booking, ItineraryItem, Trip, User, db
+from models import Booking, ItineraryItem, Trip, TripView, User, db
 
 
 @pytest.fixture
@@ -1117,3 +1117,100 @@ def test_wizard_step_has_shortcut_hint(app, trip, owner):
     # Each key is rendered inside a <kbd> tag.
     assert b"<kbd>R</kbd>" in resp.data
     assert b"<kbd>Esc</kbd>" in resp.data
+
+
+# ───────────────  "What changed since last visit" banner  ───────────────
+
+
+def test_changes_banner_absent_on_first_visit(app, trip, owner):
+    """First-ever visit creates a TripView row and shows no banner, even if
+    bookings already exist on the trip."""
+    db.session.add(Booking(
+        trip_id=trip.id, type="hotel", title="Hilton",
+        created_at=datetime(2026, 5, 1, 12, 0),  # well before first visit
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}")
+
+    assert resp.status_code == 200
+    assert b"since your last visit" not in resp.data
+    # The TripView row was created so subsequent visits can compare against it.
+    assert TripView.query.filter_by(trip_id=trip.id, user_id=owner.id).count() == 1
+
+
+def test_changes_banner_appears_on_second_visit_after_new_booking(app, trip, owner):
+    """After a first visit, a booking added later shows in the banner on
+    the next visit."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.get(f"/trips/{trip.id}")  # first visit — establishes baseline
+
+        # Backdate the TripView so a freshly-created booking is unambiguously
+        # newer than last_seen_at without relying on sleep().
+        view = TripView.query.filter_by(trip_id=trip.id, user_id=owner.id).one()
+        view.last_seen_at = datetime(2026, 5, 1, 12, 0)
+        db.session.commit()
+
+        db.session.add(Booking(
+            trip_id=trip.id, type="hotel", title="Hilton",
+            created_at=datetime(2026, 5, 2, 12, 0),  # newer than last_seen
+        ))
+        db.session.commit()
+
+        resp = client.get(f"/trips/{trip.id}")
+
+    assert resp.status_code == 200
+    assert b"1 booking was added since your last visit." in resp.data
+
+
+def test_changes_banner_clears_after_revisit(app, trip, owner):
+    """After the banner shows, an immediate reload clears it."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.get(f"/trips/{trip.id}")
+        view = TripView.query.filter_by(trip_id=trip.id, user_id=owner.id).one()
+        view.last_seen_at = datetime(2026, 5, 1, 12, 0)
+        db.session.commit()
+
+        db.session.add(Booking(
+            trip_id=trip.id, type="hotel", title="Hilton",
+            created_at=datetime(2026, 5, 2, 12, 0),
+        ))
+        db.session.commit()
+
+        resp_a = client.get(f"/trips/{trip.id}")
+        resp_b = client.get(f"/trips/{trip.id}")
+
+    assert b"since your last visit" in resp_a.data
+    assert b"since your last visit" not in resp_b.data
+
+
+def test_changes_banner_combines_bookings_and_items(app, trip, owner):
+    """Banner copy reflects both new bookings and new itinerary items."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.get(f"/trips/{trip.id}")
+        view = TripView.query.filter_by(trip_id=trip.id, user_id=owner.id).one()
+        view.last_seen_at = datetime(2026, 5, 1, 12, 0)
+        db.session.commit()
+
+        db.session.add_all([
+            Booking(trip_id=trip.id, type="hotel", title="Hilton",
+                    created_at=datetime(2026, 5, 2, 12, 0)),
+            Booking(trip_id=trip.id, type="flight", title="UA101",
+                    created_at=datetime(2026, 5, 2, 12, 5)),
+            ItineraryItem(trip_id=trip.id, day_date=date(2026, 6, 2),
+                          title="Coffee",
+                          created_at=datetime(2026, 5, 2, 12, 10)),
+        ])
+        db.session.commit()
+
+        resp = client.get(f"/trips/{trip.id}")
+
+    assert (
+        b"2 bookings and 1 itinerary item were added since your last visit."
+        in resp.data
+    )

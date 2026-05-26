@@ -404,3 +404,33 @@ def themed_countdown_label(
     if theme:
         return f"{days_out} {unit_word} until {theme}"
     return f"{days_out} {unit_word} to go"
+
+
+def format_changes_since_label(
+    new_bookings: int, new_items: int
+) -> Optional[str]:
+    """
+    Banner copy for "what changed since last visit" on the trip overview.
+
+    Returns None when both counts are zero (or negative) so the caller can
+    omit the banner entirely. Otherwise returns a sentence like:
+
+      "2 bookings and 1 itinerary item were added since your last visit."
+
+    Singular / plural is handled for each noun independently.
+    """
+    b = max(0, new_bookings)
+    i = max(0, new_items)
+    if b == 0 and i == 0:
+        return None
+
+    parts = []
+    if b > 0:
+        parts.append(f"{b} booking{'' if b == 1 else 's'}")
+    if i > 0:
+        parts.append(f"{i} itinerary item{'' if i == 1 else 's'}")
+
+    subject = " and ".join(parts)
+    # "was" when the whole subject is a single thing (b+i == 1), else "were".
+    verb = "was" if (b + i) == 1 else "were"
+    return f"{subject} {verb} added since your last visit."

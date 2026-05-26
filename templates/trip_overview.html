@@ -9,6 +9,13 @@
   &nbsp;›&nbsp; {{ trip.name }}
 </div>
 
+{% if changes_banner %}
+  <div class="vp-changes-banner" role="status">
+    <span class="vp-changes-banner-icon" aria-hidden="true">✨</span>
+    <span>{{ changes_banner }}</span>
+  </div>
+{% endif %}
+
 {% set today = today_date %}
 {% include "_countdown_hero.html" %}
 

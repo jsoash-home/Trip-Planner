@@ -15,7 +15,7 @@ budget, packing, and sharing arrive in later steps.
 import logging
 import os
 import subprocess
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -40,7 +40,16 @@ from flask_login import (
     logout_user,
 )
 
-from models import Booking, ItineraryItem, PackingItem, Trip, TripCollaborator, User, db
+from models import (
+    Booking,
+    ItineraryItem,
+    PackingItem,
+    Trip,
+    TripCollaborator,
+    TripView,
+    User,
+    db,
+)
 from src.booking_helpers import (
     BOOKING_TYPE_CODES,
     BOOKING_TYPE_LABELS,
@@ -100,6 +109,7 @@ from src.trip_helpers import (
     days_until,
     derive_status,
     emoji_theme,
+    format_changes_since_label,
     group_trips_by_state,
     parse_trip_form,
     pick_active_trip,
@@ -699,6 +709,12 @@ def trip_overview(trip_id):
             ItineraryItem.query.filter_by(trip_id=trip.id, day_date=today).all()
         )
 
+    # Step 18: "what changed since your last visit" banner. First-ever
+    # visit creates the TripView row and shows nothing. Subsequent visits
+    # count bookings + itinerary items created after `last_seen_at`, then
+    # bump it to now so the next reload starts fresh.
+    changes_banner = _changes_banner_and_mark_seen(trip.id, current_user.id)
+
     return render_template(
         "trip_overview.html",
         trip=trip,
@@ -712,7 +728,40 @@ def trip_overview(trip_id):
         today_items=today_items,
         today_day_number=today_day_number,
         today_date=today,
+        changes_banner=changes_banner,
     )
+
+
+def _changes_banner_and_mark_seen(trip_id: int, user_id: int) -> Optional[str]:
+    """
+    Read this user's TripView for the trip, build the banner string from
+    rows created after `last_seen_at`, then upsert `last_seen_at` to now.
+
+    Returns None on first-ever visit (no prior TripView) and when nothing
+    has been added since the last visit.
+    """
+    now = datetime.utcnow()
+    view = TripView.query.filter_by(trip_id=trip_id, user_id=user_id).first()
+
+    if view is None:
+        db.session.add(TripView(trip_id=trip_id, user_id=user_id, last_seen_at=now))
+        db.session.commit()
+        return None
+
+    last_seen = view.last_seen_at
+    new_bookings = Booking.query.filter(
+        Booking.trip_id == trip_id,
+        Booking.created_at > last_seen,
+    ).count()
+    new_items = ItineraryItem.query.filter(
+        ItineraryItem.trip_id == trip_id,
+        ItineraryItem.created_at > last_seen,
+    ).count()
+
+    view.last_seen_at = now
+    db.session.commit()
+
+    return format_changes_since_label(new_bookings, new_items)
 
 
 @app.route("/trips/<int:trip_id>/edit", methods=["GET", "POST"])

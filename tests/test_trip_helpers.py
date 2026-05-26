@@ -11,6 +11,7 @@ from src.trip_helpers import (
     days_until,
     derive_status,
     emoji_theme,
+    format_changes_since_label,
     group_trips_by_state,
     is_valid_status,
     parse_trip_form,
@@ -647,3 +648,58 @@ def test_themed_label_invalid_unit_defaults_to_days():
         emoji="🏝️", unit="bogus",
     )
     assert result == "23 days until the beach"
+
+
+# ───────────────────────  format_changes_since_label  ───────────────────────
+
+
+def test_changes_label_none_when_both_zero():
+    assert format_changes_since_label(0, 0) is None
+
+
+def test_changes_label_one_booking_singular():
+    assert format_changes_since_label(1, 0) == "1 booking was added since your last visit."
+
+
+def test_changes_label_multiple_bookings_plural():
+    assert format_changes_since_label(3, 0) == "3 bookings were added since your last visit."
+
+
+def test_changes_label_one_item_singular():
+    assert (
+        format_changes_since_label(0, 1)
+        == "1 itinerary item was added since your last visit."
+    )
+
+
+def test_changes_label_multiple_items_plural():
+    assert (
+        format_changes_since_label(0, 4)
+        == "4 itinerary items were added since your last visit."
+    )
+
+
+def test_changes_label_combined_singular_singular():
+    assert (
+        format_changes_since_label(1, 1)
+        == "1 booking and 1 itinerary item were added since your last visit."
+    )
+
+
+def test_changes_label_combined_plural_singular():
+    assert (
+        format_changes_since_label(2, 1)
+        == "2 bookings and 1 itinerary item were added since your last visit."
+    )
+
+
+def test_changes_label_combined_plural_plural():
+    assert (
+        format_changes_since_label(2, 3)
+        == "2 bookings and 3 itinerary items were added since your last visit."
+    )
+
+
+def test_changes_label_negative_counts_treated_as_zero():
+    # Defensive: negative counts shouldn't happen, but if they do, treat as none.
+    assert format_changes_since_label(-1, -2) is None
