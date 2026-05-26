@@ -15,6 +15,7 @@ from src.trip_helpers import (
     is_valid_status,
     parse_trip_form,
     progress_fraction,
+    sort_nav_trips,
     status_label,
     themed_countdown_label,
     trip_form_values,
@@ -132,6 +133,68 @@ def test_group_trips_drops_rows_with_inverted_dates():
     ]
     out = group_trips_by_state(trips, today)
     assert [t.id for t in out["upcoming"]] == [2]
+
+
+# ─────────────────────────────  sort_nav_trips  ───────────────────────────
+
+
+def test_sort_nav_trips_empty_input_returns_empty_list():
+    assert sort_nav_trips([], date(2026, 6, 1)) == []
+
+
+def test_sort_nav_trips_orders_active_then_upcoming_then_past():
+    today = date(2026, 6, 15)
+    trips = [
+        FakeTrip(id=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 10)),   # past
+        FakeTrip(id=2, start_date=date(2026, 7, 1), end_date=date(2026, 7, 10)),   # upcoming
+        FakeTrip(id=3, start_date=date(2026, 6, 10), end_date=date(2026, 6, 20)),  # active
+    ]
+    out = sort_nav_trips(trips, today)
+    assert [t.id for t in out] == [3, 2, 1]
+
+
+def test_sort_nav_trips_upcoming_sorted_soonest_first():
+    today = date(2026, 6, 1)
+    trips = [
+        FakeTrip(id=1, start_date=date(2026, 9, 1), end_date=date(2026, 9, 5)),
+        FakeTrip(id=2, start_date=date(2026, 7, 1), end_date=date(2026, 7, 5)),
+        FakeTrip(id=3, start_date=date(2026, 8, 1), end_date=date(2026, 8, 5)),
+    ]
+    out = sort_nav_trips(trips, today)
+    assert [t.id for t in out] == [2, 3, 1]
+
+
+def test_sort_nav_trips_past_sorted_most_recent_first():
+    today = date(2026, 6, 1)
+    trips = [
+        FakeTrip(id=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 10)),
+        FakeTrip(id=2, start_date=date(2026, 3, 1), end_date=date(2026, 3, 10)),
+        FakeTrip(id=3, start_date=date(2026, 2, 1), end_date=date(2026, 2, 10)),
+    ]
+    out = sort_nav_trips(trips, today)
+    assert [t.id for t in out] == [2, 3, 1]
+
+
+def test_sort_nav_trips_respects_limit():
+    today = date(2026, 6, 1)
+    trips = [
+        FakeTrip(id=i, start_date=date(2026, 7, i), end_date=date(2026, 7, i + 1))
+        for i in range(1, 11)
+    ]
+    out = sort_nav_trips(trips, today, limit=5)
+    assert len(out) == 5
+    assert [t.id for t in out] == [1, 2, 3, 4, 5]
+
+
+def test_sort_nav_trips_drops_rows_with_null_or_inverted_dates():
+    today = date(2026, 6, 1)
+    trips = [
+        FakeTrip(id=1, start_date=None, end_date=date(2026, 7, 1)),
+        FakeTrip(id=2, start_date=date(2026, 7, 5), end_date=date(2026, 7, 1)),  # inverted
+        FakeTrip(id=3, start_date=date(2026, 7, 1), end_date=date(2026, 7, 5)),
+    ]
+    out = sort_nav_trips(trips, today)
+    assert [t.id for t in out] == [3]
 
 
 # ─────────────────────────────  day_of_trip  ──────────────────────────────

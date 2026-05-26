@@ -102,6 +102,7 @@ from src.trip_helpers import (
     group_trips_by_state,
     parse_trip_form,
     progress_fraction,
+    sort_nav_trips,
     status_label,
     themed_countdown_label,
     trip_form_values,
@@ -249,6 +250,44 @@ def _markdown_filter(text: Optional[str]) -> str:
 
 
 app.jinja_env.filters["markdown"] = _markdown_filter
+
+
+# ─── Context processors ────────────────────────────────────────────
+@app.context_processor
+def inject_nav_trips():
+    """
+    Make ``nav_trips`` available to base.html so the navbar can render
+    a "Trips" dropdown when the user is viewing a specific trip page.
+
+    Short-circuits cheaply when:
+      - the user isn't logged in,
+      - or the current route isn't a trip page (no ``trip_id`` view arg).
+
+    Trip pages are detected by ``request.view_args["trip_id"]`` — every
+    /trips/<int:trip_id>/... route has that parameter, so we don't have
+    to maintain a list of endpoint names by hand.
+    """
+    empty = {"nav_trips": [], "nav_current_trip_id": None}
+    if not current_user.is_authenticated:
+        return empty
+    if not request.view_args or "trip_id" not in request.view_args:
+        return empty
+
+    owned = Trip.query.filter_by(owner_id=current_user.id).all()
+    user_email = normalize_email(current_user.email)
+    shared: List[Trip] = []
+    if user_email:
+        shared = (
+            Trip.query.join(TripCollaborator)
+            .filter(TripCollaborator.email == user_email)
+            .all()
+        )
+    trips = list({t.id: t for t in owned + shared}.values())
+    return {
+        "nav_trips": sort_nav_trips(trips, date.today(), limit=5),
+        "nav_current_trip_id": request.view_args.get("trip_id"),
+    }
+
 
 # ─── Google OAuth ───────────────────────────────────────────────────
 for required in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):

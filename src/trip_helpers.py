@@ -97,6 +97,47 @@ def group_trips_by_state(trips: Iterable, today: date) -> Dict[str, List]:
     return {"active": active, "upcoming": upcoming, "past": past}
 
 
+def sort_nav_trips(trips: Iterable, today: date, limit: int = 5) -> List:
+    """
+    Order trips for the navbar trip switcher and cap the result.
+
+    Ordering:
+      1. in_progress trips first (sorted by end_date ascending — ones
+         ending soonest float to the top so they don't feel buried).
+      2. upcoming trips next (sorted by start_date ascending — the
+         next trip comes first).
+      3. completed trips last (sorted by end_date descending — most
+         recent past first).
+
+    Trips with null or inverted dates are dropped with a warning, same
+    as group_trips_by_state, so a bad row can't crash the navbar.
+    """
+    active: List = []
+    upcoming: List = []
+    past: List = []
+
+    for t in trips:
+        if t.start_date is None or t.end_date is None:
+            logger.warning("sort_nav_trips skipping trip id=%s with null dates", getattr(t, "id", "?"))
+            continue
+        if t.start_date > t.end_date:
+            logger.warning("sort_nav_trips skipping trip id=%s start>%s end=%s", t.id, t.start_date, t.end_date)
+            continue
+        state = derive_status(t.start_date, t.end_date, today)
+        if state == "in_progress":
+            active.append(t)
+        elif state == "completed":
+            past.append(t)
+        else:
+            upcoming.append(t)
+
+    active.sort(key=lambda t: t.end_date)
+    upcoming.sort(key=lambda t: t.start_date)
+    past.sort(key=lambda t: t.end_date, reverse=True)
+
+    return (active + upcoming + past)[:limit]
+
+
 def day_of_trip(start: date, end: date, today: date) -> Tuple[int, int]:
     """
     Return (current_day, total_days) for a trip in progress.
