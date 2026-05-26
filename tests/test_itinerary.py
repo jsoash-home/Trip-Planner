@@ -71,8 +71,8 @@ def _valid_form(**overrides):
 
 
 def test_parse_itinerary_form_valid_no_errors():
-    data, errors = parse_itinerary_form(_valid_form(), _TRIP_START, _TRIP_END)
-    assert errors == []
+    data, field_errors = parse_itinerary_form(_valid_form(), _TRIP_START, _TRIP_END)
+    assert field_errors == {}
     assert data["title"] == "Colosseum tour"
     assert data["category"] == "sightseeing"
     assert data["day_date"] == date(2026, 6, 2)
@@ -81,78 +81,85 @@ def test_parse_itinerary_form_valid_no_errors():
 
 
 def test_parse_itinerary_form_missing_title_errors():
-    _, errors = parse_itinerary_form(_valid_form(title=""), _TRIP_START, _TRIP_END)
-    assert any("Title" in e for e in errors)
+    _, field_errors = parse_itinerary_form(_valid_form(title=""), _TRIP_START, _TRIP_END)
+    assert "title" in field_errors
 
 
 def test_parse_itinerary_form_missing_day_errors():
-    _, errors = parse_itinerary_form(_valid_form(day_date=""), _TRIP_START, _TRIP_END)
-    assert any("Day" in e for e in errors)
+    _, field_errors = parse_itinerary_form(_valid_form(day_date=""), _TRIP_START, _TRIP_END)
+    assert "day_date" in field_errors
 
 
 def test_parse_itinerary_form_invalid_day_errors():
-    _, errors = parse_itinerary_form(_valid_form(day_date="not-a-date"), _TRIP_START, _TRIP_END)
-    assert any("Day" in e and "valid" in e for e in errors)
+    _, field_errors = parse_itinerary_form(_valid_form(day_date="not-a-date"), _TRIP_START, _TRIP_END)
+    assert "day_date" in field_errors
+    assert "valid" in field_errors["day_date"].lower()
 
 
 def test_parse_itinerary_form_day_before_trip_start_errors():
-    _, errors = parse_itinerary_form(
+    _, field_errors = parse_itinerary_form(
         _valid_form(day_date="2026-05-30"), _TRIP_START, _TRIP_END
     )
-    assert any("between" in e for e in errors)
+    assert "day_date" in field_errors
+    assert "between" in field_errors["day_date"]
 
 
 def test_parse_itinerary_form_day_after_trip_end_errors():
-    _, errors = parse_itinerary_form(
+    _, field_errors = parse_itinerary_form(
         _valid_form(day_date="2026-06-08"), _TRIP_START, _TRIP_END
     )
-    assert any("between" in e for e in errors)
+    assert "day_date" in field_errors
+    assert "between" in field_errors["day_date"]
 
 
 def test_parse_itinerary_form_unknown_category_errors_and_falls_back():
-    data, errors = parse_itinerary_form(_valid_form(category="zzz"), _TRIP_START, _TRIP_END)
-    assert any("Category" in e for e in errors)
+    data, field_errors = parse_itinerary_form(_valid_form(category="zzz"), _TRIP_START, _TRIP_END)
+    assert "category" in field_errors
     assert data["category"] == "other"
 
 
 def test_parse_itinerary_form_blank_times_are_ok():
-    data, errors = parse_itinerary_form(
+    data, field_errors = parse_itinerary_form(
         _valid_form(start_time="", end_time=""), _TRIP_START, _TRIP_END
     )
-    assert errors == []
+    assert field_errors == {}
     assert data["start_time"] is None
     assert data["end_time"] is None
 
 
 def test_parse_itinerary_form_invalid_time_errors():
-    _, errors = parse_itinerary_form(
+    _, field_errors = parse_itinerary_form(
         _valid_form(start_time="25:99"), _TRIP_START, _TRIP_END
     )
-    assert any("Start time" in e for e in errors)
+    assert "start_time" in field_errors
 
 
-def test_parse_itinerary_form_end_before_start_errors():
-    _, errors = parse_itinerary_form(
+def test_parse_itinerary_form_end_before_start_keys_on_end_time():
+    _, field_errors = parse_itinerary_form(
         _valid_form(start_time="14:00", end_time="13:00"),
         _TRIP_START, _TRIP_END,
     )
-    assert any("on or after" in e for e in errors)
+    # Cross-field error attaches to end_time so the inline message shows
+    # next to the field the user can fix.
+    assert "end_time" in field_errors
+    assert "start_time" not in field_errors
+    assert "on or after" in field_errors["end_time"]
 
 
 def test_parse_itinerary_form_blank_optional_fields_become_none():
-    data, errors = parse_itinerary_form(
+    data, field_errors = parse_itinerary_form(
         _valid_form(location="", notes=""), _TRIP_START, _TRIP_END
     )
-    assert errors == []
+    assert field_errors == {}
     assert data["location"] is None
     assert data["notes"] is None
 
 
 def test_parse_itinerary_form_strips_whitespace():
-    data, errors = parse_itinerary_form(
+    data, field_errors = parse_itinerary_form(
         _valid_form(title="  Colosseum  "), _TRIP_START, _TRIP_END
     )
-    assert errors == []
+    assert field_errors == {}
     assert data["title"] == "Colosseum"
 
 

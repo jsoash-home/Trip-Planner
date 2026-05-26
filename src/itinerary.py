@@ -57,39 +57,41 @@ def parse_itinerary_form(
     form: Mapping[str, str],
     trip_start: date,
     trip_end: date,
-) -> Tuple[Dict[str, Any], List[str]]:
+) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """
     Pull and validate itinerary fields from a submitted HTML form.
 
     The day_date must fall within [trip_start, trip_end] inclusive.
     Times are optional; if both are present, end >= start.
 
-    Returns (cleaned_data, errors). On success, cleaned_data is suitable
-    for `ItineraryItem(trip_id=..., **cleaned_data)`.
+    Returns (cleaned_data, field_errors). field_errors is keyed by form
+    field name (e.g. `"title"`, `"day_date"`); an empty dict means the
+    form is valid. Cross-field errors attach to the "logically
+    responsible" field (end < start → `end_time`).
     """
-    errors: List[str] = []
+    field_errors: Dict[str, str] = {}
 
     title = (form.get("title") or "").strip()
     if not title:
-        errors.append("Title is required.")
+        field_errors["title"] = "Title is required."
 
     category = (form.get("category") or "other").strip().lower()
     if category not in ITINERARY_CATEGORY_CODES:
-        errors.append("Category is not valid.")
+        field_errors["category"] = "Category is not valid."
         category = "other"
 
     day_str = (form.get("day_date") or "").strip()
     day_date: Optional[date] = None
     if not day_str:
-        errors.append("Day is required.")
+        field_errors["day_date"] = "Day is required."
     else:
         try:
             day_date = date.fromisoformat(day_str)
         except ValueError:
-            errors.append("Day is not a valid date.")
+            field_errors["day_date"] = "Day is not a valid date."
 
     if day_date is not None and (day_date < trip_start or day_date > trip_end):
-        errors.append(
+        field_errors["day_date"] = (
             f"Day must be between {trip_start.isoformat()} and {trip_end.isoformat()}."
         )
 
@@ -102,15 +104,15 @@ def parse_itinerary_form(
         try:
             start_time = _parse_time_input(start_str)
         except ValueError:
-            errors.append("Start time is not valid.")
+            field_errors["start_time"] = "Start time is not valid."
     if end_str:
         try:
             end_time = _parse_time_input(end_str)
         except ValueError:
-            errors.append("End time is not valid.")
+            field_errors["end_time"] = "End time is not valid."
 
     if start_time and end_time and end_time < start_time:
-        errors.append("End time must be on or after start time.")
+        field_errors["end_time"] = "End time must be on or after start time."
 
     location = (form.get("location") or "").strip() or None
     notes = (form.get("notes") or "").strip() or None
@@ -124,7 +126,7 @@ def parse_itinerary_form(
         "location": location,
         "notes": notes,
     }
-    return data, errors
+    return data, field_errors
 
 
 def itinerary_form_values(item) -> Dict[str, str]:

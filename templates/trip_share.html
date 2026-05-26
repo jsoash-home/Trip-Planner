@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_icon.html" import icon %}
+{% from "_field_error.html" import field_error, invalid_class %}
 {% block title %}Share — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -25,11 +26,11 @@
   <div class="vp-card mb-3">
     <h2 class="h6 mb-3">Add a collaborator</h2>
 
-    {% if errors %}
+    {% if field_errors %}
       <div class="vp-flash vp-flash--danger">
         <strong>Please fix:</strong>
         <ul class="mb-0 mt-1">
-          {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+          {% for e in field_errors.values() %}<li>{{ e }}</li>{% endfor %}
         </ul>
       </div>
     {% endif %}
@@ -38,18 +39,24 @@
       <div class="row g-2 align-items-end">
         <div class="col-md-7">
           <label for="s-email" class="form-label">Google email address</label>
-          <input id="s-email" name="email" type="email" class="form-control"
+          <input id="s-email" name="email" type="email"
+                 class="form-control{{ invalid_class(field_errors, 'email') }}"
                  value="{{ form.get('email', '') }}"
+                 {% if field_errors and field_errors.get('email') %}aria-invalid="true"{% endif %}
                  placeholder="travelpartner@gmail.com" required>
+          {{ field_error(field_errors, 'email') }}
         </div>
         <div class="col-md-3">
           <label for="s-role" class="form-label">Access</label>
           {% set current_role = form.get('role', 'viewer') %}
-          <select id="s-role" name="role" class="form-select">
+          <select id="s-role" name="role"
+                  class="form-select{{ invalid_class(field_errors, 'role') }}"
+                  {% if field_errors and field_errors.get('role') %}aria-invalid="true"{% endif %}>
             {% for code, label in share_roles %}
               <option value="{{ code }}" {% if code == current_role %}selected{% endif %}>{{ code | capitalize }}</option>
             {% endfor %}
           </select>
+          {{ field_error(field_errors, 'role') }}
         </div>
         <div class="col-md-2">
           <button type="submit" class="btn btn-vp-primary w-100">

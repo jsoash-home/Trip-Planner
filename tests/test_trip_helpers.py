@@ -219,8 +219,8 @@ def _valid_form_dict(**overrides):
 
 
 def test_parse_trip_form_valid_no_errors():
-    data, errors = parse_trip_form(_valid_form_dict())
-    assert errors == []
+    data, field_errors = parse_trip_form(_valid_form_dict())
+    assert field_errors == {}
     assert data["name"] == "Italy 2026"
     assert data["start_date"] == date(2026, 6, 1)
     assert data["end_date"] == date(2026, 6, 10)
@@ -228,51 +228,57 @@ def test_parse_trip_form_valid_no_errors():
 
 
 def test_parse_trip_form_missing_name_errors():
-    _, errors = parse_trip_form(_valid_form_dict(name=""))
-    assert any("name" in e.lower() for e in errors)
+    _, field_errors = parse_trip_form(_valid_form_dict(name=""))
+    assert "name" in field_errors
+    assert "required" in field_errors["name"].lower()
 
 
 def test_parse_trip_form_strips_whitespace():
-    data, errors = parse_trip_form(_valid_form_dict(name="  Italy 2026  "))
-    assert errors == []
+    data, field_errors = parse_trip_form(_valid_form_dict(name="  Italy 2026  "))
+    assert field_errors == {}
     assert data["name"] == "Italy 2026"
 
 
 def test_parse_trip_form_uppercases_currency():
-    data, errors = parse_trip_form(_valid_form_dict(primary_currency="usd"))
-    assert errors == []
+    data, field_errors = parse_trip_form(_valid_form_dict(primary_currency="usd"))
+    assert field_errors == {}
     assert data["primary_currency"] == "USD"
 
 
 def test_parse_trip_form_empty_optional_fields_become_none():
-    data, errors = parse_trip_form(_valid_form_dict(destination="", notes="", cover_emoji=""))
-    assert errors == []
+    data, field_errors = parse_trip_form(_valid_form_dict(destination="", notes="", cover_emoji=""))
+    assert field_errors == {}
     assert data["destination"] is None
     assert data["notes"] is None
     assert data["cover_emoji"] is None
 
 
 def test_parse_trip_form_missing_dates_errors():
-    _, errors = parse_trip_form(_valid_form_dict(start_date="", end_date=""))
-    assert any("Start date" in e for e in errors)
-    assert any("End date" in e for e in errors)
+    _, field_errors = parse_trip_form(_valid_form_dict(start_date="", end_date=""))
+    assert "start_date" in field_errors
+    assert "end_date" in field_errors
 
 
 def test_parse_trip_form_invalid_date_string_errors():
-    _, errors = parse_trip_form(_valid_form_dict(start_date="not-a-date"))
-    assert any("Start date" in e and "valid" in e for e in errors)
+    _, field_errors = parse_trip_form(_valid_form_dict(start_date="not-a-date"))
+    assert "start_date" in field_errors
+    assert "valid" in field_errors["start_date"].lower()
 
 
-def test_parse_trip_form_start_after_end_errors():
-    _, errors = parse_trip_form(
+def test_parse_trip_form_start_after_end_keys_on_end_date():
+    _, field_errors = parse_trip_form(
         _valid_form_dict(start_date="2026-06-10", end_date="2026-06-01")
     )
-    assert any("on or before" in e for e in errors)
+    # Cross-field error attaches to the "logically responsible" field (end_date),
+    # so the inline message appears next to the field the user can fix.
+    assert "end_date" in field_errors
+    assert "start_date" not in field_errors
+    assert "on or after" in field_errors["end_date"]
 
 
 def test_parse_trip_form_blank_currency_defaults_to_usd():
-    data, errors = parse_trip_form(_valid_form_dict(primary_currency=""))
-    assert errors == []
+    data, field_errors = parse_trip_form(_valid_form_dict(primary_currency=""))
+    assert field_errors == {}
     assert data["primary_currency"] == "USD"
 
 

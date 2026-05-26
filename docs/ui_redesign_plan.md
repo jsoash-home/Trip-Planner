@@ -299,7 +299,7 @@ Each session is its own fresh Claude Code window. The workflow:
 - [x] 4a. Build SVG icon macro + first sweep
 - [x] 4b. Finish icon sweep + remove Bootstrap Icons font
 - [x] 5. Tighten heading semantics
-- [ ] 6. Inline form validation
+- [x] 6. Inline form validation
 - [ ] 7. Primary action on the right
 - [ ] 8. Branded confirm dialog
 - [ ] 9. Day-N-of-M on active-trip cards

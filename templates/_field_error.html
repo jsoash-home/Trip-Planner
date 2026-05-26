@@ -1,0 +1,25 @@
+{# Per-field inline validation helpers.
+
+   Usage in a form template:
+
+     {% from "_field_error.html" import field_error, invalid_class %}
+
+     <input id="trip-name" name="name" type="text"
+            class="form-control{{ invalid_class(field_errors, 'name') }}"
+            value="{{ form.get('name', '') }}"
+            {% if field_errors and field_errors.get('name') %}aria-invalid="true"{% endif %}>
+     {{ field_error(field_errors, 'name') }}
+
+   Bootstrap shows `.invalid-feedback` only when its sibling has
+   `.is-invalid`, so both macros need to fire together.
+#}
+
+{% macro field_error(errors, name) -%}
+  {%- if errors and errors.get(name) -%}
+    <div class="invalid-feedback">{{ errors[name] }}</div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro invalid_class(errors, name) -%}
+  {%- if errors and errors.get(name) %} is-invalid{% endif -%}
+{%- endmacro %}

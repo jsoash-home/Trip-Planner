@@ -75,8 +75,8 @@ def _valid_booking_form(**overrides):
 
 
 def test_parse_booking_form_valid_no_errors():
-    data, errors = parse_booking_form(_valid_booking_form())
-    assert errors == []
+    data, field_errors = parse_booking_form(_valid_booking_form())
+    assert field_errors == {}
     assert data["type"] == "flight"
     assert data["cost"] == 599.99
     assert data["start_datetime"] == datetime(2026, 6, 1, 21, 30)
@@ -85,21 +85,21 @@ def test_parse_booking_form_valid_no_errors():
 
 
 def test_parse_booking_form_missing_title_errors():
-    _, errors = parse_booking_form(_valid_booking_form(title=""))
-    assert any("Title" in e for e in errors)
+    _, field_errors = parse_booking_form(_valid_booking_form(title=""))
+    assert "title" in field_errors
 
 
 def test_parse_booking_form_unknown_type_errors_and_falls_back():
-    data, errors = parse_booking_form(_valid_booking_form(type="spaceship"))
-    assert any("type" in e.lower() for e in errors)
+    data, field_errors = parse_booking_form(_valid_booking_form(type="spaceship"))
+    assert "type" in field_errors
     assert data["type"] == "other"
 
 
 def test_parse_booking_form_blank_optional_fields_become_none():
-    data, errors = parse_booking_form(_valid_booking_form(
+    data, field_errors = parse_booking_form(_valid_booking_form(
         vendor="", confirmation_number="", location="", url="", notes="", cost=""
     ))
-    assert errors == []
+    assert field_errors == {}
     assert data["vendor"] is None
     assert data["confirmation_number"] is None
     assert data["location"] is None
@@ -109,44 +109,50 @@ def test_parse_booking_form_blank_optional_fields_become_none():
 
 
 def test_parse_booking_form_negative_cost_errors():
-    _, errors = parse_booking_form(_valid_booking_form(cost="-50"))
-    assert any("negative" in e for e in errors)
+    _, field_errors = parse_booking_form(_valid_booking_form(cost="-50"))
+    assert "cost" in field_errors
+    assert "negative" in field_errors["cost"]
 
 
 def test_parse_booking_form_non_numeric_cost_errors():
-    _, errors = parse_booking_form(_valid_booking_form(cost="abc"))
-    assert any("number" in e.lower() for e in errors)
+    _, field_errors = parse_booking_form(_valid_booking_form(cost="abc"))
+    assert "cost" in field_errors
+    assert "number" in field_errors["cost"].lower()
 
 
-def test_parse_booking_form_end_before_start_errors():
-    _, errors = parse_booking_form(_valid_booking_form(
+def test_parse_booking_form_end_before_start_keys_on_end_datetime():
+    _, field_errors = parse_booking_form(_valid_booking_form(
         start_datetime="2026-06-02T10:00",
         end_datetime="2026-06-01T10:00",
     ))
-    assert any("on or after" in e for e in errors)
+    # Cross-field error attaches to end_datetime so the inline message
+    # appears next to the field the user can fix.
+    assert "end_datetime" in field_errors
+    assert "start_datetime" not in field_errors
+    assert "on or after" in field_errors["end_datetime"]
 
 
 def test_parse_booking_form_blank_dates_are_ok():
-    data, errors = parse_booking_form(_valid_booking_form(start_datetime="", end_datetime=""))
-    assert errors == []
+    data, field_errors = parse_booking_form(_valid_booking_form(start_datetime="", end_datetime=""))
+    assert field_errors == {}
     assert data["start_datetime"] is None
     assert data["end_datetime"] is None
 
 
 def test_parse_booking_form_invalid_datetime_string_errors():
-    _, errors = parse_booking_form(_valid_booking_form(start_datetime="not-a-datetime"))
-    assert any("Start date/time" in e for e in errors)
+    _, field_errors = parse_booking_form(_valid_booking_form(start_datetime="not-a-datetime"))
+    assert "start_datetime" in field_errors
 
 
 def test_parse_booking_form_uppercases_currency():
-    data, errors = parse_booking_form(_valid_booking_form(currency="eur"))
-    assert errors == []
+    data, field_errors = parse_booking_form(_valid_booking_form(currency="eur"))
+    assert field_errors == {}
     assert data["currency"] == "EUR"
 
 
 def test_parse_booking_form_blank_currency_uses_default():
-    data, errors = parse_booking_form(_valid_booking_form(currency=""), default_currency="JPY")
-    assert errors == []
+    data, field_errors = parse_booking_form(_valid_booking_form(currency=""), default_currency="JPY")
+    assert field_errors == {}
     assert data["currency"] == "JPY"
 
 

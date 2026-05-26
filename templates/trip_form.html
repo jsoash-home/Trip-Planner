@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_icon.html" import icon %}
+{% from "_field_error.html" import field_error, invalid_class %}
 {% block title %}{{ "Edit trip" if trip else "Plan a new trip" }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -12,11 +13,11 @@
 
 <h1 class="h3 mb-4">{{ "Edit trip" if trip else "Plan a new trip" }}</h1>
 
-{% if errors %}
+{% if field_errors %}
   <div class="vp-flash vp-flash--danger">
     <strong>Please fix:</strong>
     <ul class="mb-0 mt-1">
-      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      {% for e in field_errors.values() %}<li>{{ e }}</li>{% endfor %}
     </ul>
   </div>
 {% endif %}
@@ -25,35 +26,52 @@
   <div class="row g-3">
     <div class="col-12">
       <label for="trip-name" class="form-label">Trip name</label>
-      <input id="trip-name" name="name" type="text" class="form-control"
+      <input id="trip-name" name="name" type="text"
+             class="form-control{{ invalid_class(field_errors, 'name') }}"
              value="{{ form.get('name', '') }}"
+             {% if field_errors and field_errors.get('name') %}aria-invalid="true"{% endif %}
              placeholder="e.g. Italy Honeymoon 2026" required maxlength="200" autofocus>
+      {{ field_error(field_errors, 'name') }}
     </div>
 
     <div class="col-12">
       <label for="trip-destination" class="form-label">Destination <span class="text-muted small">— optional</span></label>
-      <input id="trip-destination" name="destination" type="text" class="form-control"
+      <input id="trip-destination" name="destination" type="text"
+             class="form-control{{ invalid_class(field_errors, 'destination') }}"
              value="{{ form.get('destination', '') }}"
+             {% if field_errors and field_errors.get('destination') %}aria-invalid="true"{% endif %}
              placeholder="Rome, Florence, Venice" maxlength="300">
+      {{ field_error(field_errors, 'destination') }}
     </div>
 
     <div class="col-md-6">
       <label for="trip-start" class="form-label">Start date</label>
-      <input id="trip-start" name="start_date" type="date" class="form-control"
-             value="{{ form.get('start_date', '') }}" required>
+      <input id="trip-start" name="start_date" type="date"
+             class="form-control{{ invalid_class(field_errors, 'start_date') }}"
+             value="{{ form.get('start_date', '') }}"
+             {% if field_errors and field_errors.get('start_date') %}aria-invalid="true"{% endif %}
+             required>
+      {{ field_error(field_errors, 'start_date') }}
     </div>
 
     <div class="col-md-6">
       <label for="trip-end" class="form-label">End date</label>
-      <input id="trip-end" name="end_date" type="date" class="form-control"
-             value="{{ form.get('end_date', '') }}" required>
+      <input id="trip-end" name="end_date" type="date"
+             class="form-control{{ invalid_class(field_errors, 'end_date') }}"
+             value="{{ form.get('end_date', '') }}"
+             {% if field_errors and field_errors.get('end_date') %}aria-invalid="true"{% endif %}
+             required>
+      {{ field_error(field_errors, 'end_date') }}
     </div>
 
     <div class="col-md-6">
       <label for="trip-emoji" class="form-label">Cover emoji <span class="text-muted small">— optional</span></label>
-      <input id="trip-emoji" name="cover_emoji" type="text" class="form-control"
+      <input id="trip-emoji" name="cover_emoji" type="text"
+             class="form-control{{ invalid_class(field_errors, 'cover_emoji') }}"
              value="{{ form.get('cover_emoji', '') }}"
+             {% if field_errors and field_errors.get('cover_emoji') %}aria-invalid="true"{% endif %}
              placeholder="🏝️" maxlength="10">
+      {{ field_error(field_errors, 'cover_emoji') }}
       <div class="emoji-picks mt-2">
         {% for e in suggested_emojis %}
           <button type="button" class="emoji-pick" data-emoji="{{ e }}" aria-label="Use {{ e }}">{{ e }}</button>
@@ -64,20 +82,26 @@
     <div class="col-md-6">
       <label for="trip-currency" class="form-label">Primary currency</label>
       {% set current_cur = form.get('primary_currency', 'USD') %}
-      <select id="trip-currency" name="primary_currency" class="form-select">
+      <select id="trip-currency" name="primary_currency"
+              class="form-select{{ invalid_class(field_errors, 'primary_currency') }}"
+              {% if field_errors and field_errors.get('primary_currency') %}aria-invalid="true"{% endif %}>
         {% for code, label in supported_currencies %}
           <option value="{{ code }}" {% if code == current_cur %}selected{% endif %}>
             {{ code }} — {{ label }}
           </option>
         {% endfor %}
       </select>
+      {{ field_error(field_errors, 'primary_currency') }}
       <div class="form-text">Used as the default for booking costs and budget rollups.</div>
     </div>
 
     <div class="col-12">
       <label for="trip-notes" class="form-label">Notes <span class="text-muted small">— optional, supports markdown</span></label>
-      <textarea id="trip-notes" name="notes" class="form-control" rows="4"
+      <textarea id="trip-notes" name="notes" rows="4"
+                class="form-control{{ invalid_class(field_errors, 'notes') }}"
+                {% if field_errors and field_errors.get('notes') %}aria-invalid="true"{% endif %}
                 placeholder="Anything you want to remember — links, who's coming, ideas.">{{ form.get('notes', '') }}</textarea>
+      {{ field_error(field_errors, 'notes') }}
     </div>
   </div>
 

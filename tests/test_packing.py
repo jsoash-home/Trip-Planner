@@ -68,21 +68,21 @@ def _valid_form(**overrides):
 
 
 def test_parse_packing_form_valid_no_errors():
-    data, errors = parse_packing_form(_valid_form())
-    assert errors == []
+    data, field_errors = parse_packing_form(_valid_form())
+    assert field_errors == {}
     assert data["name"] == "Sunglasses"
     assert data["category"] == "other"
     assert data["packed"] is False
 
 
 def test_parse_packing_form_missing_name_errors():
-    _, errors = parse_packing_form(_valid_form(name=""))
-    assert any("Name" in e for e in errors)
+    _, field_errors = parse_packing_form(_valid_form(name=""))
+    assert "name" in field_errors
 
 
 def test_parse_packing_form_unknown_category_errors_and_falls_back():
-    data, errors = parse_packing_form(_valid_form(category="zzz"))
-    assert any("Category" in e for e in errors)
+    data, field_errors = parse_packing_form(_valid_form(category="zzz"))
+    assert "category" in field_errors
     assert data["category"] == "other"
 
 

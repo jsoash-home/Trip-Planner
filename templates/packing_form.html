@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_field_error.html" import field_error, invalid_class %}
 {% block title %}{{ "Edit packing item" if item else "Add packing item" }} — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -13,11 +14,11 @@
 
 <h1 class="h3 mb-4">{{ "Edit packing item" if item else "Add packing item" }}</h1>
 
-{% if errors %}
+{% if field_errors %}
   <div class="vp-flash vp-flash--danger">
     <strong>Please fix:</strong>
     <ul class="mb-0 mt-1">
-      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      {% for e in field_errors.values() %}<li>{{ e }}</li>{% endfor %}
     </ul>
   </div>
 {% endif %}
@@ -26,27 +27,36 @@
   <div class="row g-3">
     <div class="col-md-8">
       <label for="p-name" class="form-label">Name</label>
-      <input id="p-name" name="name" type="text" class="form-control"
+      <input id="p-name" name="name" type="text"
+             class="form-control{{ invalid_class(field_errors, 'name') }}"
              value="{{ form.get('name', '') }}"
+             {% if field_errors and field_errors.get('name') %}aria-invalid="true"{% endif %}
              placeholder="e.g. Sunglasses" required maxlength="200" autofocus>
+      {{ field_error(field_errors, 'name') }}
     </div>
 
     <div class="col-md-4">
       <label for="p-category" class="form-label">Category</label>
       {% set current_cat = form.get('category', 'other') %}
-      <select id="p-category" name="category" class="form-select">
+      <select id="p-category" name="category"
+              class="form-select{{ invalid_class(field_errors, 'category') }}"
+              {% if field_errors and field_errors.get('category') %}aria-invalid="true"{% endif %}>
         {% for code, label, emoji in packing_categories %}
           <option value="{{ code }}" {% if code == current_cat %}selected{% endif %}>
             {{ emoji }} {{ label }}
           </option>
         {% endfor %}
       </select>
+      {{ field_error(field_errors, 'category') }}
     </div>
 
     <div class="col-12">
       <label for="p-notes" class="form-label">Notes <span class="text-muted small">— optional</span></label>
-      <textarea id="p-notes" name="notes" class="form-control" rows="2"
+      <textarea id="p-notes" name="notes" rows="2"
+                class="form-control{{ invalid_class(field_errors, 'notes') }}"
+                {% if field_errors and field_errors.get('notes') %}aria-invalid="true"{% endif %}
                 placeholder="Pack the polarized pair, not the readers…">{{ form.get('notes', '') }}</textarea>
+      {{ field_error(field_errors, 'notes') }}
     </div>
 
     <div class="col-12">

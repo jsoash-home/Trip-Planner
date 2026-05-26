@@ -107,7 +107,7 @@ def parse_collaborator_form(
     *,
     owner_email: str,
     existing_emails: Optional[List[str]] = None,
-) -> Tuple[Dict[str, Any], List[str]]:
+) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """
     Pull and validate fields for adding a collaborator.
 
@@ -115,30 +115,31 @@ def parse_collaborator_form(
     that are already in `existing_emails` (duplicate adds — caller can
     instead update the existing role).
 
-    Returns (cleaned_data, errors). cleaned_data is suitable for
-    `TripCollaborator(trip_id=..., **data)`.
+    Returns (cleaned_data, field_errors). field_errors is keyed by form
+    field name (e.g. `"email"`, `"role"`); an empty dict means valid.
+    Owner-self and duplicate-email messages attach to `"email"`.
     """
-    errors: List[str] = []
+    field_errors: Dict[str, str] = {}
 
     email = normalize_email(form.get("email"))
     if not email:
-        errors.append("Email is required.")
+        field_errors["email"] = "Email is required."
     elif not is_valid_email(email):
-        errors.append("That email doesn't look right (must contain @ and a domain).")
+        field_errors["email"] = "That email doesn't look right (must contain @ and a domain)."
 
     role = (form.get("role") or "viewer").strip().lower()
     if role not in SHARE_ROLE_CODES:
-        errors.append("Role must be Viewer or Editor.")
+        field_errors["role"] = "Role must be Viewer or Editor."
         role = "viewer"
 
     if email and email == normalize_email(owner_email):
-        errors.append("You're the trip owner already — no need to share with yourself.")
+        field_errors["email"] = "You're the trip owner already — no need to share with yourself."
 
     if email and existing_emails:
         existing_normed = {normalize_email(e) for e in existing_emails}
         if email in existing_normed:
-            errors.append(
+            field_errors["email"] = (
                 "That email is already on the share list — remove it first if you want a different role."
             )
 
-    return {"email": email, "role": role}, errors
+    return {"email": email, "role": role}, field_errors

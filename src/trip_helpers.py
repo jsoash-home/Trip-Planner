@@ -148,23 +148,25 @@ def status_label(status: str) -> str:
     }.get(status, status)
 
 
-def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], List[str]]:
+def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """
     Pull and validate trip fields from a submitted HTML form.
 
     The first return value is a dict of cleaned values keyed by model
     field name (suitable for `Trip(**data)` once the date fields are
-    not None). The second is a list of human-readable error strings; an
-    empty list means the form is valid.
+    not None). The second is a dict of per-field error messages keyed
+    by the form field name (e.g. `"start_date"`); an empty dict means
+    the form is valid. Cross-field errors are attached to the
+    "logically responsible" field (e.g. start > end → `end_date`).
 
     Whitespace is stripped on every text field; empty strings on optional
     fields become None. Currency codes are upper-cased.
     """
-    errors: List[str] = []
+    field_errors: Dict[str, str] = {}
 
     name = (form.get("name") or "").strip()
     if not name:
-        errors.append("Trip name is required.")
+        field_errors["name"] = "Trip name is required."
 
     destination = (form.get("destination") or "").strip() or None
     cover_emoji = (form.get("cover_emoji") or "").strip() or None
@@ -178,23 +180,23 @@ def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], List[str]]
     end_date: Optional[date] = None
 
     if not start_str:
-        errors.append("Start date is required.")
+        field_errors["start_date"] = "Start date is required."
     else:
         try:
             start_date = date.fromisoformat(start_str)
         except ValueError:
-            errors.append("Start date is not a valid date.")
+            field_errors["start_date"] = "Start date is not a valid date."
 
     if not end_str:
-        errors.append("End date is required.")
+        field_errors["end_date"] = "End date is required."
     else:
         try:
             end_date = date.fromisoformat(end_str)
         except ValueError:
-            errors.append("End date is not a valid date.")
+            field_errors["end_date"] = "End date is not a valid date."
 
     if start_date and end_date and start_date > end_date:
-        errors.append("Start date must be on or before end date.")
+        field_errors["end_date"] = "End date must be on or after the start date."
 
     data: Dict[str, Any] = {
         "name": name,
@@ -205,7 +207,7 @@ def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], List[str]]
         "start_date": start_date,
         "end_date": end_date,
     }
-    return data, errors
+    return data, field_errors
 
 
 def trip_form_values(trip) -> Dict[str, str]:

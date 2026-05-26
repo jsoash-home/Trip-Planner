@@ -159,65 +159,69 @@ def test_is_owner_helper():
 
 
 def test_parse_form_valid():
-    data, errors = parse_collaborator_form(
+    data, field_errors = parse_collaborator_form(
         {"email": "Jane@example.com", "role": "editor"},
         owner_email="owner@example.com",
     )
-    assert errors == []
+    assert field_errors == {}
     assert data["email"] == "jane@example.com"
     assert data["role"] == "editor"
 
 
 def test_parse_form_missing_email():
-    _, errors = parse_collaborator_form(
+    _, field_errors = parse_collaborator_form(
         {"email": "", "role": "viewer"},
         owner_email="owner@example.com",
     )
-    assert any("Email" in e for e in errors)
+    assert "email" in field_errors
 
 
 def test_parse_form_invalid_email():
-    _, errors = parse_collaborator_form(
+    _, field_errors = parse_collaborator_form(
         {"email": "not-an-email", "role": "viewer"},
         owner_email="owner@example.com",
     )
-    assert any("doesn't look right" in e for e in errors)
+    assert "email" in field_errors
+    assert "doesn't look right" in field_errors["email"]
 
 
 def test_parse_form_invalid_role_falls_back_to_viewer():
-    data, errors = parse_collaborator_form(
+    data, field_errors = parse_collaborator_form(
         {"email": "jane@example.com", "role": "admin"},
         owner_email="owner@example.com",
     )
-    assert any("Viewer or Editor" in e for e in errors)
+    assert "role" in field_errors
+    assert "Viewer or Editor" in field_errors["role"]
     assert data["role"] == "viewer"
 
 
-def test_parse_form_rejects_owners_own_email():
-    _, errors = parse_collaborator_form(
+def test_parse_form_rejects_owners_own_email_keys_on_email():
+    _, field_errors = parse_collaborator_form(
         {"email": "OWNER@example.com", "role": "viewer"},
         owner_email="owner@example.com",
     )
-    assert any("trip owner" in e for e in errors)
+    assert "email" in field_errors
+    assert "trip owner" in field_errors["email"]
 
 
 def test_parse_form_rejects_duplicate_email():
-    _, errors = parse_collaborator_form(
+    _, field_errors = parse_collaborator_form(
         {"email": "Jane@Example.com", "role": "editor"},
         owner_email="owner@example.com",
         existing_emails=["jane@example.com"],
     )
-    assert any("already on the share list" in e for e in errors)
+    assert "email" in field_errors
+    assert "already on the share list" in field_errors["email"]
 
 
 def test_parse_form_blank_role_silently_defaults_to_viewer():
     # Blank role (e.g. dropdown not interacted with) is the friendliest
     # default — silently treat as viewer, no error.
-    data, errors = parse_collaborator_form(
+    data, field_errors = parse_collaborator_form(
         {"email": "jane@example.com", "role": ""},
         owner_email="owner@example.com",
     )
-    assert errors == []
+    assert field_errors == {}
     assert data["role"] == "viewer"
 
 

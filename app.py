@@ -552,15 +552,15 @@ def trips_list():
 def trip_new():
     """Form to create a new trip."""
     if request.method == "POST":
-        data, errors = parse_trip_form(request.form)
+        data, field_errors = parse_trip_form(request.form)
         if not is_valid_currency(data["primary_currency"]):
-            errors.append("Primary currency is not supported.")
-        if errors:
+            field_errors["primary_currency"] = "Primary currency is not supported."
+        if field_errors:
             return render_template(
                 "trip_form.html",
                 trip=None,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 supported_currencies=SUPPORTED_CURRENCIES,
                 suggested_emojis=SUGGESTED_TRIP_EMOJIS,
             )
@@ -582,7 +582,7 @@ def trip_new():
         "trip_form.html",
         trip=None,
         form={"primary_currency": "USD"},
-        errors=[],
+        field_errors={},
         supported_currencies=SUPPORTED_CURRENCIES,
         suggested_emojis=SUGGESTED_TRIP_EMOJIS,
     )
@@ -630,15 +630,15 @@ def trip_edit(trip_id):
     trip = _owned_trip_or_404(trip_id)
 
     if request.method == "POST":
-        data, errors = parse_trip_form(request.form)
+        data, field_errors = parse_trip_form(request.form)
         if not is_valid_currency(data["primary_currency"]):
-            errors.append("Primary currency is not supported.")
-        if errors:
+            field_errors["primary_currency"] = "Primary currency is not supported."
+        if field_errors:
             return render_template(
                 "trip_form.html",
                 trip=trip,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 supported_currencies=SUPPORTED_CURRENCIES,
                 suggested_emojis=SUGGESTED_TRIP_EMOJIS,
             )
@@ -654,7 +654,7 @@ def trip_edit(trip_id):
         "trip_form.html",
         trip=trip,
         form=trip_form_values(trip),
-        errors=[],
+        field_errors={},
         supported_currencies=SUPPORTED_CURRENCIES,
         suggested_emojis=SUGGESTED_TRIP_EMOJIS,
     )
@@ -706,16 +706,16 @@ def booking_new(trip_id):
     trip, _ = _trip_with_access_or_404(trip_id, role="editor")
 
     if request.method == "POST":
-        data, errors = parse_booking_form(request.form, default_currency=trip.primary_currency)
+        data, field_errors = parse_booking_form(request.form, default_currency=trip.primary_currency)
         if not is_valid_currency(data["currency"]):
-            errors.append("Currency is not supported.")
-        if errors:
+            field_errors["currency"] = "Currency is not supported."
+        if field_errors:
             return render_template(
                 "booking_form.html",
                 trip=trip,
                 booking=None,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 booking_types=BOOKING_TYPES,
                 supported_currencies=SUPPORTED_CURRENCIES,
             )
@@ -767,7 +767,7 @@ def booking_new(trip_id):
         trip=trip,
         booking=None,
         form={"type": "flight", "currency": trip.primary_currency},
-        errors=[],
+        field_errors={},
         booking_types=BOOKING_TYPES,
         supported_currencies=SUPPORTED_CURRENCIES,
     )
@@ -780,16 +780,16 @@ def booking_edit(trip_id, booking_id):
     trip, booking, _ = _booking_with_access_or_404(trip_id, booking_id, role="editor")
 
     if request.method == "POST":
-        data, errors = parse_booking_form(request.form, default_currency=trip.primary_currency)
+        data, field_errors = parse_booking_form(request.form, default_currency=trip.primary_currency)
         if not is_valid_currency(data["currency"]):
-            errors.append("Currency is not supported.")
-        if errors:
+            field_errors["currency"] = "Currency is not supported."
+        if field_errors:
             return render_template(
                 "booking_form.html",
                 trip=trip,
                 booking=booking,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 booking_types=BOOKING_TYPES,
                 supported_currencies=SUPPORTED_CURRENCIES,
             )
@@ -833,7 +833,7 @@ def booking_edit(trip_id, booking_id):
         trip=trip,
         booking=booking,
         form=booking_form_values(booking),
-        errors=[],
+        field_errors={},
         booking_types=BOOKING_TYPES,
         supported_currencies=SUPPORTED_CURRENCIES,
     )
@@ -1027,14 +1027,14 @@ def itinerary_new(trip_id):
     trip, _ = _trip_with_access_or_404(trip_id, role="editor")
 
     if request.method == "POST":
-        data, errors = parse_itinerary_form(request.form, trip.start_date, trip.end_date)
-        if errors:
+        data, field_errors = parse_itinerary_form(request.form, trip.start_date, trip.end_date)
+        if field_errors:
             return render_template(
                 "itinerary_form.html",
                 trip=trip,
                 item=None,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 itinerary_categories=ITINERARY_CATEGORIES,
             )
 
@@ -1065,7 +1065,7 @@ def itinerary_new(trip_id):
         trip=trip,
         item=None,
         form={"category": "sightseeing", "day_date": prefill_day},
-        errors=[],
+        field_errors={},
         itinerary_categories=ITINERARY_CATEGORIES,
     )
 
@@ -1077,14 +1077,14 @@ def itinerary_edit(trip_id, item_id):
     trip, item, _ = _itinerary_item_with_access_or_404(trip_id, item_id, role="editor")
 
     if request.method == "POST":
-        data, errors = parse_itinerary_form(request.form, trip.start_date, trip.end_date)
-        if errors:
+        data, field_errors = parse_itinerary_form(request.form, trip.start_date, trip.end_date)
+        if field_errors:
             return render_template(
                 "itinerary_form.html",
                 trip=trip,
                 item=item,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 itinerary_categories=ITINERARY_CATEGORIES,
             )
 
@@ -1118,7 +1118,7 @@ def itinerary_edit(trip_id, item_id):
         trip=trip,
         item=item,
         form=itinerary_form_values(item),
-        errors=[],
+        field_errors={},
         itinerary_categories=ITINERARY_CATEGORIES,
     )
 
@@ -1628,14 +1628,14 @@ def packing_new(trip_id):
     trip, _ = _trip_with_access_or_404(trip_id, role="editor")
 
     if request.method == "POST":
-        data, errors = parse_packing_form(request.form)
-        if errors:
+        data, field_errors = parse_packing_form(request.form)
+        if field_errors:
             return render_template(
                 "packing_form.html",
                 trip=trip,
                 item=None,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 packing_categories=PACKING_CATEGORIES,
             )
 
@@ -1654,7 +1654,7 @@ def packing_new(trip_id):
         trip=trip,
         item=None,
         form={"category": "other"},
-        errors=[],
+        field_errors={},
         packing_categories=PACKING_CATEGORIES,
     )
 
@@ -1666,14 +1666,14 @@ def packing_edit(trip_id, item_id):
     trip, item, _ = _packing_item_with_access_or_404(trip_id, item_id, role="editor")
 
     if request.method == "POST":
-        data, errors = parse_packing_form(request.form)
-        if errors:
+        data, field_errors = parse_packing_form(request.form)
+        if field_errors:
             return render_template(
                 "packing_form.html",
                 trip=trip,
                 item=item,
                 form=request.form,
-                errors=errors,
+                field_errors=field_errors,
                 packing_categories=PACKING_CATEGORIES,
             )
         for field, value in data.items():
@@ -1688,7 +1688,7 @@ def packing_edit(trip_id, item_id):
         trip=trip,
         item=item,
         form=packing_form_values(item),
-        errors=[],
+        field_errors={},
         packing_categories=PACKING_CATEGORIES,
     )
 
@@ -1736,7 +1736,7 @@ def trip_share(trip_id):
         collaborators=collaborators,
         share_roles=SHARE_ROLES,
         form={},
-        errors=[],
+        field_errors={},
     )
 
 
@@ -1749,12 +1749,12 @@ def share_add(trip_id):
     existing = TripCollaborator.query.filter_by(trip_id=trip.id).all()
     existing_emails = [c.email for c in existing]
 
-    data, errors = parse_collaborator_form(
+    data, field_errors = parse_collaborator_form(
         request.form,
         owner_email=owner.email,
         existing_emails=existing_emails,
     )
-    if errors:
+    if field_errors:
         # Re-render the share page with the failed input pre-filled.
         return render_template(
             "trip_share.html",
@@ -1764,7 +1764,7 @@ def share_add(trip_id):
             collaborators=existing,
             share_roles=SHARE_ROLES,
             form=request.form,
-            errors=errors,
+            field_errors=field_errors,
         )
 
     collab = TripCollaborator(trip_id=trip.id, **data)

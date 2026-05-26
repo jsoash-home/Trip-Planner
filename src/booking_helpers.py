@@ -60,24 +60,26 @@ def _parse_datetime_local(s: str) -> datetime:
 def parse_booking_form(
     form: Mapping[str, str],
     default_currency: str = "USD",
-) -> Tuple[Dict[str, Any], List[str]]:
+) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """
     Pull and validate booking fields from a submitted HTML form.
 
-    Returns (cleaned_data, errors). On success, cleaned_data is suitable
-    for `Booking(trip_id=..., **cleaned_data)`. On failure, errors is a
-    list of human-readable strings.
+    Returns (cleaned_data, field_errors). On success, cleaned_data is
+    suitable for `Booking(trip_id=..., **cleaned_data)`. field_errors
+    is keyed by form field name (e.g. `"title"`, `"end_datetime"`);
+    an empty dict means the form is valid. Cross-field errors attach
+    to the "logically responsible" field (end < start → `end_datetime`).
     """
-    errors: List[str] = []
+    field_errors: Dict[str, str] = {}
 
     type_ = (form.get("type") or "").strip().lower()
     if type_ not in BOOKING_TYPE_CODES:
-        errors.append("Booking type is not valid.")
+        field_errors["type"] = "Booking type is not valid."
         type_ = "other"
 
     title = (form.get("title") or "").strip()
     if not title:
-        errors.append("Title is required.")
+        field_errors["title"] = "Title is required."
 
     vendor = (form.get("vendor") or "").strip() or None
     confirmation_number = (form.get("confirmation_number") or "").strip() or None
@@ -93,11 +95,11 @@ def parse_booking_form(
         try:
             cost = float(cost_str)
         except ValueError:
-            errors.append("Cost must be a number (or blank).")
+            field_errors["cost"] = "Cost must be a number (or blank)."
             cost = None
         else:
             if cost < 0:
-                errors.append("Cost can't be negative.")
+                field_errors["cost"] = "Cost can't be negative."
                 cost = None
 
     start_dt: Optional[datetime] = None
@@ -109,15 +111,15 @@ def parse_booking_form(
         try:
             start_dt = _parse_datetime_local(start_str)
         except ValueError:
-            errors.append("Start date/time is not valid.")
+            field_errors["start_datetime"] = "Start date/time is not valid."
     if end_str:
         try:
             end_dt = _parse_datetime_local(end_str)
         except ValueError:
-            errors.append("End date/time is not valid.")
+            field_errors["end_datetime"] = "End date/time is not valid."
 
     if start_dt and end_dt and end_dt < start_dt:
-        errors.append("End date/time must be on or after start.")
+        field_errors["end_datetime"] = "End date/time must be on or after start."
 
     data: Dict[str, Any] = {
         "type": type_,
@@ -132,7 +134,7 @@ def parse_booking_form(
         "url": url,
         "notes": notes,
     }
-    return data, errors
+    return data, field_errors
 
 
 def booking_form_values(booking) -> Dict[str, str]:

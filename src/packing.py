@@ -54,22 +54,22 @@ def category_emoji(code: str) -> str:
     return PACKING_CATEGORY_EMOJIS.get(code, "📦")
 
 
-def parse_packing_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], List[str]]:
+def parse_packing_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], Dict[str, str]]:
     """
     Pull and validate packing fields from a submitted HTML form.
 
-    Returns (cleaned_data, errors). On success the dict is suitable for
-    `PackingItem(trip_id=..., **cleaned_data)`.
+    Returns (cleaned_data, field_errors). field_errors is keyed by form
+    field name; an empty dict means the form is valid.
     """
-    errors: List[str] = []
+    field_errors: Dict[str, str] = {}
 
     name = (form.get("name") or "").strip()
     if not name:
-        errors.append("Name is required.")
+        field_errors["name"] = "Name is required."
 
     category = (form.get("category") or "other").strip().lower()
     if category not in PACKING_CATEGORY_CODES:
-        errors.append("Category is not valid.")
+        field_errors["category"] = "Category is not valid."
         category = "other"
 
     notes = (form.get("notes") or "").strip() or None
@@ -83,7 +83,7 @@ def parse_packing_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], List[st
         "packed": packed,
         "notes": notes,
     }
-    return data, errors
+    return data, field_errors
 
 
 def packing_form_values(item) -> Dict[str, str]:

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_field_error.html" import field_error, invalid_class %}
 {% block title %}{{ "Edit item" if item else "Add itinerary item" }} — {{ trip.name }} — Vacation Planner{% endblock %}
 
 {% block content %}
@@ -13,11 +14,11 @@
 
 <h1 class="h3 mb-4">{{ "Edit itinerary item" if item else "Add itinerary item" }}</h1>
 
-{% if errors %}
+{% if field_errors %}
   <div class="vp-flash vp-flash--danger">
     <strong>Please fix:</strong>
     <ul class="mb-0 mt-1">
-      {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      {% for e in field_errors.values() %}<li>{{ e }}</li>{% endfor %}
     </ul>
   </div>
 {% endif %}
@@ -26,30 +27,39 @@
   <div class="row g-3">
     <div class="col-12">
       <label for="i-title" class="form-label">Title</label>
-      <input id="i-title" name="title" type="text" class="form-control"
+      <input id="i-title" name="title" type="text"
+             class="form-control{{ invalid_class(field_errors, 'title') }}"
              value="{{ form.get('title', '') }}"
+             {% if field_errors and field_errors.get('title') %}aria-invalid="true"{% endif %}
              placeholder="e.g. Colosseum tour" required maxlength="300" autofocus>
+      {{ field_error(field_errors, 'title') }}
     </div>
 
     <div class="col-md-4">
       <label for="i-category" class="form-label">Category</label>
       {% set current_cat = form.get('category', 'sightseeing') %}
-      <select id="i-category" name="category" class="form-select">
+      <select id="i-category" name="category"
+              class="form-select{{ invalid_class(field_errors, 'category') }}"
+              {% if field_errors and field_errors.get('category') %}aria-invalid="true"{% endif %}>
         {% for code, label, emoji, _css in itinerary_categories %}
           <option value="{{ code }}" {% if code == current_cat %}selected{% endif %}>
             {{ emoji }} {{ label }}
           </option>
         {% endfor %}
       </select>
+      {{ field_error(field_errors, 'category') }}
     </div>
 
     <div class="col-md-4">
       <label for="i-day" class="form-label">Day</label>
-      <input id="i-day" name="day_date" type="date" class="form-control"
+      <input id="i-day" name="day_date" type="date"
+             class="form-control{{ invalid_class(field_errors, 'day_date') }}"
              value="{{ form.get('day_date', '') }}"
              min="{{ trip.start_date.isoformat() }}"
              max="{{ trip.end_date.isoformat() }}"
+             {% if field_errors and field_errors.get('day_date') %}aria-invalid="true"{% endif %}
              required>
+      {{ field_error(field_errors, 'day_date') }}
       <div class="form-text">
         Between {{ trip.start_date.strftime('%b %d') }} and {{ trip.end_date.strftime('%b %d') }}.
       </div>
@@ -64,27 +74,39 @@
 
     <div class="col-md-6">
       <label for="i-start" class="form-label">Start time <span class="text-muted small">— optional</span></label>
-      <input id="i-start" name="start_time" type="time" class="form-control"
-             value="{{ form.get('start_time', '') }}">
+      <input id="i-start" name="start_time" type="time"
+             class="form-control{{ invalid_class(field_errors, 'start_time') }}"
+             value="{{ form.get('start_time', '') }}"
+             {% if field_errors and field_errors.get('start_time') %}aria-invalid="true"{% endif %}>
+      {{ field_error(field_errors, 'start_time') }}
     </div>
 
     <div class="col-md-6">
       <label for="i-end" class="form-label">End time <span class="text-muted small">— optional</span></label>
-      <input id="i-end" name="end_time" type="time" class="form-control"
-             value="{{ form.get('end_time', '') }}">
+      <input id="i-end" name="end_time" type="time"
+             class="form-control{{ invalid_class(field_errors, 'end_time') }}"
+             value="{{ form.get('end_time', '') }}"
+             {% if field_errors and field_errors.get('end_time') %}aria-invalid="true"{% endif %}>
+      {{ field_error(field_errors, 'end_time') }}
     </div>
 
     <div class="col-12">
       <label for="i-location" class="form-label">Location <span class="text-muted small">— optional</span></label>
-      <input id="i-location" name="location" type="text" class="form-control"
+      <input id="i-location" name="location" type="text"
+             class="form-control{{ invalid_class(field_errors, 'location') }}"
              value="{{ form.get('location', '') }}"
+             {% if field_errors and field_errors.get('location') %}aria-invalid="true"{% endif %}
              placeholder="Piazza del Colosseo, Rome" maxlength="300">
+      {{ field_error(field_errors, 'location') }}
     </div>
 
     <div class="col-12">
       <label for="i-notes" class="form-label">Notes <span class="text-muted small">— optional</span></label>
-      <textarea id="i-notes" name="notes" class="form-control" rows="3"
+      <textarea id="i-notes" name="notes" rows="3"
+                class="form-control{{ invalid_class(field_errors, 'notes') }}"
+                {% if field_errors and field_errors.get('notes') %}aria-invalid="true"{% endif %}
                 placeholder="Reservation details, dress code, what to bring…">{{ form.get('notes', '') }}</textarea>
+      {{ field_error(field_errors, 'notes') }}
     </div>
   </div>
 
