@@ -42,6 +42,8 @@ from flask_login import (
 
 from models import Booking, ItineraryItem, PackingItem, Trip, TripCollaborator, User, db
 from src.booking_helpers import (
+    BOOKING_TYPE_CODES,
+    BOOKING_TYPE_LABELS,
     BOOKING_TYPES,
     DRIFT_FIELDS,
     DriftReport,
@@ -683,9 +685,20 @@ def trip_delete(trip_id):
 @app.route("/trips/<int:trip_id>/bookings")
 @login_required
 def bookings_list(trip_id):
-    """List all bookings for this trip, grouped by type."""
+    """List all bookings for this trip, grouped by type.
+
+    Supports a ?type=<code> query param to filter to a single booking type.
+    Invalid or missing values silently fall back to "all".
+    """
     trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
-    bookings = Booking.query.filter_by(trip_id=trip.id).all()
+
+    requested_type = (request.args.get("type") or "").strip().lower()
+    active_type = requested_type if requested_type in BOOKING_TYPE_CODES else None
+
+    bookings_query = Booking.query.filter_by(trip_id=trip.id)
+    if active_type:
+        bookings_query = bookings_query.filter_by(type=active_type)
+    bookings = bookings_query.all()
     grouped = group_bookings_by_type(bookings)
 
     totals = total_cost_by_currency(bookings)
@@ -696,12 +709,17 @@ def bookings_list(trip_id):
     else:
         total_label = ""
 
+    active_type_label = BOOKING_TYPE_LABELS.get(active_type) if active_type else None
+
     return render_template(
         "bookings_list.html",
         trip=trip,
         user_role=user_role,
         grouped=grouped,
         total_label=total_label,
+        booking_types=BOOKING_TYPES,
+        active_type=active_type,
+        active_type_label=active_type_label,
     )
 
 
