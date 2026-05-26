@@ -97,6 +97,22 @@ def group_trips_by_state(trips: Iterable, today: date) -> Dict[str, List]:
     return {"active": active, "upcoming": upcoming, "past": past}
 
 
+def day_of_trip(start: date, end: date, today: date) -> Tuple[int, int]:
+    """
+    Return (current_day, total_days) for a trip in progress.
+
+    Day 1 is the start date; the final day equals total_days. Callers
+    should guard with `derive_status(...) == "in_progress"` — for dates
+    outside [start, end] the numbers are not meaningful.
+
+    Used by the dashboard trip card to render "Day 3 of 7" on the
+    in-progress pill.
+    """
+    total = (end - start).days + 1
+    current = (today - start).days + 1
+    return current, total
+
+
 def countdown_label(start: date, end: date, today: date) -> str:
     """
     Friendly countdown string for a trip card.

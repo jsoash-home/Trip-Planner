@@ -6,6 +6,7 @@ from typing import Optional
 
 from src.trip_helpers import (
     countdown_label,
+    day_of_trip,
     days_remaining,
     days_until,
     derive_status,
@@ -131,6 +132,25 @@ def test_group_trips_drops_rows_with_inverted_dates():
     ]
     out = group_trips_by_state(trips, today)
     assert [t.id for t in out["upcoming"]] == [2]
+
+
+# ─────────────────────────────  day_of_trip  ──────────────────────────────
+
+
+def test_day_of_trip_first_day():
+    assert day_of_trip(date(2026, 7, 1), date(2026, 7, 7), date(2026, 7, 1)) == (1, 7)
+
+
+def test_day_of_trip_mid_trip():
+    assert day_of_trip(date(2026, 7, 1), date(2026, 7, 7), date(2026, 7, 3)) == (3, 7)
+
+
+def test_day_of_trip_last_day():
+    assert day_of_trip(date(2026, 7, 1), date(2026, 7, 7), date(2026, 7, 7)) == (7, 7)
+
+
+def test_day_of_trip_single_day_trip():
+    assert day_of_trip(date(2026, 7, 1), date(2026, 7, 1), date(2026, 7, 1)) == (1, 1)
 
 
 # ─────────────────────────────  countdown_label  ──────────────────────────

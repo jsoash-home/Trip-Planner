@@ -91,6 +91,7 @@ from src.sharing import (
 from src.trip_helpers import (
     SUGGESTED_TRIP_EMOJIS,
     countdown_label,
+    day_of_trip,
     days_until,
     derive_status,
     emoji_theme,
@@ -210,6 +211,7 @@ login_manager.login_view = "index"
 # Templates can call these directly: {{ derive_status(...) }} / {{ "**hi**" | markdown }}
 app.jinja_env.globals.update(
     countdown_label=countdown_label,
+    day_of_trip=day_of_trip,
     days_until=days_until,
     derive_status=derive_status,
     emoji_theme=emoji_theme,

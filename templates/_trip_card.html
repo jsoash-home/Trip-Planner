@@ -39,6 +39,9 @@
         <span data-countdown-form="days">{{ _themed_days }}</span>
         <span data-countdown-form="sleeps" hidden>{{ _themed_sleeps }}</span>
       </span>
+    {% elif status == 'in_progress' %}
+      {% set _d = day_of_trip(trip.start_date, trip.end_date, today) %}
+      <span class="trip-card-countdown {{ countdown_cls }}">Day {{ _d[0] }} of {{ _d[1] }}</span>
     {% else %}
       <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
     {% endif %}
