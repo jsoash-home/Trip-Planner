@@ -22,7 +22,11 @@ from src.currency import format_money
 logger = logging.getLogger(__name__)
 
 
-def rollup_bookings_by_category(bookings: Iterable) -> List[Dict]:
+def rollup_bookings_by_category(
+    bookings: Iterable,
+    *,
+    primary_currency: Optional[str] = None,
+) -> List[Dict]:
     """
     Group bookings by type and sum costs per currency within each group.
 
@@ -36,6 +40,12 @@ def rollup_bookings_by_category(bookings: Iterable) -> List[Dict]:
       count             — total bookings in this category
       uncosted_count    — bookings with cost=None
       totals_by_currency — {USD: 1200.0, EUR: 600.0, ...}; empty when all uncosted
+
+    When ``primary_currency`` is supplied, each dict also includes:
+
+      primary_total     — sum of costs in the primary currency only (0.0 if none)
+      share_fraction    — primary_total / sum of all primary_totals, in [0.0, 1.0]
+                          (0.0 when the grand primary total is zero)
     """
     by_type: Dict[str, List] = {}
     for b in bookings:
@@ -63,6 +73,19 @@ def rollup_bookings_by_category(bookings: Iterable) -> List[Dict]:
             "uncosted_count": uncosted,
             "totals_by_currency": totals,
         })
+
+    if primary_currency is not None:
+        primary = primary_currency.upper()
+        for cat in out:
+            cat["primary_total"] = cat["totals_by_currency"].get(primary, 0.0)
+        grand_primary = sum(cat["primary_total"] for cat in out)
+        for cat in out:
+            if grand_primary > 0:
+                share = cat["primary_total"] / grand_primary
+                cat["share_fraction"] = max(0.0, min(1.0, share))
+            else:
+                cat["share_fraction"] = 0.0
+
     return out
 
 

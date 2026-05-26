@@ -663,12 +663,17 @@
 }
 .budget-row {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.6rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--vp-border);
 }
 .budget-row:last-child { border-bottom: none; }
+.budget-row-line {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
 .budget-row-emoji {
   font-size: 1.6rem;
   line-height: 1;
@@ -689,6 +694,17 @@
   font-variant-numeric: tabular-nums;
   text-align: right;
   flex-shrink: 0;
+}
+.budget-row-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--vp-surface-2);
+  overflow: hidden;
+}
+.budget-row-bar-fill {
+  height: 100%;
+  background: var(--vp-accent);
+  border-radius: 999px;
 }
 .text-warning {
   color: var(--vp-warning) !important;

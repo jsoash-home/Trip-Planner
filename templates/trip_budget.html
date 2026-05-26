@@ -63,19 +63,27 @@
   <div class="budget-table">
     {% for cat in categories %}
       <div class="budget-row">
-        <div class="budget-row-emoji" aria-hidden="true">{{ cat.emoji }}</div>
-        <div class="budget-row-main">
-          <div class="budget-row-label">{{ cat.label }}</div>
-          <div class="budget-row-meta">
-            {{ cat.count }} booking{{ '' if cat.count == 1 else 's' }}
-            {% if cat.uncosted_count > 0 %}
-              · <span class="text-warning">{{ cat.uncosted_count }} without cost</span>
-            {% endif %}
+        <div class="budget-row-line">
+          <div class="budget-row-emoji" aria-hidden="true">{{ cat.emoji }}</div>
+          <div class="budget-row-main">
+            <div class="budget-row-label">{{ cat.label }}</div>
+            <div class="budget-row-meta">
+              {{ cat.count }} booking{{ '' if cat.count == 1 else 's' }}
+              {% if cat.uncosted_count > 0 %}
+                · <span class="text-warning">{{ cat.uncosted_count }} without cost</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="budget-row-total">
+            {{ format_money_totals(cat.totals_by_currency, empty='no cost yet') }}
           </div>
         </div>
-        <div class="budget-row-total">
-          {{ format_money_totals(cat.totals_by_currency, empty='no cost yet') }}
-        </div>
+        {% if cat.share_fraction and cat.share_fraction > 0 %}
+          <div class="budget-row-bar" aria-hidden="true">
+            <div class="budget-row-bar-fill"
+                 style="width: {{ (cat.share_fraction * 100) | round(1) }}%"></div>
+          </div>
+        {% endif %}
       </div>
     {% endfor %}
   </div>

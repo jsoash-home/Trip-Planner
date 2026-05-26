@@ -1582,7 +1582,9 @@ def trip_budget(trip_id):
     """Auto-rollup of booking costs by category. No data of its own. Viewer+."""
     trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
     bookings = Booking.query.filter_by(trip_id=trip.id).all()
-    categories = rollup_bookings_by_category(bookings)
+    categories = rollup_bookings_by_category(
+        bookings, primary_currency=trip.primary_currency
+    )
 
     # Grand total = sum across every category's per-currency totals.
     grand_totals: dict = {}

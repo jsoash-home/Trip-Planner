@@ -111,6 +111,95 @@ def test_rollup_falls_back_to_other_for_unknown_type():
     assert out == []
 
 
+# ─────────────────────────  rollup with primary_currency  ──────────────────
+
+
+def test_rollup_without_primary_currency_omits_share_keys():
+    """Backward compat: existing callers see no new keys."""
+    bookings = [FakeBooking(type="flight", cost=600, currency="USD")]
+    out = rollup_bookings_by_category(bookings)
+    assert "share_fraction" not in out[0]
+    assert "primary_total" not in out[0]
+
+
+def test_rollup_single_category_primary_currency_share_is_one():
+    bookings = [FakeBooking(type="flight", cost=600, currency="USD")]
+    out = rollup_bookings_by_category(bookings, primary_currency="USD")
+    assert out[0]["primary_total"] == 600.0
+    assert out[0]["share_fraction"] == 1.0
+
+
+def test_rollup_two_categories_same_currency_shares_sum_to_one():
+    bookings = [
+        FakeBooking(type="flight", cost=600, currency="USD"),
+        FakeBooking(type="hotel",  cost=400, currency="USD"),
+    ]
+    out = rollup_bookings_by_category(bookings, primary_currency="USD")
+    by_code = {c["code"]: c for c in out}
+    assert by_code["flight"]["share_fraction"] == 0.6
+    assert by_code["hotel"]["share_fraction"] == 0.4
+    assert by_code["flight"]["share_fraction"] + by_code["hotel"]["share_fraction"] == 1.0
+
+
+def test_rollup_foreign_currency_category_has_zero_share():
+    """Category with only non-primary currency contributes nothing to share."""
+    bookings = [
+        FakeBooking(type="flight",     cost=600, currency="USD"),
+        FakeBooking(type="restaurant", cost=200, currency="EUR"),
+    ]
+    out = rollup_bookings_by_category(bookings, primary_currency="USD")
+    by_code = {c["code"]: c for c in out}
+    assert by_code["flight"]["share_fraction"] == 1.0
+    assert by_code["restaurant"]["primary_total"] == 0.0
+    assert by_code["restaurant"]["share_fraction"] == 0.0
+
+
+def test_rollup_all_foreign_currency_all_shares_zero():
+    bookings = [
+        FakeBooking(type="flight", cost=600, currency="EUR"),
+        FakeBooking(type="hotel",  cost=400, currency="EUR"),
+    ]
+    out = rollup_bookings_by_category(bookings, primary_currency="USD")
+    for cat in out:
+        assert cat["primary_total"] == 0.0
+        assert cat["share_fraction"] == 0.0
+
+
+def test_rollup_uncosted_only_category_has_zero_share():
+    bookings = [
+        FakeBooking(type="flight", cost=600, currency="USD"),
+        FakeBooking(type="hotel",  cost=None, currency="USD"),
+    ]
+    out = rollup_bookings_by_category(bookings, primary_currency="USD")
+    by_code = {c["code"]: c for c in out}
+    assert by_code["hotel"]["primary_total"] == 0.0
+    assert by_code["hotel"]["share_fraction"] == 0.0
+    assert by_code["flight"]["share_fraction"] == 1.0
+
+
+def test_rollup_mixed_currency_category_counts_only_primary_in_share():
+    """A category with both USD and EUR rows contributes only its USD slice."""
+    bookings = [
+        FakeBooking(type="flight", cost=600, currency="USD"),
+        FakeBooking(type="hotel",  cost=400, currency="USD"),
+        FakeBooking(type="hotel",  cost=500, currency="EUR"),
+    ]
+    out = rollup_bookings_by_category(bookings, primary_currency="USD")
+    by_code = {c["code"]: c for c in out}
+    # hotel's primary_total is 400 (the EUR row doesn't count).
+    # Denominator is 600 + 400 = 1000.
+    assert by_code["hotel"]["primary_total"] == 400.0
+    assert by_code["hotel"]["share_fraction"] == 0.4
+    assert by_code["flight"]["share_fraction"] == 0.6
+
+
+def test_rollup_primary_currency_lowercased_still_matches():
+    """Robust to lowercase primary_currency input."""
+    bookings = [FakeBooking(type="flight", cost=100, currency="USD")]
+    out = rollup_bookings_by_category(bookings, primary_currency="usd")
+    assert out[0]["share_fraction"] == 1.0
+
+
 # ─────────────────────────────  format_money_totals  ───────────────────────
 
 
