@@ -301,7 +301,7 @@ Each session is its own fresh Claude Code window. The workflow:
 - [x] 5. Tighten heading semantics
 - [x] 6. Inline form validation
 - [x] 7. Primary action on the right
-- [ ] 8. Branded confirm dialog
+- [x] 8. Branded confirm dialog
 - [ ] 9. Day-N-of-M on active-trip cards
 - [ ] 10. Budget per-category bars
 - [ ] 11. Per-category packing progress

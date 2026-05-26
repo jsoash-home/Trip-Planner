@@ -1167,3 +1167,52 @@
 @media (prefers-reduced-motion: reduce) {
   .countdown-hero-milestone { transition: none; }
 }
+
+/* ---------------------------------------------------------------------
+ * Branded confirm dialog (templates/_confirm_dialog.html). One <dialog>
+ * lives at the end of <body>; static/js/confirm.js opens it for any
+ * form[data-confirm].
+ * ------------------------------------------------------------------- */
+.vp-confirm {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--vp-text);
+  max-width: 28rem;
+  width: calc(100vw - 2rem);
+}
+
+.vp-confirm::backdrop {
+  background: rgba(34, 24, 18, 0.45);
+}
+
+.vp-confirm-card {
+  background: var(--vp-surface);
+  border: 1px solid var(--vp-border);
+  border-radius: 12px;
+  box-shadow: var(--vp-shadow-md);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vp-confirm-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--vp-text);
+}
+
+.vp-confirm-detail {
+  margin: 0;
+  color: var(--vp-text-muted);
+  font-size: 0.95rem;
+}
+
+.vp-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}

@@ -95,7 +95,8 @@
             <form method="post"
                   class="d-inline m-0"
                   action="{{ url_for('share_remove', trip_id=trip.id, collab_id=c.id) }}"
-                  onsubmit="return confirm('Remove {{ c.email | e }} from this trip?');">
+                  data-confirm="Remove {{ c.email | e }} from this trip?"
+                  data-confirm-label="Remove">
               <button type="submit" class="btn btn-sm btn-outline-danger">
                 {{ icon('x-lg', class='me-1') }} Remove
               </button>

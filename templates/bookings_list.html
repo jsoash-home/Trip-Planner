@@ -94,7 +94,7 @@
                 <form method="post"
                       class="d-inline m-0"
                       action="{{ url_for('booking_delete', trip_id=trip.id, booking_id=b.id) }}"
-                      onsubmit="return confirm('Delete &quot;{{ b.title | e }}&quot;?');">
+                      data-confirm='Delete "{{ b.title | e }}"?'>
                   <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Delete booking">
                     {{ icon('trash') }}
                   </button>

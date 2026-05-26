@@ -112,7 +112,7 @@
                   <form method="post"
                         class="d-inline m-0"
                         action="{{ url_for('itinerary_delete', trip_id=trip.id, item_id=it.id) }}"
-                        onsubmit="return confirm('Delete &quot;{{ it.title | e }}&quot;?');">
+                        data-confirm='Delete "{{ it.title | e }}"?'>
                     <button type="submit" class="btn btn-xs btn-outline-danger" aria-label="Delete item">
                       {{ icon('trash') }}
                     </button>

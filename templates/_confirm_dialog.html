@@ -1,0 +1,18 @@
+{# Branded confirm dialog. One instance lives at the end of <body> in
+   base.html. Forms opt in by setting data-confirm="…" (and optionally
+   data-confirm-detail / data-confirm-label); static/js/confirm.js does
+   the wiring. #}
+<dialog id="vp-confirm" class="vp-confirm" aria-labelledby="vp-confirm-title">
+  <form method="dialog" class="vp-confirm-card">
+    <h2 id="vp-confirm-title" class="vp-confirm-title"></h2>
+    <p id="vp-confirm-detail" class="vp-confirm-detail" hidden></p>
+    <div class="vp-confirm-actions">
+      <button type="button" class="btn btn-outline-secondary" data-confirm-cancel>
+        Cancel
+      </button>
+      <button type="submit" class="btn btn-danger" data-confirm-ok value="confirm">
+        Delete
+      </button>
+    </div>
+  </form>
+</dialog>

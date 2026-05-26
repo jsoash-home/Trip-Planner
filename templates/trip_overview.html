@@ -27,7 +27,8 @@
       </a>
       <form method="post" action="{{ url_for('trip_delete', trip_id=trip.id) }}"
             class="m-0"
-            onsubmit="return confirm('Delete &quot;{{ trip.name | e }}&quot;? This cannot be undone.');">
+            data-confirm='Delete "{{ trip.name | e }}"?'
+            data-confirm-detail="This cannot be undone.">
         <button type="submit" class="btn btn-outline-danger btn-sm">
           {{ icon('trash', class='me-1') }} Delete
         </button>
