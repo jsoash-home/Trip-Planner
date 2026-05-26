@@ -6,6 +6,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vacation Planner{% endblock %}</title>
 
+  <script>
+    // Synchronous theme init — must run before <style> + first paint to
+    // avoid a flash of the wrong theme. Reads saved preference, falls
+    // back to prefers-color-scheme. Sets data-bs-theme too so Bootstrap
+    // 5.3's own components (.btn-outline-*, .form-control, modals)
+    // inherit dark styling for free.
+    (function () {
+      try {
+        var saved = localStorage.getItem('vp.theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+      }
+    })();
+  </script>
+
   <style>
     /* Critical CSS — single source of truth for :root design tokens.
        Inlined so first paint is brand-coloured and not blocked on app.css. */
@@ -31,7 +50,95 @@
       --vp-hero-gradient-start: var(--vp-accent);
       --vp-hero-gradient-end:   var(--vp-accent-hover);
       --vp-hero-shadow:         rgba(232, 116, 79, 0.18);
+
+      /* Soft tinted backgrounds for status flashes and pills. */
+      --vp-success-soft:        #d6f1e3;
+      --vp-success-soft-border: #86efac;
+      --vp-success-check:       #16a34a;
+      --vp-warning-soft:        #fbeec7;
+      --vp-danger-soft:         #f7d8d2;
+
+      /* "Drift" yellow pill (booking changed since itinerary item). */
+      --vp-pill-drift-bg:       #fff3cd;
+      --vp-pill-drift-fg:       #8a4a00;
+      --vp-pill-drift-border:   #ffe69c;
+      --vp-pill-drift-bg-hover: #ffe69c;
+      --vp-pill-drift-fg-hover: #5b3000;
+
+      /* "New" blue pill on dashboard trip cards. */
+      --vp-pill-new-bg:         #e0f2fe;
+      --vp-pill-new-fg:         #075985;
+      --vp-pill-new-border:     #bae6fd;
+
+      /* Itinerary chip category colors — left border + faint background. */
+      --vp-cat-sightseeing-fg:  #5b8def;
+      --vp-cat-sightseeing-bg:  #eef4ff;
+      --vp-cat-meal-fg:         #ef8a4f;
+      --vp-cat-meal-bg:         #fdf0e6;
+      --vp-cat-transit-fg:      #8a8a8a;
+      --vp-cat-transit-bg:      #f4f4f4;
+      --vp-cat-break-fg:        #5fa97e;
+      --vp-cat-break-bg:        #e8f5ee;
+      --vp-cat-other-fg:        #9b6dc9;
+      --vp-cat-other-bg:        #f3edfa;
+
+      /* Overlays — milestone "celebration" card and confirm-dialog backdrop. */
+      --vp-overlay-card:        rgba(255, 255, 255, 0.95);
+      --vp-overlay-backdrop:    rgba(34, 24, 18, 0.45);
     }
+
+    /* Dark palette — applied when documentElement has data-theme="dark".
+       Warm dark (not pure black) to preserve the coral-vacation feel.
+       The inline init script at the top of <head> sets this attribute
+       before first paint, so there is no FOUC. */
+    :root[data-theme="dark"] {
+      --vp-bg:           #1a1612;
+      --vp-surface:      #221d18;
+      --vp-surface-2:    #2d2620;
+      --vp-border:       #3a3128;
+      --vp-text:         #f5ede4;
+      --vp-text-muted:   #a89d92;
+      --vp-accent:       #ff8a66;        /* brighter coral so it pops on dark */
+      --vp-accent-hover: #ffa080;
+      --vp-accent-soft:  #3a2418;
+      --vp-success:      #5fb993;
+      --vp-warning:      #d9a955;
+      --vp-danger:       #e6745f;
+      --vp-shadow-sm:    0 1px 2px rgba(0, 0, 0, 0.4);
+      --vp-shadow-md:    0 4px 12px rgba(0, 0, 0, 0.5);
+      --vp-hero-shadow:  rgba(0, 0, 0, 0.45);
+
+      --vp-success-soft:        #1e3a2c;
+      --vp-success-soft-border: #2f7a4f;
+      --vp-success-check:       #5fb993;
+      --vp-warning-soft:        #3a2e16;
+      --vp-danger-soft:         #3a201a;
+
+      --vp-pill-drift-bg:       #3a2e16;
+      --vp-pill-drift-fg:       #f3c969;
+      --vp-pill-drift-border:   #5b4520;
+      --vp-pill-drift-bg-hover: #4b3a1d;
+      --vp-pill-drift-fg-hover: #ffe4a3;
+
+      --vp-pill-new-bg:         #15293a;
+      --vp-pill-new-fg:         #7cc4ee;
+      --vp-pill-new-border:     #2b4a66;
+
+      --vp-cat-sightseeing-fg:  #7da7f0;
+      --vp-cat-sightseeing-bg:  #1e2a3d;
+      --vp-cat-meal-fg:         #f3a87a;
+      --vp-cat-meal-bg:         #3a2a1f;
+      --vp-cat-transit-fg:      #b0b0b0;
+      --vp-cat-transit-bg:      #2a2a2a;
+      --vp-cat-break-fg:        #8ec8a7;
+      --vp-cat-break-bg:        #1f3329;
+      --vp-cat-other-fg:        #b694d9;
+      --vp-cat-other-bg:        #2c2235;
+
+      --vp-overlay-card:        rgba(34, 29, 24, 0.95);
+      --vp-overlay-backdrop:    rgba(0, 0, 0, 0.6);
+    }
+
     html, body {
       background: var(--vp-bg);
       color: var(--vp-text);
@@ -115,6 +222,13 @@
           <button type="button" class="vp-unit-btn" data-countdown-toggle="sleeps" aria-pressed="false">Sleeps</button>
         </div>
 
+        <button type="button"
+                class="vp-theme-toggle"
+                aria-label="Switch to dark mode"
+                data-theme-toggle>
+          <span aria-hidden="true" data-theme-toggle-icon>🌙</span>
+        </button>
+
         <div class="vp-user">
           <span class="vp-avatar" aria-hidden="true">
             {% if current_user.avatar_url %}
@@ -152,6 +266,7 @@
   <script src="{{ url_for('static', filename='js/countdown.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/confirm.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/nav-dropdown.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
   <script>
     // Auto-dismiss non-danger flash messages after 4 seconds.
     // Hovering pauses dismissal so the user can read at their pace.
