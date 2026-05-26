@@ -142,3 +142,19 @@ def packing_progress(items: Iterable) -> Tuple[int, int, int]:
     packed = sum(1 for it in items_list if getattr(it, "packed", False))
     percent = round((packed / total) * 100)
     return (packed, total, percent)
+
+
+def packing_progress_for_group(items: Iterable) -> Tuple[int, int]:
+    """
+    Return (packed_count, total_count) for one category group.
+
+    Used by the packing page to render a per-category "3 / 7" subhead
+    next to each group title. No percent — the per-group display only
+    needs the raw counts.
+    """
+    items_list = list(items)
+    total = len(items_list)
+    if total == 0:
+        return (0, 0)
+    packed = sum(1 for it in items_list if getattr(it, "packed", False))
+    return (packed, total)

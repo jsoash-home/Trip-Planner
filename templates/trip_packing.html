@@ -51,11 +51,12 @@
 
   {# Per-category lists #}
   {% for code, label, emoji, items in grouped %}
+    {% set group_packed, group_total = packing_progress_for_group(items) %}
     <div class="packing-group">
       <h2 class="packing-group-title">
         <span class="packing-group-emoji" aria-hidden="true">{{ emoji }}</span>
         {{ label }}
-        <span class="packing-group-count">{{ items | length }}</span>
+        <span class="packing-group-count">{{ group_packed }} / {{ group_total }}</span>
       </h2>
       {% for it in items %}
         <div class="packing-row {% if it.packed %}is-packed{% endif %}">

@@ -76,6 +76,7 @@ from src.packing import (
     group_packing_by_category,
     packing_form_values,
     packing_progress,
+    packing_progress_for_group,
     parse_packing_form,
 )
 from src.sharing import (
@@ -223,6 +224,7 @@ app.jinja_env.globals.update(
     category_css=category_css,
     can_edit=can_edit,
     is_owner=is_owner,
+    packing_progress_for_group=packing_progress_for_group,
     progress_fraction=progress_fraction,
     share_role_label=lambda code: SHARE_ROLE_LABELS.get(code, code),
     themed_countdown_label=themed_countdown_label,

@@ -12,6 +12,7 @@ from src.packing import (
     group_packing_by_category,
     packing_form_values,
     packing_progress,
+    packing_progress_for_group,
     parse_packing_form,
 )
 
@@ -202,3 +203,37 @@ def test_packing_progress_rounds_correctly():
     ]
     _, _, percent = packing_progress(items)
     assert percent == 67
+
+
+# ─────────────────────────────  packing_progress_for_group  ────────────────
+
+
+def test_packing_progress_for_group_empty_returns_zeros():
+    assert packing_progress_for_group([]) == (0, 0)
+
+
+def test_packing_progress_for_group_nothing_packed():
+    items = [FakeItem(id=1, name="A"), FakeItem(id=2, name="B")]
+    assert packing_progress_for_group(items) == (0, 2)
+
+
+def test_packing_progress_for_group_partial():
+    items = [
+        FakeItem(id=1, name="A", packed=True),
+        FakeItem(id=2, name="B", packed=False),
+        FakeItem(id=3, name="C", packed=True),
+    ]
+    assert packing_progress_for_group(items) == (2, 3)
+
+
+def test_packing_progress_for_group_all_packed():
+    items = [
+        FakeItem(id=1, name="A", packed=True),
+        FakeItem(id=2, name="B", packed=True),
+    ]
+    assert packing_progress_for_group(items) == (2, 2)
+
+
+def test_packing_progress_for_group_single_item():
+    items = [FakeItem(id=1, name="A", packed=False)]
+    assert packing_progress_for_group(items) == (0, 1)

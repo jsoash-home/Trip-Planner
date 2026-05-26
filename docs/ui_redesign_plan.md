@@ -304,7 +304,7 @@ Each session is its own fresh Claude Code window. The workflow:
 - [x] 8. Branded confirm dialog
 - [x] 9. Day-N-of-M on active-trip cards
 - [x] 10. Budget per-category bars
-- [ ] 11. Per-category packing progress
+- [x] 11. Per-category packing progress
 - [ ] 12. Per-day itinerary counts
 - [ ] 13. Bookings filter chips
 - [ ] 14. Trip switcher in nav
