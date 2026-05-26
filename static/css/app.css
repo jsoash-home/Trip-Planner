@@ -555,6 +555,11 @@
   font-weight: 700;
   color: var(--vp-text);
 }
+.day-column-summary {
+  font-size: 0.8rem;
+  color: var(--vp-text-muted);
+  margin-top: 0.15rem;
+}
 .day-column-body {
   padding: 0.75rem;
   display: flex;

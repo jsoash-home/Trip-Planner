@@ -65,6 +65,7 @@
         <div class="day-column-header">
           <h2 class="day-column-num">Day {{ day_index }}</h2>
           <div class="day-column-date">{{ day_date.strftime('%a, %b %d') }}</div>
+          <div class="day-column-summary">{{ format_day_items_summary(items) }}</div>
         </div>
 
         <div class="day-column-body">

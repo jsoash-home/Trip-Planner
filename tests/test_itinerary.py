@@ -10,6 +10,7 @@ from src.itinerary import (
     category_css,
     category_emoji,
     category_label,
+    format_day_items_summary,
     format_time_range,
     group_items_by_day,
     itinerary_form_values,
@@ -296,3 +297,78 @@ def test_format_time_range_strips_zero_padded_hour():
     out = format_time_range(time(9, 30), time(11, 45))
     assert "09:30" not in out
     assert "9:30 AM" in out
+
+
+# ─────────────────────────────  format_day_items_summary  ──────────────────
+
+
+def test_day_summary_empty_list():
+    assert format_day_items_summary([]) == "0 items"
+
+
+def test_day_summary_singular_untimed():
+    items = [FakeItem(id=1, title="Wander")]
+    assert format_day_items_summary(items) == "1 item"
+
+
+def test_day_summary_plural_untimed():
+    items = [FakeItem(id=i, title=f"x{i}") for i in range(5)]
+    assert format_day_items_summary(items) == "5 items"
+
+
+def test_day_summary_single_timed_minutes_only():
+    items = [FakeItem(id=1, title="Coffee", start_time=time(9, 0), end_time=time(9, 30))]
+    assert format_day_items_summary(items) == "1 item · 30m scheduled"
+
+
+def test_day_summary_whole_hours():
+    items = [
+        FakeItem(id=1, title="Museum", start_time=time(10, 0), end_time=time(12, 0)),
+        FakeItem(id=2, title="Lunch", start_time=time(12, 30), end_time=time(13, 30)),
+        FakeItem(id=3, title="Gallery", start_time=time(14, 0), end_time=time(15, 0)),
+    ]
+    assert format_day_items_summary(items) == "3 items · 4h scheduled"
+
+
+def test_day_summary_mixed_timed_and_untimed():
+    items = [
+        FakeItem(id=1, title="Free time"),
+        FakeItem(id=2, title="Pack"),
+        FakeItem(id=3, title="Brunch", start_time=time(11, 0), end_time=time(12, 0)),
+        FakeItem(id=4, title="Walk", start_time=time(13, 0), end_time=time(13, 30)),
+    ]
+    assert format_day_items_summary(items) == "4 items · 1h 30m scheduled"
+
+
+def test_day_summary_half_timed_item_counts_but_no_duration():
+    """Item with only start_time (no end_time) counts toward N but not the duration."""
+    items = [
+        FakeItem(id=1, title="Open-ended", start_time=time(9, 0)),
+        FakeItem(id=2, title="Tea", start_time=time(15, 0), end_time=time(15, 30)),
+    ]
+    assert format_day_items_summary(items) == "2 items · 30m scheduled"
+
+
+def test_day_summary_crosses_hour_boundary():
+    items = [
+        FakeItem(id=1, title="A", start_time=time(9, 0), end_time=time(9, 45)),
+        FakeItem(id=2, title="B", start_time=time(10, 0), end_time=time(10, 30)),
+    ]
+    assert format_day_items_summary(items) == "2 items · 1h 15m scheduled"
+
+
+def test_day_summary_zero_duration_items_dont_add_fragment():
+    """Items where start_time == end_time contribute 0 minutes, so no '·' suffix."""
+    items = [
+        FakeItem(id=1, title="Quick stop", start_time=time(9, 0), end_time=time(9, 0)),
+    ]
+    assert format_day_items_summary(items) == "1 item"
+
+
+def test_day_summary_skips_inverted_time_range():
+    """Defensive: end < start (form validation should prevent this) is skipped silently."""
+    items = [
+        FakeItem(id=1, title="Bad", start_time=time(15, 0), end_time=time(14, 0)),
+        FakeItem(id=2, title="Good", start_time=time(9, 0), end_time=time(9, 30)),
+    ]
+    assert format_day_items_summary(items) == "2 items · 30m scheduled"

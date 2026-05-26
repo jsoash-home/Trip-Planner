@@ -215,6 +215,57 @@ def group_items_by_day(
     return out
 
 
+def format_day_items_summary(items: Iterable) -> str:
+    """
+    Subhead label for a day-column header on the itinerary page.
+
+    Examples:
+      no items           → "0 items"
+      one, untimed       → "1 item"
+      five, all untimed  → "5 items"
+      one, 30 min        → "1 item · 30m scheduled"
+      three, 4 hours     → "3 items · 4h scheduled"
+      four, 1h 30m       → "4 items · 1h 30m scheduled"
+
+    Only items with both `start_time` and `end_time` contribute to the
+    duration; half-timed items count toward the item total but not the
+    duration. Items with end < start are skipped silently from the
+    duration (form validation already blocks this; this is defensive).
+    """
+    items_list = list(items)
+    count = len(items_list)
+    count_label = "1 item" if count == 1 else f"{count} items"
+
+    total_minutes = 0
+    for it in items_list:
+        start = getattr(it, "start_time", None)
+        end = getattr(it, "end_time", None)
+        if start is None or end is None:
+            continue
+        start_min = start.hour * 60 + start.minute
+        end_min = end.hour * 60 + end.minute
+        delta = end_min - start_min
+        if delta <= 0:
+            if delta < 0:
+                logger.warning(
+                    "format_day_items_summary skipping item id=%s — end %s < start %s",
+                    getattr(it, "id", "?"), end, start,
+                )
+            continue
+        total_minutes += delta
+
+    if total_minutes == 0:
+        return count_label
+
+    hours, mins = divmod(total_minutes, 60)
+    parts: List[str] = []
+    if hours:
+        parts.append(f"{hours}h")
+    if mins:
+        parts.append(f"{mins}m")
+    return f"{count_label} · {' '.join(parts)} scheduled"
+
+
 def format_time_range(
     start: Optional[time],
     end: Optional[time],
