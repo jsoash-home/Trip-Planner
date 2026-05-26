@@ -102,6 +102,7 @@ from src.trip_helpers import (
     emoji_theme,
     group_trips_by_state,
     parse_trip_form,
+    pick_active_trip,
     progress_fraction,
     sort_nav_trips,
     status_label,
@@ -288,6 +289,49 @@ def inject_nav_trips():
         "nav_trips": sort_nav_trips(trips, date.today(), limit=5),
         "nav_current_trip_id": request.view_args.get("trip_id"),
     }
+
+
+@app.context_processor
+def inject_active_trip():
+    """
+    Make ``active_trip`` available to base.html so every page can render
+    a coral ribbon above the navbar when one of the user's trips is
+    currently in progress.
+
+    Runs on every authenticated page render. Narrows the SQL filter to
+    trips that contain today's date (both owned and shared via
+    TripCollaborator), then delegates to ``pick_active_trip`` for the
+    final selection — that helper handles the rare "two overlapping
+    in-progress trips" case.
+    """
+    empty = {"active_trip": None, "active_trip_day": None, "active_trip_total": None}
+    if not current_user.is_authenticated:
+        return empty
+
+    today = date.today()
+    owned = Trip.query.filter(
+        Trip.owner_id == current_user.id,
+        Trip.start_date <= today,
+        Trip.end_date >= today,
+    ).all()
+    user_email = normalize_email(current_user.email)
+    shared: List[Trip] = []
+    if user_email:
+        shared = (
+            Trip.query.join(TripCollaborator)
+            .filter(
+                TripCollaborator.email == user_email,
+                Trip.start_date <= today,
+                Trip.end_date >= today,
+            )
+            .all()
+        )
+    candidates = list({t.id: t for t in owned + shared}.values())
+    active = pick_active_trip(candidates, today)
+    if not active:
+        return empty
+    day, total = day_of_trip(active.start_date, active.end_date, today)
+    return {"active_trip": active, "active_trip_day": day, "active_trip_total": total}
 
 
 # ─── Google OAuth ───────────────────────────────────────────────────

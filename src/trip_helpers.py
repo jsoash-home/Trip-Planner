@@ -138,6 +138,40 @@ def sort_nav_trips(trips: Iterable, today: date, limit: int = 5) -> List:
     return (active + upcoming + past)[:limit]
 
 
+def pick_active_trip(trips: Iterable, today: date) -> Optional[Any]:
+    """
+    Pick the single "active trip" to surface in the global ribbon.
+
+    Filters to trips where ``derive_status == "in_progress"`` and returns
+    the one ending soonest (tiebreaker: lowest id, for determinism).
+    Returns ``None`` if no trip is currently in progress.
+
+    Multiple simultaneous in-progress trips are rare but possible
+    (e.g. an overlapping return-leg) — when it happens, the one closer
+    to its end is the more time-sensitive one to surface, and we log a
+    debug-level note so we can see it happened.
+    """
+    active: List = []
+    for t in trips:
+        if t.start_date is None or t.end_date is None:
+            continue
+        if t.start_date > t.end_date:
+            continue
+        if derive_status(t.start_date, t.end_date, today) == "in_progress":
+            active.append(t)
+
+    if not active:
+        return None
+    if len(active) > 1:
+        logger.info(
+            "pick_active_trip: %d in-progress trips on %s, surfacing earliest end_date",
+            len(active),
+            today,
+        )
+    active.sort(key=lambda t: (t.end_date, t.id))
+    return active[0]
+
+
 def day_of_trip(start: date, end: date, today: date) -> Tuple[int, int]:
     """
     Return (current_day, total_days) for a trip in progress.

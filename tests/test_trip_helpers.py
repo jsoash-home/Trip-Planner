@@ -14,6 +14,7 @@ from src.trip_helpers import (
     group_trips_by_state,
     is_valid_status,
     parse_trip_form,
+    pick_active_trip,
     progress_fraction,
     sort_nav_trips,
     status_label,
@@ -195,6 +196,40 @@ def test_sort_nav_trips_drops_rows_with_null_or_inverted_dates():
     ]
     out = sort_nav_trips(trips, today)
     assert [t.id for t in out] == [3]
+
+
+# ─────────────────────────────  pick_active_trip  ─────────────────────────
+
+
+def test_pick_active_trip_returns_the_only_in_progress_trip():
+    today = date(2026, 7, 3)
+    trips = [
+        FakeTrip(id=1, start_date=date(2026, 6, 1), end_date=date(2026, 6, 10)),  # past
+        FakeTrip(id=2, start_date=date(2026, 7, 1), end_date=date(2026, 7, 7)),   # active
+        FakeTrip(id=3, start_date=date(2026, 8, 1), end_date=date(2026, 8, 7)),   # future
+    ]
+    out = pick_active_trip(trips, today)
+    assert out is not None and out.id == 2
+
+
+def test_pick_active_trip_returns_none_when_no_active_trip():
+    today = date(2026, 7, 3)
+    trips = [
+        FakeTrip(id=1, start_date=date(2026, 6, 1), end_date=date(2026, 6, 10)),
+        FakeTrip(id=2, start_date=date(2026, 8, 1), end_date=date(2026, 8, 7)),
+    ]
+    assert pick_active_trip(trips, today) is None
+
+
+def test_pick_active_trip_prefers_earliest_end_date_when_multiple_active():
+    today = date(2026, 7, 5)
+    trips = [
+        FakeTrip(id=10, start_date=date(2026, 7, 1), end_date=date(2026, 7, 20)),
+        FakeTrip(id=11, start_date=date(2026, 7, 3), end_date=date(2026, 7, 8)),   # ends soonest
+        FakeTrip(id=12, start_date=date(2026, 7, 4), end_date=date(2026, 7, 15)),
+    ]
+    out = pick_active_trip(trips, today)
+    assert out is not None and out.id == 11
 
 
 # ─────────────────────────────  day_of_trip  ──────────────────────────────

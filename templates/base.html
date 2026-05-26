@@ -45,6 +45,17 @@
 
   <a class="skip-link" href="#main-content">Skip to main content</a>
 
+  {% if active_trip %}
+    <a class="vp-active-ribbon" href="{{ url_for('trip_itinerary', trip_id=active_trip.id) }}">
+      <span class="vp-active-ribbon-emoji" aria-hidden="true">{{ active_trip.cover_emoji or '🧳' }}</span>
+      <span class="vp-active-ribbon-name">{{ active_trip.name }}</span>
+      <span class="vp-active-ribbon-sep" aria-hidden="true">—</span>
+      <span class="vp-active-ribbon-day">Day {{ active_trip_day }}</span>
+      <span class="vp-active-ribbon-sep" aria-hidden="true">—</span>
+      <span class="vp-active-ribbon-cta">Open today's plan&nbsp;→</span>
+    </a>
+  {% endif %}
+
   <nav class="vp-navbar">
     <div class="container">
       <a class="vp-brand" href="{{ url_for('trips_list') if current_user.is_authenticated else url_for('index') }}">
