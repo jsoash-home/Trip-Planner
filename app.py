@@ -235,11 +235,42 @@ def _ensure_trip_columns() -> None:
                 logger.warning("Migration skipped (%s): %s", stmt, e)
 
 
+def _ensure_geocoding_columns() -> None:
+    """
+    Add geocoding columns to booking + itinerary_item (added by the
+    map-view feature). Same swallow-on-duplicate pattern as the other
+    _ensure_* helpers — re-runs are no-ops.
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE booking ADD COLUMN geocoded_lat FLOAT",
+        "ALTER TABLE booking ADD COLUMN geocoded_lng FLOAT",
+        "ALTER TABLE booking ADD COLUMN geocoded_at DATETIME",
+        "ALTER TABLE booking ADD COLUMN geocoded_manually BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE booking ADD COLUMN geocoded_city VARCHAR(120)",
+        "ALTER TABLE booking ADD COLUMN geocoded_country_code VARCHAR(2)",
+        "ALTER TABLE itinerary_item ADD COLUMN geocoded_lat FLOAT",
+        "ALTER TABLE itinerary_item ADD COLUMN geocoded_lng FLOAT",
+        "ALTER TABLE itinerary_item ADD COLUMN geocoded_at DATETIME",
+        "ALTER TABLE itinerary_item ADD COLUMN geocoded_manually BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE itinerary_item ADD COLUMN geocoded_city VARCHAR(120)",
+        "ALTER TABLE itinerary_item ADD COLUMN geocoded_country_code VARCHAR(2)",
+    ]
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+                logger.info("Migration: applied %s", stmt)
+            except Exception as e:
+                logger.warning("Migration skipped (%s): %s", stmt, e)
+
+
 db.init_app(app)
 with app.app_context():
     db.create_all()
     _ensure_drift_columns()
     _ensure_trip_columns()
+    _ensure_geocoding_columns()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)

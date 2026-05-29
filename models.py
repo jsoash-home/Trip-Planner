@@ -118,6 +118,14 @@ class Booking(db.Model):
     url = db.Column(db.String(500), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
+    # ── Geocoding (added by map-view feature) ─────────────────────────
+    geocoded_lat = db.Column(db.Float, nullable=True)
+    geocoded_lng = db.Column(db.Float, nullable=True)
+    geocoded_at = db.Column(db.DateTime, nullable=True)
+    geocoded_manually = db.Column(db.Boolean, nullable=False, default=False)
+    geocoded_city = db.Column(db.String(120), nullable=True)
+    geocoded_country_code = db.Column(db.String(2), nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -181,6 +189,14 @@ class ItineraryItem(db.Model):
     # Stored as a sorted comma-separated string (e.g. "day_date,title").
     # Empty string means nothing touched. Replaces customized_by_user.
     auto_fields_touched = db.Column(db.String(255), nullable=False, default="")
+
+    # ── Geocoding (added by map-view feature) ─────────────────────────
+    geocoded_lat = db.Column(db.Float, nullable=True)
+    geocoded_lng = db.Column(db.Float, nullable=True)
+    geocoded_at = db.Column(db.DateTime, nullable=True)
+    geocoded_manually = db.Column(db.Boolean, nullable=False, default=False)
+    geocoded_city = db.Column(db.String(120), nullable=True)
+    geocoded_country_code = db.Column(db.String(2), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -257,3 +273,24 @@ class TripView(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
 
     last_seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class GeocodeCache(db.Model):
+    """De-duplicates geocoding API calls across the whole app.
+
+    `location_text_normalized` is the input text after strip + lower +
+    whitespace collapse — see `src.map_helpers.normalize_location`.
+    A miss writes here; a hit copies the cached coords onto the row
+    without calling the API.
+    """
+
+    __tablename__ = "geocode_cache"
+
+    id = db.Column(db.Integer, primary_key=True)
+    location_text_normalized = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    lat = db.Column(db.Float, nullable=False)
+    lng = db.Column(db.Float, nullable=False)
+    city = db.Column(db.String(120), nullable=True)
+    country_code = db.Column(db.String(2), nullable=True)
+    provider = db.Column(db.String(40), nullable=False, default="mapbox")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
