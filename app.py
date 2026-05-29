@@ -73,6 +73,7 @@ from src.booking_helpers import (
 from src.budget import format_money_totals, rollup_bookings_by_category
 from src.currency import SUPPORTED_CURRENCIES, format_money, is_valid_currency
 from src.drift_review import chronological_order
+from src.geocoding import ensure_geocoded
 from src.itinerary import (
     ITINERARY_CATEGORIES,
     category_css,
@@ -886,7 +887,14 @@ def trip_delete(trip_id):
 
 
 def _booking_category(btype: str) -> str:
-    """Map a Booking.type to the same category names used on the itinerary."""
+    """Map a Booking.type to the same category names used on the itinerary.
+
+    Mirrors the implicit category mapping in
+    `src.booking_helpers.auto_itinerary_items_for_booking`. If that
+    function's mapping changes (e.g. hotel → lodging), update this
+    helper too — otherwise map pins will silently disagree with the
+    itinerary's colors.
+    """
     mapping = {
         "flight": "transit",
         "car": "transit",
@@ -978,7 +986,6 @@ def trip_map_data(trip_id):
     # Lazy-geocode any rows that need it. Only attempt when a token is
     # configured — otherwise the helper would just no-op for every row.
     if MAPBOX_TOKEN:
-        from src.geocoding import ensure_geocoded
         rows_with_location = [
             r for r in list(trip.bookings) + list(trip.itinerary_items)
             if (r.location or "").strip()

@@ -1271,3 +1271,50 @@ def test_trip_map_data_404_for_non_member(app, trip):
 
     resp = client.get(f"/trips/{trip.id}/map/data.geojson")
     assert resp.status_code in (403, 404)
+
+
+def test_trip_map_data_skips_items_linked_to_booking(app, trip, owner, monkeypatch):
+    """De-dup rule: itinerary items with linked_booking_id should NOT
+    produce their own pin — the parent booking is the authoritative pin.
+    """
+    monkeypatch.setattr("app.MAPBOX_TOKEN", "pk.test")
+
+    # Booking with coords already set (skip geocoding entirely).
+    b = Booking(
+        trip_id=trip.id, type="hotel", title="Skansen",
+        location="Hotel Skansen",
+        geocoded_lat=59.33, geocoded_lng=18.07,
+    )
+    db.session.add(b)
+    db.session.commit()
+
+    # Linked itinerary item — should NOT pin (booking wins).
+    linked = ItineraryItem(
+        trip_id=trip.id,
+        linked_booking_id=b.id,
+        auto_kind="check_in",
+        day_date=date(2026, 6, 1),
+        title="Check in: Skansen",
+        location="Hotel Skansen",
+        geocoded_lat=59.33, geocoded_lng=18.07,
+    )
+    # Standalone itinerary item with its own location — SHOULD pin.
+    standalone = ItineraryItem(
+        trip_id=trip.id,
+        day_date=date(2026, 6, 2),
+        title="Vasa Museum",
+        location="Galärvarvsvägen 14",
+        geocoded_lat=59.328, geocoded_lng=18.092,
+    )
+    db.session.add_all([linked, standalone])
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    resp = client.get(f"/trips/{trip.id}/map/data.geojson")
+    payload = json.loads(resp.data)
+    titles = sorted(f["properties"]["title"] for f in payload["features"])
+    # Booking + standalone = 2 features. Linked auto-item is excluded.
+    assert titles == ["Skansen", "Vasa Museum"]
