@@ -657,6 +657,13 @@ def _section_tiles_for(trip: Trip):
             "status": "ready",
         },
         {
+            "emoji": "🗺️",
+            "name": "Map",
+            "summary": _map_tile_summary(trip),
+            "url": url_for("trip_map", trip_id=trip.id),
+            "status": "ready",
+        },
+        {
             "emoji": "👥",
             "name": "Share",
             "summary": share_summary,
@@ -664,6 +671,17 @@ def _section_tiles_for(trip: Trip):
             "status": "ready",
         },
     ]
+
+
+def _map_tile_summary(trip) -> str:
+    """Short summary for the Map tile (e.g., '14 pins')."""
+    pinned = sum(
+        1 for r in list(trip.bookings) + list(trip.itinerary_items)
+        if r.geocoded_lat is not None
+    )
+    if pinned == 0:
+        return "Add a location to get started"
+    return f"{pinned} pin{'s' if pinned != 1 else ''}"
 
 
 # ─── Public routes ──────────────────────────────────────────────────
@@ -975,6 +993,15 @@ def _build_pins_for_trip(trip: Trip) -> List[Pin]:
         ))
 
     return pins
+
+
+@app.route("/trips/<int:trip_id>/map")
+@login_required
+def trip_map(trip_id):
+    """In-trip map page — shows all geocoded bookings and itinerary items
+    as pins on a Mapbox base map. Viewer access is enough to see it."""
+    trip, _ = _trip_with_access_or_404(trip_id, role="viewer")
+    return render_template("trip_map.html", trip=trip)
 
 
 @app.route("/trips/<int:trip_id>/map/data.geojson")

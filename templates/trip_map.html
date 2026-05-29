@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Map · {{ trip.name }}{% endblock %}
+
+{% block head_extra %}
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">🗺️ Map · {{ trip.name }}</h1>
+
+{% if not mapbox_token %}
+<div class="alert alert-warning">
+  Map provider not configured. Set <code>MAPBOX_TOKEN</code> in your environment.
+</div>
+{% else %}
+
+<div id="vp-trip-map"
+     class="vp-trip-map"
+     data-trip-id="{{ trip.id }}"
+     data-mode="trip"
+     data-geojson-url="{{ url_for('trip_map_data', trip_id=trip.id) }}">
+</div>
+
+<p class="text-muted small mt-2" id="vp-map-side-note" hidden>
+  <span data-no-loc-count></span> items have no location —
+  <a href="{{ url_for('bookings_list', trip_id=trip.id) }}">add locations</a>.
+</p>
+
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  (function () {
+    if (window.vpInitTripMap) { window.vpInitTripMap(); }
+  })();
+</script>
+{% endblock %}
