@@ -35,8 +35,9 @@
   padding-bottom: 6px; margin-bottom: 8px;
 }
 .vp-day-chip {
-  background: var(--vp-chip-bg, #f5f7fa);
-  border: 1px solid var(--vp-chip-border, #e0e5eb);
+  background: var(--vp-surface-2, #f5f7fa);
+  border: 1px solid var(--vp-border, #e0e5eb);
+  color: var(--vp-text, inherit);
   padding: 4px 10px; border-radius: 14px;
   font-size: 0.85rem; white-space: nowrap;
   cursor: pointer;

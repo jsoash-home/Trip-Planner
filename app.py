@@ -673,7 +673,7 @@ def _section_tiles_for(trip: Trip):
     ]
 
 
-def _map_tile_summary(trip) -> str:
+def _map_tile_summary(trip: Trip) -> str:
     """Short summary for the Map tile (e.g., '14 pins')."""
     pinned = sum(
         1 for r in list(trip.bookings) + list(trip.itinerary_items)
