@@ -12,6 +12,7 @@ from src.booking_helpers import (
     booking_form_values,
     booking_type_emoji,
     booking_type_label,
+    clear_stale_geocode_on_booking_edit,
     format_datetime_range,
     group_bookings_by_type,
     parse_booking_form,
@@ -638,8 +639,6 @@ def test_new_item_suggestion_carries_booking_kind_and_data():
 
 
 # ─── clear_stale_geocode_on_booking_edit ─────────────────────────────
-
-from src.booking_helpers import clear_stale_geocode_on_booking_edit
 
 
 def test_booking_edit_clears_geocode_when_location_changes():

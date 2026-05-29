@@ -9,6 +9,8 @@ import logging
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from src.map_helpers import should_clear_geocode
+
 logger = logging.getLogger(__name__)
 
 
@@ -313,8 +315,6 @@ def format_time_range(
 
 
 # ─── clear_stale_geocode_on_item_edit ────────────────────────────────
-
-from src.map_helpers import should_clear_geocode
 
 
 def clear_stale_geocode_on_item_edit(item, new_location: str) -> None:

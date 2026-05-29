@@ -10,6 +10,7 @@ from src.itinerary import (
     category_css,
     category_emoji,
     category_label,
+    clear_stale_geocode_on_item_edit,
     format_day_items_summary,
     format_time_range,
     group_items_by_day,
@@ -425,8 +426,6 @@ def test_initial_day_index_inverted_dates_returns_1():
 
 
 # ─── clear_stale_geocode_on_item_edit ────────────────────────────────
-
-from src.itinerary import clear_stale_geocode_on_item_edit
 
 
 def test_item_edit_clears_geocode_when_location_changes():

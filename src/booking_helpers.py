@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
+from src.map_helpers import should_clear_geocode
+
 logger = logging.getLogger(__name__)
 
 
@@ -522,8 +524,6 @@ def missing_auto_kinds_for_booking(
 
 
 # ─── clear_stale_geocode_on_booking_edit ─────────────────────────────
-
-from src.map_helpers import should_clear_geocode
 
 
 def clear_stale_geocode_on_booking_edit(booking, new_location: str) -> None:
