@@ -519,3 +519,27 @@ def missing_auto_kinds_for_booking(
             continue
         out.append(w)
     return out
+
+
+# ─── clear_stale_geocode_on_booking_edit ─────────────────────────────
+
+from src.map_helpers import should_clear_geocode
+
+
+def clear_stale_geocode_on_booking_edit(booking, new_location: str) -> None:
+    """Clear geocoded coords when the user changes location text, UNLESS
+    they manually pinned the row.
+
+    Call from the booking_edit route AFTER parsing the form but BEFORE
+    overwriting `booking.location`. Mutates the row in place.
+    """
+    if should_clear_geocode(
+        booking.location or "",
+        new_location or "",
+        manually_pinned=bool(booking.geocoded_manually),
+    ):
+        booking.geocoded_lat = None
+        booking.geocoded_lng = None
+        booking.geocoded_at = None
+        booking.geocoded_city = None
+        booking.geocoded_country_code = None

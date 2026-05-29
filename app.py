@@ -59,6 +59,7 @@ from src.booking_helpers import (
     NewItemSuggestion,
     auto_itinerary_items_for_booking,
     booking_form_values,
+    clear_stale_geocode_on_booking_edit,
     detect_drift,
     format_datetime_range,
     group_bookings_by_type,
@@ -75,6 +76,7 @@ from src.itinerary import (
     ITINERARY_CATEGORIES,
     category_css,
     category_emoji,
+    clear_stale_geocode_on_item_edit,
     format_day_items_summary,
     format_time_range,
     group_items_by_day,
@@ -130,6 +132,10 @@ logger = logging.getLogger(__name__)
 # ─── Env ────────────────────────────────────────────────────────────
 _APP_ROOT = Path(__file__).resolve().parent
 load_dotenv(_APP_ROOT / ".env")
+
+MAPBOX_TOKEN = os.environ.get("MAPBOX_TOKEN", "").strip()
+if not MAPBOX_TOKEN:
+    logger.warning("MAPBOX_TOKEN not configured — map pages will show a banner.")
 
 
 def _resolve_database_uri(app_root: Path) -> str:
@@ -394,6 +400,14 @@ def inject_active_trip():
         return empty
     day, total = day_of_trip(active.start_date, active.end_date, today)
     return {"active_trip": active, "active_trip_day": day, "active_trip_total": total}
+
+
+@app.context_processor
+def inject_mapbox_token():
+    """Make ``mapbox_token`` available to base.html so the head can render
+    a ``<meta name="mapbox-token">`` tag for the map-view JS to read.
+    """
+    return {"mapbox_token": MAPBOX_TOKEN}
 
 
 # ─── Google OAuth ───────────────────────────────────────────────────
@@ -1003,6 +1017,7 @@ def booking_edit(trip_id, booking_id):
                 supported_currencies=SUPPORTED_CURRENCIES,
             )
 
+        clear_stale_geocode_on_booking_edit(booking, new_location=data["location"])
         for field, value in data.items():
             setattr(booking, field, value)
         db.session.commit()
@@ -1313,6 +1328,7 @@ def itinerary_edit(trip_id, item_id):
                 if data.get(f) != getattr(item, f):
                     changed_fields.add(f)
 
+        clear_stale_geocode_on_item_edit(item, new_location=data["location"])
         for field, value in data.items():
             setattr(item, field, value)
 

@@ -422,3 +422,36 @@ def test_initial_day_index_inverted_dates_returns_1():
     start = date(2026, 5, 26)
     end = date(2026, 5, 20)
     assert initial_day_index(start, end, date(2026, 5, 23)) == 1
+
+
+# ─── clear_stale_geocode_on_item_edit ────────────────────────────────
+
+from src.itinerary import clear_stale_geocode_on_item_edit
+
+
+def test_item_edit_clears_geocode_when_location_changes():
+    class FakeItem:
+        location = "Paris"
+        geocoded_lat = 48.85
+        geocoded_lng = 2.35
+        geocoded_at = "anything"
+        geocoded_city = "Paris"
+        geocoded_country_code = "FR"
+        geocoded_manually = False
+    i = FakeItem()
+    clear_stale_geocode_on_item_edit(i, new_location="Lyon")
+    assert i.geocoded_lat is None
+
+
+def test_item_edit_preserves_geocode_when_manually_pinned():
+    class FakeItem:
+        location = "Paris"
+        geocoded_lat = 48.85
+        geocoded_lng = 2.35
+        geocoded_at = "anything"
+        geocoded_city = "Paris"
+        geocoded_country_code = "FR"
+        geocoded_manually = True
+    i = FakeItem()
+    clear_stale_geocode_on_item_edit(i, new_location="Lyon")
+    assert i.geocoded_lat == 48.85

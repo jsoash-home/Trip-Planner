@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vacation Planner{% endblock %}</title>
 
+  {% if mapbox_token %}
+  <meta name="mapbox-token" content="{{ mapbox_token }}">
+  {% endif %}
+
   <script>
     // Synchronous theme init — must run before <style> + first paint to
     // avoid a flash of the wrong theme. Reads saved preference, falls

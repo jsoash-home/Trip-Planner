@@ -310,3 +310,22 @@ def format_time_range(
     if end and start is None:
         return "→ " + _fmt(end)
     return _fmt(start) + " – " + _fmt(end)
+
+
+# ─── clear_stale_geocode_on_item_edit ────────────────────────────────
+
+from src.map_helpers import should_clear_geocode
+
+
+def clear_stale_geocode_on_item_edit(item, new_location: str) -> None:
+    """Mirror of clear_stale_geocode_on_booking_edit, for ItineraryItem."""
+    if should_clear_geocode(
+        item.location or "",
+        new_location or "",
+        manually_pinned=bool(item.geocoded_manually),
+    ):
+        item.geocoded_lat = None
+        item.geocoded_lng = None
+        item.geocoded_at = None
+        item.geocoded_city = None
+        item.geocoded_country_code = None

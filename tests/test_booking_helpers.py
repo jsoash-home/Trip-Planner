@@ -635,3 +635,41 @@ def test_new_item_suggestion_carries_booking_kind_and_data():
     assert s.booking == "booking-stand-in"
     assert s.auto_kind == "arrive"
     assert s.item_data == {"title": "X"}
+
+
+# ─── clear_stale_geocode_on_booking_edit ─────────────────────────────
+
+from src.booking_helpers import clear_stale_geocode_on_booking_edit
+
+
+def test_booking_edit_clears_geocode_when_location_changes():
+    class FakeBooking:
+        location = "Paris"
+        geocoded_lat = 48.85
+        geocoded_lng = 2.35
+        geocoded_at = "anything"
+        geocoded_city = "Paris"
+        geocoded_country_code = "FR"
+        geocoded_manually = False
+    b = FakeBooking()
+    clear_stale_geocode_on_booking_edit(b, new_location="Lyon")
+    assert b.geocoded_lat is None
+    assert b.geocoded_lng is None
+    assert b.geocoded_at is None
+    assert b.geocoded_city is None
+    assert b.geocoded_country_code is None
+
+
+def test_booking_edit_preserves_geocode_when_manually_pinned():
+    class FakeBooking:
+        location = "Paris"
+        geocoded_lat = 48.85
+        geocoded_lng = 2.35
+        geocoded_at = "anything"
+        geocoded_city = "Paris"
+        geocoded_country_code = "FR"
+        geocoded_manually = True
+    b = FakeBooking()
+    clear_stale_geocode_on_booking_edit(b, new_location="Lyon")
+    assert b.geocoded_lat == 48.85           # untouched
+    assert b.geocoded_country_code == "FR"   # untouched
