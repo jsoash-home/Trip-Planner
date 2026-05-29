@@ -67,6 +67,46 @@ def test_geocode_one_empty_text_returns_none():
     assert result is None
 
 
+@patch("src.geocoding.requests.get")
+def test_geocode_one_malformed_center_returns_none(mock_get):
+    """Malformed Mapbox response — feature is missing center — must not crash."""
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {"features": [{"context": []}]},  # no center key
+    )
+    result = geocode_one("Anywhere", token="pk.test")
+    assert result is None
+
+
+@patch("src.geocoding.requests.get")
+def test_geocode_one_non_numeric_center_returns_none(mock_get):
+    """Mapbox returns center with non-numeric values — must not crash."""
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {"features": [{"center": ["not", "a number"]}]},
+    )
+    result = geocode_one("Anywhere", token="pk.test")
+    assert result is None
+
+
+@patch("src.geocoding.requests.get")
+def test_geocode_one_non_json_200_returns_none(mock_get):
+    """Mapbox returns 200 with HTML / non-JSON body — must not crash."""
+    resp = MagicMock(status_code=200)
+    resp.json.side_effect = ValueError("not JSON")
+    mock_get.return_value = resp
+    result = geocode_one("Anywhere", token="pk.test")
+    assert result is None
+
+
+@patch("src.geocoding.requests.get")
+def test_geocode_one_4xx_returns_none(mock_get):
+    """4xx HTTP (e.g. 401 invalid token) returns None like 5xx does."""
+    mock_get.return_value = MagicMock(status_code=401)
+    result = geocode_one("Anywhere", token="pk.test")
+    assert result is None
+
+
 # ────────────────────────── geocode_with_cache ──────────────────────────
 
 from datetime import date

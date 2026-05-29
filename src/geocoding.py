@@ -74,14 +74,24 @@ def geocode_one(text: str, *, token: str) -> Optional[GeocodeResult]:
         logger.error("geocode HTTP %s for %r", resp.status_code, text)
         return None
 
-    payload = resp.json()
+    try:
+        payload = resp.json()
+    except ValueError as e:
+        logger.error("geocode non-JSON response for %r: %s", text, e)
+        return None
     features = payload.get("features", [])
     if not features:
         logger.warning("geocode 0 results for: %s", text)
         return None
 
     feat = features[0]
-    lng, lat = feat["center"]
+    try:
+        center = feat["center"]
+        lng = float(center[0])
+        lat = float(center[1])
+    except (KeyError, TypeError, ValueError, IndexError) as e:
+        logger.error("geocode malformed feature for %r: %s", text, e)
+        return None
     city, country = _extract_city_and_country(feat)
     return GeocodeResult(lat=lat, lng=lng, city=city, country_code=country)
 
