@@ -25,6 +25,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -85,6 +86,7 @@ from src.itinerary import (
     parse_itinerary_form,
     sort_within_day,
 )
+from src.map_helpers import Pin, color_for_category, pins_to_geojson
 from src.packing import (
     DEFAULT_PACKING_ITEMS,
     PACKING_CATEGORIES,
@@ -878,6 +880,114 @@ def trip_delete(trip_id):
     logger.info("Deleted trip id=%s name=%r", trip_id, name)
     flash(f"Deleted trip “{name}”.", "success")
     return redirect(url_for("trips_list"))
+
+
+# ─── Trip map (in-trip view) ────────────────────────────────────────
+
+
+def _booking_category(btype: str) -> str:
+    """Map a Booking.type to the same category names used on the itinerary."""
+    mapping = {
+        "flight": "transit",
+        "car": "transit",
+        "transport": "transit",
+        "hotel": "other",
+        "restaurant": "meal",
+        "activity": "sightseeing",
+        "other": "other",
+    }
+    return mapping.get(btype, "other")
+
+
+def _day_index(trip: Trip, the_date) -> Optional[int]:
+    """1-based day index within the trip's date range. None when out of range or NULL."""
+    if the_date is None or trip.start_date is None:
+        return None
+    delta = (the_date - trip.start_date).days
+    if delta < 0:
+        return None
+    return delta + 1
+
+
+def _build_pins_for_trip(trip: Trip) -> List[Pin]:
+    """Collect pins for a single trip's bookings + non-linked items.
+
+    De-duplication rule: items with linked_booking_id are skipped — their
+    parent booking is the authoritative pin.
+    """
+    pins: List[Pin] = []
+    year = trip.start_date.year if trip.start_date else 0
+
+    for b in trip.bookings:
+        if not b.location or b.geocoded_lat is None:
+            continue
+        category = _booking_category(b.type)
+        pins.append(Pin(
+            row_type="booking",
+            row_id=b.id,
+            trip_id=trip.id,
+            trip_name=trip.name,
+            title=b.title or b.vendor or b.type,
+            location_text=b.location,
+            lat=b.geocoded_lat,
+            lng=b.geocoded_lng,
+            geocoded_city=b.geocoded_city,
+            geocoded_country_code=b.geocoded_country_code,
+            year=year,
+            category=category,
+            datetime_iso=b.start_datetime.isoformat() if b.start_datetime else None,
+            day_index=_day_index(
+                trip, b.start_datetime.date() if b.start_datetime else None
+            ),
+        ))
+
+    for it in trip.itinerary_items:
+        if not it.location or it.geocoded_lat is None:
+            continue
+        if it.linked_booking_id is not None:
+            continue
+        pins.append(Pin(
+            row_type="item",
+            row_id=it.id,
+            trip_id=trip.id,
+            trip_name=trip.name,
+            title=it.title,
+            location_text=it.location,
+            lat=it.geocoded_lat,
+            lng=it.geocoded_lng,
+            geocoded_city=it.geocoded_city,
+            geocoded_country_code=it.geocoded_country_code,
+            year=year,
+            category=it.category or "other",
+            datetime_iso=(
+                datetime.combine(it.day_date, it.start_time).isoformat()
+                if it.day_date and it.start_time else None
+            ),
+            day_index=_day_index(trip, it.day_date),
+        ))
+
+    return pins
+
+
+@app.route("/trips/<int:trip_id>/map/data.geojson")
+@login_required
+def trip_map_data(trip_id):
+    """GeoJSON pin data for the in-trip map. Lazy-geocodes rows on the way."""
+    trip, _ = _trip_with_access_or_404(trip_id, role="viewer")
+
+    # Lazy-geocode any rows that need it. Only attempt when a token is
+    # configured — otherwise the helper would just no-op for every row.
+    if MAPBOX_TOKEN:
+        from src.geocoding import ensure_geocoded
+        rows_with_location = [
+            r for r in list(trip.bookings) + list(trip.itinerary_items)
+            if (r.location or "").strip()
+        ]
+        ensure_geocoded(rows_with_location, db_session=db.session, token=MAPBOX_TOKEN)
+
+    pins = _build_pins_for_trip(trip)
+    payload = pins_to_geojson(pins, color_fn=lambda p: color_for_category(p.category))
+    return jsonify(payload)
 
 
 # ─── Bookings ───────────────────────────────────────────────────────

@@ -1214,3 +1214,60 @@ def test_changes_banner_combines_bookings_and_items(app, trip, owner):
         b"2 bookings and 1 itinerary item were added since your last visit."
         in resp.data
     )
+
+
+# ───────────────  In-trip /map/data.geojson route  ───────────────
+
+import json
+from unittest.mock import patch, MagicMock
+
+
+@patch("src.geocoding.requests.get")
+def test_trip_map_data_returns_geojson_for_owner(
+    mock_get, app, trip, owner, monkeypatch
+):
+    # The route only calls ensure_geocoded when MAPBOX_TOKEN is set; the
+    # token is loaded at module import time, so override it here.
+    monkeypatch.setattr("app.MAPBOX_TOKEN", "pk.test")
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "features": [{
+                "center": [18.0686, 59.3293],
+                "context": [
+                    {"id": "place.1", "text": "Stockholm"},
+                    {"id": "country.1", "short_code": "SE", "text": "Sweden"},
+                ],
+            }],
+        },
+    )
+    b = Booking(trip_id=trip.id, type="hotel", title="Skansen",
+                location="Hotel Skansen")
+    db.session.add(b)
+    db.session.commit()
+
+    client = flask_app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    resp = client.get(f"/trips/{trip.id}/map/data.geojson")
+    assert resp.status_code == 200
+    payload = json.loads(resp.data)
+    assert payload["type"] == "FeatureCollection"
+    assert len(payload["features"]) == 1
+    feat = payload["features"][0]
+    assert feat["geometry"]["coordinates"] == [18.0686, 59.3293]
+    assert feat["properties"]["title"] == "Skansen"
+
+
+def test_trip_map_data_404_for_non_member(app, trip):
+    other = User(google_id="g99", email="other@e.com", name="Other")
+    db.session.add(other)
+    db.session.commit()
+
+    client = flask_app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(other.id)
+
+    resp = client.get(f"/trips/{trip.id}/map/data.geojson")
+    assert resp.status_code in (403, 404)
