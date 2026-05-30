@@ -40,7 +40,6 @@
         .then(function (r) { return r.json(); })
         .then(function (geojson) {
           renderTripPins(map, geojson);
-          updateSideNote(geojson);
         })
         .catch(function (err) {
           console.error("Failed to load map data:", err);
@@ -63,6 +62,18 @@
       },
     });
 
+    map.on("click", "vp-pins-layer", function (e) {
+      var f = e.features[0];
+      var p = f.properties;
+      new mapboxgl.Popup({ offset: 12, className: "vp-map-popup" })
+        .setLngLat(f.geometry.coordinates)
+        .setHTML(buildPopupHTML(p, /*lifetimeView=*/ false))
+        .addTo(map);
+    });
+
+    map.on("mouseenter", "vp-pins-layer", function () { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "vp-pins-layer", function () { map.getCanvas().style.cursor = ""; });
+
     if (geojson.features && geojson.features.length > 0) {
       var bounds = new mapboxgl.LngLatBounds();
       geojson.features.forEach(function (f) {
@@ -72,9 +83,42 @@
     }
   }
 
-  function updateSideNote(geojson) {
-    /* For now just hide the side note — Task 7 will compute the
-     * no-location count from a separate endpoint or pass it in
-     * via the page template. */
+  function buildPopupHTML(p, lifetimeView) {
+    var safe = function (s) {
+      if (s === null || s === undefined) return "";
+      var d = document.createElement("div");
+      d.textContent = String(s);
+      return d.innerHTML;
+    };
+
+    var dt = "";
+    if (p.datetime_iso) {
+      try {
+        var dObj = new Date(p.datetime_iso);
+        dt = dObj.toLocaleString(undefined, {
+          weekday: "short", month: "short", day: "numeric",
+          hour: "numeric", minute: "2-digit",
+        });
+      } catch (e) { /* leave blank */ }
+    }
+
+    var link, label;
+    if (lifetimeView) {
+      link = "/trips/" + p.trip_id;
+      label = "Open trip →";
+    } else if (p.row_type === "booking") {
+      link = "/trips/" + p.trip_id + "/bookings/" + p.row_id + "/edit";
+      label = "Open booking →";
+    } else {
+      link = "/trips/" + p.trip_id + "/itinerary/" + p.row_id + "/edit";
+      label = "Open itinerary item →";
+    }
+
+    return (
+      '<div class="vp-popup-title">' + safe(p.title) + '</div>' +
+      (dt ? '<div class="vp-popup-meta">' + safe(dt) + '</div>' : '') +
+      (p.location_text ? '<div class="vp-popup-meta">' + safe(p.location_text) + '</div>' : '') +
+      '<a class="vp-popup-link" href="' + link + '">' + label + '</a>'
+    );
   }
 })();

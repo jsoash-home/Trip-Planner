@@ -22,10 +22,12 @@
      data-geojson-url="{{ url_for('trip_map_data', trip_id=trip.id) }}">
 </div>
 
-<p class="text-muted small mt-2" id="vp-map-side-note" hidden>
-  <span data-no-loc-count></span> items have no location —
+{% if no_location_count > 0 %}
+<p class="text-muted small mt-2">
+  {{ no_location_count }} item{{ 's' if no_location_count != 1 else '' }} have no location —
   <a href="{{ url_for('bookings_list', trip_id=trip.id) }}">add locations</a>.
 </p>
+{% endif %}
 
 {% endif %}
 

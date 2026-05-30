@@ -1006,7 +1006,11 @@ def trip_map(trip_id):
     """In-trip map page — shows all geocoded bookings and itinerary items
     as pins on a Mapbox base map. Viewer access is enough to see it."""
     trip, _ = _trip_with_access_or_404(trip_id, role="viewer")
-    return render_template("trip_map.html", trip=trip)
+    no_loc = sum(
+        1 for r in list(trip.bookings) + list(trip.itinerary_items)
+        if not (r.location or "").strip()
+    )
+    return render_template("trip_map.html", trip=trip, no_location_count=no_loc)
 
 
 @app.route("/trips/<int:trip_id>/map/data.geojson")
