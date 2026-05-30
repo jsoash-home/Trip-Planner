@@ -1,5 +1,23 @@
 # Session Log
 
+## 2026-05-30 — Map view debug: empty pins were a Mapbox token URL-restriction; 7 airport/station pins manually overridden
+
+**Shipped:**
+- Fixed empty map: token in `.env` was URL-restricted to `http://localhost:5002/`, but backend `requests.get` sends no Referer → Mapbox returned 403 on every geocode. Replaced with a fresh unrestricted token. All 45 rows now geocoded.
+- `fix: map tile summary counts rows with location, not just geocoded ones` (e9529ea) — Map section tile was lying about "no locations" because count used `geocoded_lat` which is null until first /map open.
+- Data fix (local SQLite only): renamed 10 ambiguous location strings (`MSP`, `LYR`, etc. → full airport/station names) and manually overrode the 7 strings Mapbox still couldn't geocode well, with `geocoded_manually=1` and provider="manual" cache entries.
+
+**Test status:** 419 passing / 0 failing.
+
+**Stopped at:** End of Phase 2 debugging detour. Plan is back on track at Task 7.
+
+**Pick up next with:** Start **Task 7: Pin popup cards** in a fresh window. Plan file: `docs/superpowers/plans/2026-05-29-map-view.md` (Task 7 begins at line 1795).
+
+**Loose ends:**
+- Data fix is local-only. If you ever wipe `vacation.db` or develop from another machine, you'd need to redo the manual coord overrides (or back up the DB now). The cache entries with `provider="manual"` are sticky within this DB but don't travel via git.
+- Today the lazy-geocode flow silently swallows backend 403s (route still returns 200 with empty features → map looks blank with no signal). A "geocoding failed" banner would be a future polish; Task 17 covers the missing-token banner but not the silent-403 case.
+- Two flight bookings still have raw codes the user may or may not want renamed: `OSL - GARDERMOEN` (booking #3 — actually geocoded correctly) and `Tallinn D-Terminal` for the ferry booking (not the renamed item).
+
 ## 2026-05-29 — Map view: spec, plan, and Tasks 1-6 of 17 shipped
 
 **Shipped:**
