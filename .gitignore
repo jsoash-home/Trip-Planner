@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 *.db
 *.sqlite
+*.bak
 *.bak.*
 .pytest_cache/
 .DS_Store
