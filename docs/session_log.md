@@ -1,5 +1,23 @@
 # Session Log
 
+## 2026-05-30 — Map view Task 7: pin popup cards
+
+**Shipped:**
+- `feat: pin popup cards on in-trip map` (39d3546) — click a pin to see title, formatted datetime, location, and an "Open booking →" / "Open itinerary item →" deep link. Server-rendered "N items have no location" side note (no_location_count via app.py → trip_map.html). Added `buildPopupHTML` helper + click/mouseenter/mouseleave wiring in `static/js/map.js`. Popup CSS (`.vp-map-popup .vp-popup-*`) was already in `static/css/map.css` from earlier scaffolding.
+
+**Test status:** 419 passing / 0 failing.
+
+**Stopped at:** Task 7 complete and pushed. Plan map-view tasks remaining: Task 8 (day filter chips), Task 9 (drag-to-correct), plus later tasks for the lifetime map.
+
+**Pick up next with:** Task 8 — day filter chips at `docs/superpowers/plans/2026-05-29-map-view.md:1915`.
+
+**Kickoff prompt for next session:**
+
+> Pick up the map view work at Task 8 (Day filter chips). Plan: docs/superpowers/plans/2026-05-29-map-view.md line 1915. Tests are green (419 passing). Task 7 (popups) shipped in 39d3546.
+
+**Loose ends:**
+- None.
+
 ## 2026-05-30 — Map view debug: empty pins were a Mapbox token URL-restriction; 7 airport/station pins manually overridden
 
 **Shipped:**
