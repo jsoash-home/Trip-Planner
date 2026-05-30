@@ -674,14 +674,19 @@ def _section_tiles_for(trip: Trip):
 
 
 def _map_tile_summary(trip: Trip) -> str:
-    """Short summary for the Map tile (e.g., '14 pins')."""
-    pinned = sum(
+    """Short summary for the Map tile (e.g., '14 pins').
+
+    Counts rows with a non-empty `location`, not rows that have been
+    geocoded — geocoding is lazy (only runs on first map open) and we
+    don't want the tile to say "Add a location" while locations exist.
+    """
+    with_location = sum(
         1 for r in list(trip.bookings) + list(trip.itinerary_items)
-        if r.geocoded_lat is not None
+        if (r.location or "").strip()
     )
-    if pinned == 0:
+    if with_location == 0:
         return "Add a location to get started"
-    return f"{pinned} pin{'s' if pinned != 1 else ''}"
+    return f"{with_location} pin{'s' if with_location != 1 else ''}"
 
 
 # ─── Public routes ──────────────────────────────────────────────────
