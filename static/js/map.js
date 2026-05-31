@@ -247,9 +247,84 @@
     map.fitBounds(bounds, { padding: 50, maxZoom: 6, duration: 0 });
   }
 
-  // Stubs — populated in Task 15.
-  function renderStatsBar(geojson) {}
-  function renderYearChips(map, geojson) {}
+  function renderStatsBar(geojson) {
+    var bar = document.getElementById("vp-stats-bar");
+    if (!bar) return;
+    var stats = computeStats(geojson.features);
+    bar.textContent =
+      stats.countries + " countries · " +
+      stats.cities + " cities · " +
+      stats.trips + " trips";
+  }
+
+  function computeStats(features) {
+    var countries = new Set();
+    var cityKeys = new Set();
+    var tripIds = new Set();
+    features.forEach(function (f) {
+      var p = f.properties;
+      if (p.geocoded_country_code) countries.add(p.geocoded_country_code);
+      if (p.geocoded_city) cityKeys.add(p.geocoded_city + "::" + p.geocoded_country_code);
+      tripIds.add(p.trip_id);
+    });
+    return { countries: countries.size, cities: cityKeys.size, trips: tripIds.size };
+  }
+
+  function renderYearChips(map, geojson) {
+    var bar = document.getElementById("vp-year-chip-bar");
+    if (!bar) return;
+
+    var years = Array.from(new Set(geojson.features.map(function (f) {
+      return f.properties.year;
+    }))).sort(function (a, b) { return b - a; });
+
+    years.forEach(function (year) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vp-day-chip";
+      btn.setAttribute("data-year", String(year));
+      btn.setAttribute("aria-pressed", "false");
+      btn.textContent = String(year);
+      bar.appendChild(btn);
+    });
+
+    bar.addEventListener("click", function (e) {
+      var btn = e.target.closest(".vp-day-chip");
+      if (!btn) return;
+      bar.querySelectorAll(".vp-day-chip").forEach(function (b) {
+        b.setAttribute("aria-pressed", "false");
+      });
+      btn.setAttribute("aria-pressed", "true");
+      applyYearFilter(map, btn.getAttribute("data-year"), geojson);
+    });
+  }
+
+  function applyYearFilter(map, year, geojson) {
+    var filter = null;
+    if (year !== "all") {
+      filter = ["==", ["get", "year"], parseInt(year, 10)];
+    }
+    if (map.getLayer("vp-pins-layer")) {
+      map.setFilter("vp-pins-layer", filter
+        ? ["all", ["!", ["has", "point_count"]], filter]
+        : ["!", ["has", "point_count"]]);
+    }
+    if (map.getLayer("vp-clusters-layer")) {
+      map.setFilter("vp-clusters-layer", filter
+        ? ["all", ["has", "point_count"], filter]
+        : ["has", "point_count"]);
+    }
+    if (map.getLayer("vp-cluster-counts")) {
+      map.setFilter("vp-cluster-counts", filter
+        ? ["all", ["has", "point_count"], filter]
+        : ["has", "point_count"]);
+    }
+
+    var filtered = year === "all"
+      ? geojson.features
+      : geojson.features.filter(function (f) { return f.properties.year === parseInt(year, 10); });
+    renderStatsBar({ features: filtered });
+  }
 
   function userCanEdit() {
     var el = getContainer();
