@@ -203,6 +203,39 @@
     });
     map.on("mouseenter", "vp-pins-layer", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "vp-pins-layer", function () { map.getCanvas().style.cursor = ""; });
+
+    // Country paint at world zoom — Mapbox's built-in boundaries tileset
+    // shaded for every country the user has visited. Fades out past zoom 4
+    // so the cluster + pin layers take over.
+    var visited = (geojson.meta && geojson.meta.visited_country_codes) || [];
+
+    map.addSource("vp-country-bounds", {
+      type: "vector",
+      url: "mapbox://mapbox.country-boundaries-v1",
+    });
+
+    var matchExpr = ["match", ["get", "iso_3166_1"]];
+    if (visited.length === 0) {
+      // Mapbox match requires at least one case. Use a sentinel that won't match.
+      matchExpr.push("__NONE__", "rgba(74,111,165,0.25)");
+    } else {
+      visited.forEach(function (code) {
+        matchExpr.push(code, "rgba(74,111,165,0.25)");
+      });
+    }
+    matchExpr.push("rgba(0,0,0,0)");
+
+    map.addLayer({
+      id: "vp-country-paint",
+      source: "vp-country-bounds",
+      "source-layer": "country_boundaries",
+      type: "fill",
+      maxzoom: 4,
+      paint: {
+        "fill-color": matchExpr,
+        "fill-outline-color": "rgba(0,0,0,0)",
+      },
+    }, "vp-clusters-layer");
   }
 
   function fitToFeatures(map, geojson) {

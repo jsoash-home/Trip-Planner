@@ -1107,7 +1107,9 @@ def lifetime_map_data():
     for t in sorted(all_trips, key=lambda x: x.start_date):
         pins.extend(_build_pins_for_trip(t))
 
+    visited = sorted({p.geocoded_country_code for p in pins if p.geocoded_country_code})
     payload = pins_to_geojson(pins, color_fn=lambda p: color_for_year(p.year))
+    payload["meta"] = {"visited_country_codes": visited}
     return jsonify(payload)
 
 
