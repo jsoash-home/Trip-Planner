@@ -1,5 +1,27 @@
 # Session Log
 
+## 2026-05-31 — Map view: browser verification, plan closed out
+
+**Verified in the user's regular browser:** `/trips/2/map` (Scandinavia '26, 45 geocoded rows) renders Mapbox tiles, pins, day chips, popups, and drag-to-correct — exactly as designed. The in-trip map is fully functional.
+
+**Lifetime map status:** `/map` correctly returns an empty FeatureCollection for the user's current data. Only "TEST TRIP" qualifies (start_date ≤ today) and it has zero geocoded data. Scandinavia '26 is excluded as a future trip per the `_trip_is_for_lifetime` rule. This is working as designed — the lifetime map will populate organically once a trip with geocoded pins has started.
+
+**False-alarm finding from the Claude-driven Chrome MCP browser:** The MCP extension's privacy filter silently blocked Mapbox's vector tile XHRs (which include `access_token=pk....` as a query parameter). This produced a white-globe-with-stars rendering with no tiles in the verification browser, but the issue does NOT exist for normal browsing. Recorded here so a future session that tries to verify maps via Chrome MCP doesn't waste time on the same red herring — drive Mapbox maps via a non-extension tab or trust the test-client smoke pass.
+
+**Verdict:** PASS. Map view plan (Tasks 1–17, all 4 phases) is functionally complete and shipped.
+
+**Test status:** 423 passing / 0 failing — no change.
+
+**Stopped at:** Plan closed out. No outstanding work on the map view feature.
+
+**Pick up next with:** Open. The plan's "What's intentionally NOT in this plan" list (`docs/superpowers/plans/2026-05-29-map-view.md:3193`) names 12 deferred items if you want to pick one (route lines between pins, dashboard mini-map widget, per-trip exclude-from-lifetime toggle, etc.).
+
+**Loose ends:**
+- `.claude/launch.json` was created this session to register the Flask dev server for the Claude Preview tools. Currently untracked. Keep if you want to use `/run` or `/verify` against the app in future sessions; delete (`rm -rf .claude/`) if you don't want the file around.
+- `vacation.db.bak` (May 25, 122 KB) still at project root, gitignored. Still safe to delete.
+
+---
+
 ## 2026-05-30 — Map view Phase 3 + Phase 4: lifetime map end-to-end (plan complete)
 
 **Shipped (7 commits, Tasks 11–17 — the entire lifetime map and final polish):**
