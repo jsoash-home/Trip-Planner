@@ -244,6 +244,11 @@
             {{ icon('plus-circle') }}
             <span>New trip</span>
           </a>
+          <a class="vp-navlink {% if ep == 'lifetime_map' %}is-active{% endif %}"
+             href="{{ url_for('lifetime_map') }}">
+            <span aria-hidden="true">🌍</span>
+            <span>Map</span>
+          </a>
         </div>
 
         <div class="vp-unit-toggle ms-auto me-3" role="group" aria-label="Countdown unit" hidden>

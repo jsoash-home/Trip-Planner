@@ -95,6 +95,76 @@
     });
   };
 
+  // ───────────────────────────── lifetime map ───────────────────────
+
+  window.vpInitLifetimeMap = function () {
+    var el = document.getElementById("vp-lifetime-map");
+    if (!el || typeof mapboxgl === "undefined") return;
+    var token = getMapboxToken();
+    if (!token) return;
+
+    mapboxgl.accessToken = token;
+
+    var map = new mapboxgl.Map({
+      container: el,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [0, 20],
+      zoom: 1.2,
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+    map.on("load", function () {
+      fetch(el.getAttribute("data-geojson-url"))
+        .then(function (r) { return r.json(); })
+        .then(function (geojson) {
+          renderLifetimePins(map, geojson);
+          renderStatsBar(geojson);
+          renderYearChips(map, geojson);
+          fitToFeatures(map, geojson);
+        })
+        .catch(function (err) { console.error("Lifetime map fetch:", err); });
+    });
+  };
+
+  function renderLifetimePins(map, geojson) {
+    map.addSource("vp-pins", { type: "geojson", data: geojson });
+    map.addLayer({
+      id: "vp-pins-layer",
+      type: "circle",
+      source: "vp-pins",
+      paint: {
+        "circle-radius": 5,
+        "circle-color": ["get", "color"],
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#ffffff",
+      },
+    });
+
+    map.on("click", "vp-pins-layer", function (e) {
+      var f = e.features[0];
+      new mapboxgl.Popup({ offset: 10, className: "vp-map-popup" })
+        .setLngLat(f.geometry.coordinates)
+        .setHTML(buildPopupHTML(f.properties, /*lifetimeView=*/ true))
+        .addTo(map);
+    });
+    map.on("mouseenter", "vp-pins-layer", function () { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "vp-pins-layer", function () { map.getCanvas().style.cursor = ""; });
+  }
+
+  function fitToFeatures(map, geojson) {
+    if (!geojson.features.length) return;
+    var bounds = new mapboxgl.LngLatBounds();
+    geojson.features.forEach(function (f) {
+      bounds.extend(f.geometry.coordinates);
+    });
+    map.fitBounds(bounds, { padding: 50, maxZoom: 6, duration: 0 });
+  }
+
+  // Stubs — populated in Task 15.
+  function renderStatsBar(geojson) {}
+  function renderYearChips(map, geojson) {}
+
   function userCanEdit() {
     var el = getContainer();
     return el && el.getAttribute("data-can-edit") === "true";

@@ -1065,6 +1065,15 @@ def _trip_is_for_lifetime(trip: Trip, today: date) -> bool:
     return trip.start_date <= today  # excludes purely future trips
 
 
+@app.route("/map")
+@login_required
+def lifetime_map():
+    """Top-level lifetime map page — every place this user has been
+    across owned + collaborator trips. Data loads asynchronously from
+    ``/map/data.geojson``."""
+    return render_template("lifetime_map.html")
+
+
 @app.route("/map/data.geojson")
 @login_required
 def lifetime_map_data():

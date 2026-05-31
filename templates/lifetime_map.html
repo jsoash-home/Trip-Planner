@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Map · Your travels{% endblock %}
+
+{% block head_extra %}
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">🌍 Your travels</h1>
+
+{% if not mapbox_token %}
+<div class="alert alert-warning">
+  Map provider not configured. Set <code>MAPBOX_TOKEN</code> in your environment.
+</div>
+{% else %}
+
+<div class="vp-stats-bar text-muted small mb-2" id="vp-stats-bar">
+  Loading…
+</div>
+
+<div class="vp-year-chip-bar mb-2" id="vp-year-chip-bar" role="tablist"
+     aria-label="Filter pins by year">
+  <button type="button" class="vp-day-chip" data-year="all" aria-pressed="true">
+    All years
+  </button>
+</div>
+
+<div id="vp-lifetime-map"
+     class="vp-lifetime-map"
+     data-geojson-url="{{ url_for('lifetime_map_data') }}">
+</div>
+
+<div class="small text-muted mt-2">
+  <a href="#" id="vp-replay-link">Replay animation</a>
+</div>
+
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  (function () {
+    if (window.vpInitLifetimeMap) { window.vpInitLifetimeMap(); }
+  })();
+</script>
+{% endblock %}
