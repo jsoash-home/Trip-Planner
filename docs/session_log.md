@@ -1,5 +1,24 @@
 # Session Log
 
+## 2026-05-30 — Map view Task 10: mini-map teaser on trip overview (Phase 2 complete)
+
+**Shipped:**
+- `feat: mini-map teaser on trip overview` (b3e0cfd) — new `templates/_mini_map.html` partial renders only when `has_pins and mapbox_token`. Computed `has_pins` in `trip_overview` route from `geocoded_lat` across bookings + itinerary items. Included partial between the dates/status cards and the "Plan" section-tile grid. New `vpInitMiniMap` factory in `static/js/map.js`: non-interactive, no attribution control, fits bounds with `maxZoom: 11`. Whole tile is a clickable link to the full `/map` page.
+
+**Test status:** 422 passing / 0 failing.
+
+**Stopped at:** Phase 2 of the map view plan complete (Tasks 5–10 all shipped + pushed). Stopped at the user-requested phase boundary before Phase 3 (lifetime map, Tasks 11–17).
+
+**Pick up next with:** Task 11 — Lifetime GeoJSON route `/map/data.geojson` at `docs/superpowers/plans/2026-05-29-map-view.md:2411`.
+
+**Kickoff prompt for next session:**
+
+> Pick up the map view work at Task 11 (Lifetime GeoJSON route `/map/data.geojson`). Plan: docs/superpowers/plans/2026-05-29-map-view.md line 2411. Tests are green (422 passing). Task 10 (mini-map teaser) shipped in b3e0cfd, completing Phase 2. Phase 3 covers Tasks 11–17 (lifetime map end-to-end).
+
+**Loose ends:**
+- Mini-map was server-side smoke-tested via Flask test client but not visually verified in a real browser (no live Mapbox tile render confirmed). The JS factory closely mirrors `vpInitTripMap`, which is already working in production.
+- `vacation.db.bak` (May 25, 122 KB) sits at the project root. Gitignored, harmless, but no longer needed if you trust the current local DB.
+
 ## 2026-05-30 — Map view Task 7: pin popup cards
 
 **Shipped:**
