@@ -87,7 +87,7 @@ from src.itinerary import (
     parse_itinerary_form,
     sort_within_day,
 )
-from src.map_helpers import Pin, color_for_category, pins_to_geojson
+from src.map_helpers import Pin, color_for_category, color_for_year, pins_to_geojson
 from src.packing import (
     DEFAULT_PACKING_ITEMS,
     PACKING_CATEGORIES,
@@ -1055,6 +1055,50 @@ def trip_map_data(trip_id):
 
     pins = _build_pins_for_trip(trip)
     payload = pins_to_geojson(pins, color_fn=lambda p: color_for_category(p.category))
+    return jsonify(payload)
+
+
+def _trip_is_for_lifetime(trip: Trip, today: date) -> bool:
+    """True if a trip belongs on the lifetime map (completed or in-progress)."""
+    if trip.start_date is None or trip.end_date is None:
+        return False
+    return trip.start_date <= today  # excludes purely future trips
+
+
+@app.route("/map/data.geojson")
+@login_required
+def lifetime_map_data():
+    """GeoJSON for the lifetime map — owned + collaborator trips that have
+    started (completed or in progress). Lazy-geocodes rows when a token is
+    configured. Pins are returned in chronological trip order so the
+    front-end fade-in can replay them in the same sequence."""
+    today = date.today()
+
+    owned = Trip.query.filter_by(owner_id=current_user.id).all()
+    collab_trip_ids = [
+        c.trip_id for c in TripCollaborator.query.filter_by(
+            email=current_user.email,
+        ).all()
+    ]
+    collab = (
+        Trip.query.filter(Trip.id.in_(collab_trip_ids)).all()
+        if collab_trip_ids else []
+    )
+
+    all_trips = [t for t in owned + collab if _trip_is_for_lifetime(t, today)]
+
+    if MAPBOX_TOKEN:
+        rows = []
+        for t in all_trips:
+            rows.extend(b for b in t.bookings if (b.location or "").strip())
+            rows.extend(i for i in t.itinerary_items if (i.location or "").strip())
+        ensure_geocoded(rows, db_session=db.session, token=MAPBOX_TOKEN)
+
+    pins = []
+    for t in sorted(all_trips, key=lambda x: x.start_date):
+        pins.extend(_build_pins_for_trip(t))
+
+    payload = pins_to_geojson(pins, color_fn=lambda p: color_for_year(p.year))
     return jsonify(payload)
 
 

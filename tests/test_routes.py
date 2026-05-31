@@ -1404,3 +1404,52 @@ def test_drag_correct_rejects_invalid_coords(app, trip, editor):
             f"/trips/{trip.id}/map/pin/booking/{b.id}", json=bad,
         )
         assert resp.status_code == 400
+
+
+# ───────────────  Lifetime /map/data.geojson route  ───────────────
+
+
+@patch("src.geocoding.requests.get")
+def test_lifetime_map_data_includes_owned_completed_trips(
+    mock_get, app, owner, monkeypatch
+):
+    """Owned trips with start_date <= today are included; purely future
+    (planning) trips are excluded."""
+    monkeypatch.setattr("app.MAPBOX_TOKEN", "pk.test")
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "features": [{
+                "center": [18.0686, 59.3293],
+                "context": [
+                    {"id": "place.1", "text": "Stockholm"},
+                    {"id": "country.1", "short_code": "SE", "text": "Sweden"},
+                ],
+            }],
+        },
+    )
+
+    # Past trip (completed because end_date < today).
+    t1 = Trip(owner_id=owner.id, name="Past trip",
+              start_date=date(2024, 6, 1), end_date=date(2024, 6, 10))
+    # Planning trip in the future (should be excluded).
+    t2 = Trip(owner_id=owner.id, name="Future trip",
+              start_date=date(2099, 1, 1), end_date=date(2099, 1, 10))
+    db.session.add_all([t1, t2])
+    db.session.commit()
+    db.session.add_all([
+        Booking(trip_id=t1.id, type="hotel", title="X", location="Hotel A"),
+        Booking(trip_id=t2.id, type="hotel", title="Y", location="Hotel B"),
+    ])
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    resp = client.get("/map/data.geojson")
+    assert resp.status_code == 200
+    payload = json.loads(resp.data)
+    titles = [f["properties"]["title"] for f in payload["features"]]
+    assert "X" in titles
+    assert "Y" not in titles  # future trip excluded
