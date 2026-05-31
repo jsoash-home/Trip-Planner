@@ -36,6 +36,7 @@
      class="vp-trip-map"
      data-trip-id="{{ trip.id }}"
      data-mode="trip"
+     data-can-edit="{{ 'true' if can_edit else 'false' }}"
      data-geojson-url="{{ url_for('trip_map_data', trip_id=trip.id) }}">
 </div>
 

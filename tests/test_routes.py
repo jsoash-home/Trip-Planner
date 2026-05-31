@@ -1318,3 +1318,89 @@ def test_trip_map_data_skips_items_linked_to_booking(app, trip, owner, monkeypat
     titles = sorted(f["properties"]["title"] for f in payload["features"])
     # Booking + standalone = 2 features. Linked auto-item is excluded.
     assert titles == ["Skansen", "Vasa Museum"]
+
+
+# ─── Task 9: Drag-to-correct ──────────────────────────────────────
+
+
+@pytest.fixture
+def editor(app, owner, trip):
+    e = User(google_id="g2", email="editor@e.com", name="Editor")
+    db.session.add(e)
+    db.session.commit()
+    from models import TripCollaborator
+    db.session.add(TripCollaborator(
+        trip_id=trip.id, email="editor@e.com", role="editor",
+    ))
+    db.session.commit()
+    return e
+
+
+@pytest.fixture
+def viewer(app, owner, trip):
+    v = User(google_id="g3", email="viewer@e.com", name="Viewer")
+    db.session.add(v)
+    db.session.commit()
+    from models import TripCollaborator
+    db.session.add(TripCollaborator(
+        trip_id=trip.id, email="viewer@e.com", role="viewer",
+    ))
+    db.session.commit()
+    return v
+
+
+def test_drag_correct_succeeds_for_editor(app, trip, editor):
+    b = Booking(trip_id=trip.id, type="hotel", title="X",
+                location="Hotel", geocoded_lat=0.0, geocoded_lng=0.0)
+    db.session.add(b)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(editor.id)
+
+    resp = client.post(
+        f"/trips/{trip.id}/map/pin/booking/{b.id}",
+        json={"lat": 59.33, "lng": 18.07},
+    )
+    assert resp.status_code == 204
+    db.session.refresh(b)
+    assert b.geocoded_lat == 59.33
+    assert b.geocoded_lng == 18.07
+    assert b.geocoded_manually is True
+
+
+def test_drag_correct_forbidden_for_viewer(app, trip, viewer):
+    b = Booking(trip_id=trip.id, type="hotel", title="X",
+                location="Hotel", geocoded_lat=0.0, geocoded_lng=0.0)
+    db.session.add(b)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+
+    resp = client.post(
+        f"/trips/{trip.id}/map/pin/booking/{b.id}",
+        json={"lat": 1.0, "lng": 2.0},
+    )
+    assert resp.status_code in (403, 404)
+    db.session.refresh(b)
+    assert b.geocoded_lat == 0.0   # unchanged
+
+
+def test_drag_correct_rejects_invalid_coords(app, trip, editor):
+    b = Booking(trip_id=trip.id, type="hotel", title="X",
+                location="Hotel", geocoded_lat=0.0, geocoded_lng=0.0)
+    db.session.add(b)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(editor.id)
+
+    for bad in [{"lat": 999, "lng": 0}, {"lat": 0, "lng": 999}, {"lat": "x", "lng": 0}]:
+        resp = client.post(
+            f"/trips/{trip.id}/map/pin/booking/{b.id}", json=bad,
+        )
+        assert resp.status_code == 400

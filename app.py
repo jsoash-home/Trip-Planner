@@ -1005,7 +1005,7 @@ def _build_pins_for_trip(trip: Trip) -> List[Pin]:
 def trip_map(trip_id):
     """In-trip map page — shows all geocoded bookings and itinerary items
     as pins on a Mapbox base map. Viewer access is enough to see it."""
-    trip, _ = _trip_with_access_or_404(trip_id, role="viewer")
+    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
     no_loc = sum(
         1 for r in list(trip.bookings) + list(trip.itinerary_items)
         if not (r.location or "").strip()
@@ -1020,11 +1020,13 @@ def trip_map(trip_id):
                 "date": d.isoformat(),
                 "label": d.strftime("%a %-m/%-d"),
             })
+    can_edit = role_satisfies(user_role, "editor")
     return render_template(
         "trip_map.html",
         trip=trip,
         no_location_count=no_loc,
         trip_days=days,
+        can_edit=can_edit,
     )
 
 
@@ -1046,6 +1048,38 @@ def trip_map_data(trip_id):
     pins = _build_pins_for_trip(trip)
     payload = pins_to_geojson(pins, color_fn=lambda p: color_for_category(p.category))
     return jsonify(payload)
+
+
+@app.route("/trips/<int:trip_id>/map/pin/<string:row_type>/<int:row_id>", methods=["POST"])
+@login_required
+def trip_map_pin_update(trip_id, row_type, row_id):
+    """Editor-only: save a drag-corrected pin position for a booking or
+    itinerary item. Marks the row as manually geocoded so future re-
+    geocodes don't overwrite the user's correction."""
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        lat = float(payload["lat"])
+        lng = float(payload["lng"])
+    except (KeyError, ValueError, TypeError):
+        return ("Invalid coordinates", 400)
+    if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        return ("Coordinates out of range", 400)
+
+    if row_type == "booking":
+        row = Booking.query.filter_by(id=row_id, trip_id=trip.id).first_or_404()
+    elif row_type == "item":
+        row = ItineraryItem.query.filter_by(id=row_id, trip_id=trip.id).first_or_404()
+    else:
+        return ("Unknown row type", 400)
+
+    row.geocoded_lat = lat
+    row.geocoded_lng = lng
+    row.geocoded_manually = True
+    row.geocoded_at = datetime.utcnow()
+    db.session.commit()
+    return ("", 204)
 
 
 # ─── Bookings ───────────────────────────────────────────────────────

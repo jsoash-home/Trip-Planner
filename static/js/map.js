@@ -41,12 +41,79 @@
         .then(function (geojson) {
           renderTripPins(map, geojson);
           wireDayChips(map);
+          wireDrag(map, el.getAttribute("data-trip-id"), userCanEdit());
         })
         .catch(function (err) {
           console.error("Failed to load map data:", err);
         });
     });
   };
+
+  function userCanEdit() {
+    var el = getContainer();
+    return el && el.getAttribute("data-can-edit") === "true";
+  }
+
+  function wireDrag(map, tripId, canEdit) {
+    if (!canEdit) return;
+
+    var dragging = null;
+
+    map.on("mouseenter", "vp-pins-layer", function () {
+      map.getCanvas().style.cursor = "grab";
+    });
+    map.on("mousedown", "vp-pins-layer", function (e) {
+      e.preventDefault();
+      dragging = e.features[0];
+      map.getCanvas().style.cursor = "grabbing";
+      map.dragPan.disable();
+    });
+    map.on("mousemove", function (e) {
+      if (!dragging) return;
+      var src = map.getSource("vp-pins");
+      var data = src._data;
+      var feat = data.features.find(function (f) {
+        return f.properties.row_type === dragging.properties.row_type &&
+               f.properties.row_id === dragging.properties.row_id;
+      });
+      if (feat) {
+        feat.geometry.coordinates = [e.lngLat.lng, e.lngLat.lat];
+        src.setData(data);
+      }
+    });
+    map.on("mouseup", function (e) {
+      if (!dragging) return;
+      var coords = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+      var p = dragging.properties;
+      dragging = null;
+      map.getCanvas().style.cursor = "";
+      map.dragPan.enable();
+
+      fetch("/trips/" + tripId + "/map/pin/" + p.row_type + "/" + p.row_id, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(coords),
+      }).then(function (r) {
+        if (r.status === 204) showToast("Pin saved");
+        else showToast("Could not save — try again");
+      }).catch(function () { showToast("Could not save — try again"); });
+    });
+  }
+
+  function showToast(msg) {
+    var t = document.createElement("div");
+    t.className = "vp-map-toast";
+    t.textContent = msg;
+    Object.assign(t.style, {
+      position: "fixed", bottom: "20px", left: "50%",
+      transform: "translateX(-50%)",
+      background: "rgba(0,0,0,0.85)", color: "white",
+      padding: "8px 14px", borderRadius: "6px",
+      fontSize: "0.9rem", zIndex: 9999,
+    });
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 1500);
+  }
 
   function wireDayChips(map) {
     var chips = document.querySelectorAll(".vp-day-chip-bar .vp-day-chip");
