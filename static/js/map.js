@@ -118,10 +118,23 @@
       fetch(el.getAttribute("data-geojson-url"))
         .then(function (r) { return r.json(); })
         .then(function (geojson) {
-          renderLifetimePins(map, geojson);
-          renderStatsBar(geojson);
+          // Scaffold the layers with an empty source so they exist
+          // before the fade-in begins to push features in.
+          renderLifetimePins(map, {
+            type: "FeatureCollection",
+            features: [],
+            meta: geojson.meta,
+          });
           renderYearChips(map, geojson);
-          fitToFeatures(map, geojson);
+
+          if (prefersReducedMotion()) {
+            map.getSource("vp-pins").setData(geojson);
+            renderStatsBar(geojson);
+            fitToFeatures(map, geojson);
+          } else {
+            chronologicalFadeIn(map, geojson);
+            wireReplay(map, geojson);
+          }
         })
         .catch(function (err) { console.error("Lifetime map fetch:", err); });
     });
@@ -324,6 +337,60 @@
       ? geojson.features
       : geojson.features.filter(function (f) { return f.properties.year === parseInt(year, 10); });
     renderStatsBar({ features: filtered });
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia &&
+           window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function chronologicalFadeIn(map, geojson) {
+    // Group features by trip_id, preserving the server's chronological
+    // order (the route sorts trips by start_date before building pins).
+    var byTrip = [];
+    var seen = new Set();
+    geojson.features.forEach(function (f) {
+      var tid = f.properties.trip_id;
+      if (!seen.has(tid)) {
+        seen.add(tid);
+        byTrip.push({ trip_id: tid, features: [] });
+      }
+      byTrip[byTrip.length - 1].features.push(f);
+    });
+
+    var totalMs = 1500;
+    var perTripMs = byTrip.length > 0 ? Math.max(40, totalMs / byTrip.length) : 0;
+
+    var accumulated = { type: "FeatureCollection", features: [], meta: geojson.meta };
+    var i = 0;
+
+    function tick() {
+      if (i >= byTrip.length) {
+        renderStatsBar(geojson);
+        fitToFeatures(map, geojson);
+        return;
+      }
+      accumulated.features = accumulated.features.concat(byTrip[i].features);
+      map.getSource("vp-pins").setData(accumulated);
+      renderStatsBar(accumulated);
+      i += 1;
+      setTimeout(tick, perTripMs);
+    }
+    tick();
+  }
+
+  function wireReplay(map, geojson) {
+    var link = document.getElementById("vp-replay-link");
+    if (!link) return;
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      map.getSource("vp-pins").setData({
+        type: "FeatureCollection",
+        features: [],
+        meta: geojson.meta,
+      });
+      chronologicalFadeIn(map, geojson);
+    });
   }
 
   function userCanEdit() {
