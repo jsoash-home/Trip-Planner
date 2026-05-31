@@ -13,6 +13,11 @@
 <div class="alert alert-warning">
   Map provider not configured. Set <code>MAPBOX_TOKEN</code> in your environment.
 </div>
+{% elif not has_any_qualifying_trips %}
+<div class="text-center text-muted py-5">
+  <p>No travel history yet.<br>
+     Your map will fill in after your first trip wraps up.</p>
+</div>
 {% else %}
 
 <div class="vp-stats-bar text-muted small mb-2" id="vp-stats-bar">

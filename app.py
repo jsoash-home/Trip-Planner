@@ -1029,12 +1029,17 @@ def trip_map(trip_id):
                 "label": d.strftime("%a %-m/%-d"),
             })
     can_edit = role_satisfies(user_role, "editor")
+    has_any_location = any(
+        (r.location or "").strip()
+        for r in list(trip.bookings) + list(trip.itinerary_items)
+    )
     return render_template(
         "trip_map.html",
         trip=trip,
         no_location_count=no_loc,
         trip_days=days,
         can_edit=can_edit,
+        has_any_location=has_any_location,
     )
 
 
@@ -1071,7 +1076,22 @@ def lifetime_map():
     """Top-level lifetime map page — every place this user has been
     across owned + collaborator trips. Data loads asynchronously from
     ``/map/data.geojson``."""
-    return render_template("lifetime_map.html")
+    today = date.today()
+    owned = Trip.query.filter_by(owner_id=current_user.id).all()
+    collab_trip_ids = [
+        c.trip_id for c in TripCollaborator.query.filter_by(
+            email=current_user.email,
+        ).all()
+    ]
+    collab = (
+        Trip.query.filter(Trip.id.in_(collab_trip_ids)).all()
+        if collab_trip_ids else []
+    )
+    qualifying = [t for t in owned + collab if _trip_is_for_lifetime(t, today)]
+    return render_template(
+        "lifetime_map.html",
+        has_any_qualifying_trips=bool(qualifying),
+    )
 
 
 @app.route("/map/data.geojson")
