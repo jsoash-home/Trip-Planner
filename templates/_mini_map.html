@@ -1,0 +1,21 @@
+{% if has_pins and mapbox_token %}
+<section class="vp-mini-map-section mb-3">
+  <a href="{{ url_for('trip_map', trip_id=trip.id) }}" class="text-decoration-none">
+    <div id="vp-mini-map"
+         class="vp-mini-map"
+         data-trip-id="{{ trip.id }}"
+         data-geojson-url="{{ url_for('trip_map_data', trip_id=trip.id) }}">
+    </div>
+    <div class="small text-muted mt-1">Open full map →</div>
+  </a>
+</section>
+
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+  (function () {
+    if (window.vpInitMiniMap) { window.vpInitMiniMap(); }
+  })();
+</script>
+{% endif %}

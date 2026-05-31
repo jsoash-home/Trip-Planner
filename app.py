@@ -807,6 +807,13 @@ def trip_overview(trip_id):
     # bump it to now so the next reload starts fresh.
     changes_banner = _changes_banner_and_mark_seen(trip.id, current_user.id)
 
+    # Mini-map teaser (Task 10): only show the section when at least one
+    # booking or itinerary item has already been geocoded.
+    has_pins = any(
+        r.geocoded_lat is not None
+        for r in list(trip.bookings) + list(trip.itinerary_items)
+    )
+
     return render_template(
         "trip_overview.html",
         trip=trip,
@@ -821,6 +828,7 @@ def trip_overview(trip_id):
         today_day_number=today_day_number,
         today_date=today,
         changes_banner=changes_banner,
+        has_pins=has_pins,
     )
 
 

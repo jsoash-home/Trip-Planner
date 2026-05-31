@@ -49,6 +49,52 @@
     });
   };
 
+  // ───────────────────────────── mini-map teaser ────────────────────
+
+  window.vpInitMiniMap = function () {
+    var el = document.getElementById("vp-mini-map");
+    if (!el || typeof mapboxgl === "undefined") return;
+    var token = getMapboxToken();
+    if (!token) return;
+
+    mapboxgl.accessToken = token;
+
+    var map = new mapboxgl.Map({
+      container: el,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [0, 20],
+      zoom: 1,
+      interactive: false,
+      attributionControl: false,
+    });
+
+    map.on("load", function () {
+      fetch(el.getAttribute("data-geojson-url"))
+        .then(function (r) { return r.json(); })
+        .then(function (geojson) {
+          if (!geojson.features.length) return;
+          map.addSource("vp-mini-pins", { type: "geojson", data: geojson });
+          map.addLayer({
+            id: "vp-mini-pins-layer",
+            type: "circle",
+            source: "vp-mini-pins",
+            paint: {
+              "circle-radius": 5,
+              "circle-color": ["get", "color"],
+              "circle-stroke-width": 1.5,
+              "circle-stroke-color": "#ffffff",
+            },
+          });
+          var bounds = new mapboxgl.LngLatBounds();
+          geojson.features.forEach(function (f) {
+            bounds.extend(f.geometry.coordinates);
+          });
+          map.fitBounds(bounds, { padding: 20, maxZoom: 11, duration: 0 });
+        })
+        .catch(function (err) { console.error("Mini-map fetch:", err); });
+    });
+  };
+
   function userCanEdit() {
     var el = getContainer();
     return el && el.getAttribute("data-can-edit") === "true";
