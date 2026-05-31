@@ -128,11 +128,20 @@
   };
 
   function renderLifetimePins(map, geojson) {
-    map.addSource("vp-pins", { type: "geojson", data: geojson });
+    map.addSource("vp-pins", {
+      type: "geojson",
+      data: geojson,
+      cluster: true,
+      clusterMaxZoom: 9,
+      clusterRadius: 50,
+    });
+
+    // Unclustered pins (visible at zoom > clusterMaxZoom).
     map.addLayer({
       id: "vp-pins-layer",
       type: "circle",
       source: "vp-pins",
+      filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-radius": 5,
         "circle-color": ["get", "color"],
@@ -141,6 +150,50 @@
       },
     });
 
+    // Cluster circles (visible at world / country zoom).
+    map.addLayer({
+      id: "vp-clusters-layer",
+      type: "circle",
+      source: "vp-pins",
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": "#4a6fa5",
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+        "circle-radius": [
+          "step", ["get", "point_count"],
+          12, 10,
+          18, 30,
+          24,
+        ],
+      },
+    });
+
+    map.addLayer({
+      id: "vp-cluster-counts",
+      type: "symbol",
+      source: "vp-pins",
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-size": 12,
+      },
+      paint: { "text-color": "#ffffff" },
+    });
+
+    // Click a cluster ⇒ zoom in.
+    map.on("click", "vp-clusters-layer", function (e) {
+      var cluster = e.features[0];
+      var clusterId = cluster.properties.cluster_id;
+      map.getSource("vp-pins").getClusterExpansionZoom(clusterId, function (err, zoom) {
+        if (err) return;
+        map.easeTo({ center: cluster.geometry.coordinates, zoom: zoom });
+      });
+    });
+    map.on("mouseenter", "vp-clusters-layer", function () { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "vp-clusters-layer", function () { map.getCanvas().style.cursor = ""; });
+
+    // Click an unclustered pin ⇒ popup.
     map.on("click", "vp-pins-layer", function (e) {
       var f = e.features[0];
       new mapboxgl.Popup({ offset: 10, className: "vp-map-popup" })
