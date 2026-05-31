@@ -1,5 +1,31 @@
 # Session Log
 
+## 2026-05-30 — Map view Phase 3 + Phase 4: lifetime map end-to-end (plan complete)
+
+**Shipped (7 commits, Tasks 11–17 — the entire lifetime map and final polish):**
+- `feat: /map/data.geojson aggregates owned + collaborator trips` (731e083) — new lifetime data route, excludes purely future trips, sorts pins chronologically for fade-in, lazy-geocodes when token present. +1 test.
+- `feat: lifetime map page + nav link + flat pin layer` (a82ab9d) — `/map` page route, `templates/lifetime_map.html`, "🌍 Map" top-level nav entry (adapted from the plan's Bootstrap-dropdown assumption to this codebase's custom `vp-navlink`), `vpInitLifetimeMap` factory in `static/js/map.js`.
+- `feat: city-level clustering on lifetime map` (fd964a9) — Mapbox built-in clustering with `clusterMaxZoom: 9`, cluster circles + count labels + click-to-zoom.
+- `feat: country paint layer at world zoom on lifetime map` (ed24c47) — `visited_country_codes` in payload meta; `mapbox.country-boundaries-v1` fill layer with `maxzoom: 4` so it fades into the cluster/pin layers.
+- `feat: year chip filter + stats bar on lifetime map` (b7870ee) — `renderStatsBar`, `renderYearChips`, `applyYearFilter`; filter applies to pins + clusters + counts; stats recompute for the filtered subset.
+- `feat: chronological fade-in on lifetime map (D-lite)` (c89b881) — `chronologicalFadeIn` groups features by `trip_id` in server order, ticks them in over ~1.5s; `wireReplay` for the Replay link; `prefers-reduced-motion` skips the animation.
+- `feat: empty states for in-trip and lifetime map` (d43e792) — Task 17. `has_any_location` + `has_any_qualifying_trips` flags + friendly copy when each is false. Missing-token banner was already in place from earlier tasks.
+
+**Test status:** 423 passing / 0 failing (+1 new lifetime route test).
+
+**Stopped at:** The full 17-task map view plan is shipped. Plan file at `docs/superpowers/plans/2026-05-29-map-view.md` is complete — every checkbox covered.
+
+**Pick up next with:** No concrete next action queued. Open-ended. The plan's "What's intentionally NOT in this plan" list (line 3193) names 12 deferred items if you want to pick one: route lines between pins, dashboard mini-map widget, per-trip exclude-from-lifetime toggle, etc. The other natural next step is a real browser walkthrough — none of the lifetime map's visual behavior (clusters, country paint, fade-in, year filter, replay) was confirmed in a real browser this session.
+
+**Kickoff prompt for next session:**
+
+> The full 17-task map view plan is shipped. Tests are green at 423 passing. The lifetime map (`/map`) was verified server-side via test client (status 200, all expected template hooks present) but NOT visually confirmed in a real browser — clusters, country paint, year chips, fade-in, and Replay link are all untested visually. Either: (a) walk through the lifetime map in a browser to verify, following the 14-point smoke list at `docs/superpowers/plans/2026-05-29-map-view.md:3137`; or (b) pick one of the deferred items from line 3193 (e.g., dashboard mini-map widget, route lines between pins).
+
+**Loose ends:**
+- **Browser walkthrough never happened.** Specifically untested in a real browser: cluster zoom behavior, year-chip filter, country paint at world zoom, chronological fade-in, Replay link, `prefers-reduced-motion` path, drag-correct pin save (from Phase 2).
+- The plan assumed a Bootstrap dropdown for the "Map" nav link, but this codebase uses a custom `.vp-nav` flex layout. I added the link as a top-level `.vp-navlink` between "New trip" and the user area. Worth a sanity look in the browser to make sure it doesn't crowd the nav on smaller widths.
+- `vacation.db.bak` (May 25, 122 KB) still at project root, gitignored. Decide whether to delete next session.
+
 ## 2026-05-30 — Map view Task 10: mini-map teaser on trip overview (Phase 2 complete)
 
 **Shipped:**
