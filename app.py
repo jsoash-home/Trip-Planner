@@ -15,7 +15,7 @@ budget, packing, and sharing arrive in later steps.
 import logging
 import os
 import subprocess
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1010,7 +1010,22 @@ def trip_map(trip_id):
         1 for r in list(trip.bookings) + list(trip.itinerary_items)
         if not (r.location or "").strip()
     )
-    return render_template("trip_map.html", trip=trip, no_location_count=no_loc)
+    days = []
+    if trip.start_date and trip.end_date:
+        n_days = (trip.end_date - trip.start_date).days + 1
+        for i in range(n_days):
+            d = trip.start_date + timedelta(days=i)
+            days.append({
+                "index": i + 1,
+                "date": d.isoformat(),
+                "label": d.strftime("%a %-m/%-d"),
+            })
+    return render_template(
+        "trip_map.html",
+        trip=trip,
+        no_location_count=no_loc,
+        trip_days=days,
+    )
 
 
 @app.route("/trips/<int:trip_id>/map/data.geojson")

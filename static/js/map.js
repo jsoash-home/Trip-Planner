@@ -40,12 +40,55 @@
         .then(function (r) { return r.json(); })
         .then(function (geojson) {
           renderTripPins(map, geojson);
+          wireDayChips(map);
         })
         .catch(function (err) {
           console.error("Failed to load map data:", err);
         });
     });
   };
+
+  function wireDayChips(map) {
+    var chips = document.querySelectorAll(".vp-day-chip-bar .vp-day-chip");
+    if (!chips.length) return;
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        chips.forEach(function (c) { c.setAttribute("aria-pressed", "false"); });
+        chip.setAttribute("aria-pressed", "true");
+        applyDayFilter(map, chip.getAttribute("data-day"));
+      });
+    });
+  }
+
+  function applyDayFilter(map, day) {
+    if (!map.getLayer("vp-pins-layer")) return;
+
+    if (day === "all") {
+      map.setFilter("vp-pins-layer", null);
+    } else if (day === "anytime") {
+      map.setFilter("vp-pins-layer", ["==", ["get", "day_index"], null]);
+    } else {
+      var idx = parseInt(day, 10);
+      map.setFilter("vp-pins-layer", ["==", ["get", "day_index"], idx]);
+    }
+
+    var features = map.querySourceFeatures("vp-pins");
+    if (!features.length) return;
+    var bounds = new mapboxgl.LngLatBounds();
+    features.forEach(function (f) {
+      if (matchesCurrentFilter(map, f)) {
+        bounds.extend(f.geometry.coordinates);
+      }
+    });
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, { padding: 40, maxZoom: 14, duration: 400 });
+    }
+  }
+
+  function matchesCurrentFilter(map, feature) {
+    return true;
+  }
 
   function renderTripPins(map, geojson) {
     map.addSource("vp-pins", { type: "geojson", data: geojson });

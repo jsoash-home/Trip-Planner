@@ -15,6 +15,23 @@
 </div>
 {% else %}
 
+{% if trip_days %}
+<div class="vp-day-chip-bar" role="tablist" aria-label="Filter pins by day">
+  <button type="button" class="vp-day-chip" data-day="all" aria-pressed="true">
+    All days
+  </button>
+  {% for d in trip_days %}
+  <button type="button" class="vp-day-chip"
+          data-day="{{ d.index }}" aria-pressed="false">
+    Day {{ d.index }} · {{ d.label }}
+  </button>
+  {% endfor %}
+  <button type="button" class="vp-day-chip" data-day="anytime" aria-pressed="false">
+    Anytime
+  </button>
+</div>
+{% endif %}
+
 <div id="vp-trip-map"
      class="vp-trip-map"
      data-trip-id="{{ trip.id }}"
