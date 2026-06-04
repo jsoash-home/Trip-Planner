@@ -2004,3 +2004,139 @@ def test_visibility_viewer_forbidden(app, owner, trip, viewer):
     resp = client.post(f"/trips/{trip.id}/yearbook/visibility",
                        json={"show_notes": True, "show_spend": True})
     assert resp.status_code in (403, 404)
+
+
+# ───────────────  Yearbook Task 9: public route + share UI  ──────────
+
+
+def _completed_shared_trip(owner_id: int, **kw) -> Trip:
+    """Completed trip with a public share token pre-set."""
+    t = _make_trip(owner_id, start_offset=-30, end_offset=-25, **kw)
+    t.yearbook_share_token = "abc123token"
+    db.session.commit()
+    return t
+
+
+def test_public_yearbook_valid_token_renders(app, owner):
+    t = _completed_shared_trip(owner.id, name="Scandinavia '24")
+    client = app.test_client()
+    # No login on purpose — public route.
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Scandinavia &#39;24" in body or "Scandinavia '24" in body
+    # No navbar on the public layout.
+    assert "vp-navbar" not in body
+    # Public layout has its own footer marker.
+    assert "Powered by" in body
+
+
+def test_public_yearbook_unknown_token_404(app):
+    client = app.test_client()
+    resp = client.get("/yearbook/this-token-does-not-exist")
+    assert resp.status_code == 404
+
+
+def test_public_yearbook_token_on_in_progress_trip_404(app, owner):
+    t = _make_trip(owner.id, start_offset=-1, end_offset=5)
+    t.yearbook_share_token = "still-running"
+    db.session.commit()
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    assert resp.status_code == 404
+
+
+def test_public_yearbook_response_has_noindex_header(app, owner):
+    t = _completed_shared_trip(owner.id)
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    assert resp.headers.get("X-Robots-Tag") == "noindex, nofollow"
+
+
+def test_public_yearbook_strips_confirmation_numbers(app, owner):
+    t = _completed_shared_trip(owner.id)
+    db.session.add(Booking(
+        trip_id=t.id, type="hotel", title="Plaza",
+        confirmation_number="TOPSECRET-123",
+    ))
+    db.session.commit()
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    body = resp.get_data(as_text=True)
+    assert "TOPSECRET-123" not in body
+
+
+def test_public_yearbook_strips_booking_costs(app, owner):
+    t = _completed_shared_trip(owner.id)
+    db.session.add(Booking(
+        trip_id=t.id, type="hotel", title="Plaza", cost=4999.99,
+    ))
+    db.session.commit()
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    body = resp.get_data(as_text=True)
+    assert "4999.99" not in body
+    # Spend chip aggregates costs — gated by show_spend toggle (default True).
+    # We separately assert nothing reveals the raw per-booking number itself.
+
+
+def test_public_yearbook_hides_notes_when_toggle_off(app, owner):
+    t = _completed_shared_trip(
+        owner.id, notes="A private memory about **the trip**.",
+    )
+    t.yearbook_public_show_notes = False
+    db.session.commit()
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    body = resp.get_data(as_text=True)
+    assert "private memory" not in body
+    assert "yearbook-notes" not in body
+
+
+def test_public_yearbook_includes_notes_when_toggle_on(app, owner):
+    t = _completed_shared_trip(
+        owner.id, notes="A shareable memory.",
+    )
+    t.yearbook_public_show_notes = True
+    db.session.commit()
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    body = resp.get_data(as_text=True)
+    assert "shareable memory" in body
+
+
+def test_public_yearbook_hides_spend_when_toggle_off(app, owner):
+    t = _completed_shared_trip(owner.id)
+    db.session.add(Booking(
+        trip_id=t.id, type="hotel", title="Plaza", cost=500.0, currency="USD",
+    ))
+    t.yearbook_public_show_spend = False
+    db.session.commit()
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    body = resp.get_data(as_text=True)
+    # Spend section markup gone.
+    assert "yearbook-spend" not in body
+
+
+def test_public_yearbook_uses_base_public_template(app, owner):
+    t = _completed_shared_trip(owner.id)
+    client = app.test_client()
+    resp = client.get(f"/yearbook/{t.yearbook_share_token}")
+    body = resp.get_data(as_text=True)
+    assert 'class="vp-public"' in body
+    assert "noindex" in body
+
+
+def test_auth_yearbook_still_renders_after_partial_extraction(app, owner):
+    """Sanity: the auth route still works end-to-end after Task 9
+    moved the body into a shared partial."""
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "yearbook-hero" in body
+    assert "All days at a glance" in body

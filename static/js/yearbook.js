@@ -78,6 +78,85 @@
     }, 2200);
   }
 
+  // ─── Yearbook share buttons ───────────────────────────────────
+  var shareBtns = document.querySelectorAll('[data-share-action]');
+  if (shareBtns.length) {
+    shareBtns.forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var action = btn.getAttribute('data-share-action');
+        if (action === 'copy') return copyShareUrl();
+        var confirmMsg = btn.getAttribute('data-confirm');
+        if (confirmMsg && !window.confirm(confirmMsg)) return;
+        var tripId = btn.getAttribute('data-trip-id');
+        if (!tripId) return;
+        btn.disabled = true;
+        postShare(tripId, action)
+          .then(function () { window.location.reload(); })
+          .catch(function (err) {
+            btn.disabled = false;
+            if (window.console) console.warn('share action failed', err);
+            window.alert('Could not update share link — try again.');
+          });
+      });
+    });
+  }
+
+  var visBoxes = document.querySelectorAll('[data-vis]');
+  if (visBoxes.length) {
+    visBoxes.forEach(function (box) {
+      box.addEventListener('change', function () {
+        var tripId = box.getAttribute('data-trip-id');
+        var body = {};
+        document.querySelectorAll('[data-vis]').forEach(function (b) {
+          body[b.getAttribute('data-vis')] = b.checked;
+        });
+        fetch('/trips/' + tripId + '/yearbook/visibility', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }).catch(function (err) {
+          if (window.console) console.warn('visibility update failed', err);
+        });
+      });
+    });
+  }
+
+  function postShare(tripId, action) {
+    return fetch('/trips/' + tripId + '/yearbook/share', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error('share action ' + action + ' failed: ' + r.status);
+      return r.json();
+    });
+  }
+
+  function copyShareUrl() {
+    var input = document.getElementById('share-url');
+    if (!input) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(function () {
+        flashCopied(input);
+      });
+    } else {
+      // Fallback for older browsers.
+      input.select();
+      try { document.execCommand('copy'); flashCopied(input); } catch (e) {}
+    }
+  }
+
+  function flashCopied(input) {
+    var note = document.createElement('span');
+    note.className = 'yearbook-share__copied';
+    note.textContent = 'Copied!';
+    input.parentNode.appendChild(note);
+    setTimeout(function () { if (note.parentNode) note.parentNode.removeChild(note); }, 1500);
+  }
+
   // ─── Yearbook map mount ───────────────────────────────────────
   var mapEl = document.getElementById('yearbook-map');
   if (mapEl && window.mapboxgl) {

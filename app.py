@@ -26,6 +26,7 @@ from flask import (
     abort,
     flash,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -1807,6 +1808,9 @@ def yearbook(trip_id):
         highlight_groups=highlight_groups,
         total_spend_by_currency=total_spend_by_currency,
         pins_geojson=pins_geojson,
+        static_map_url=None,  # Task 10 wires this in for the auth view too.
+        show_notes=True,
+        show_spend=True,
         view_mode=view_mode,
         user_role=user_role,
     )
@@ -1861,12 +1865,71 @@ def yearbook_share(trip_id):
 
 @app.route("/yearbook/<string:token>")
 def yearbook_public(token):
-    """Placeholder — populated in Task 9 with the public read view.
+    """Public read-only yearbook keyed by opaque share token.
 
-    Defined now so url_for('yearbook_public', token=...) inside the
-    share route can resolve. Until T9 ships, any access 404s.
+    No auth required. 404s when:
+      - the token doesn't match any trip,
+      - the trip isn't completed (sharing in-progress data would leak
+        rows that are still being edited).
+    The page renders via the public base layout (no navbar, noindex,
+    no auth chrome) and runs the view model through sanitize_public_view
+    so private fields like confirmation_number, cost, and collaborator
+    info never reach the template.
     """
-    abort(404)
+    trip = Trip.query.filter_by(yearbook_share_token=token).first()
+    if trip is None:
+        abort(404)
+    today = date.today()
+    if derive_yearbook_view(trip, today) != "final":
+        abort(404)
+
+    bookings = list(trip.bookings)
+    itinerary = list(trip.itinerary_items)
+    stats = compute_trip_stats(trip, bookings, itinerary)
+    highlights = compute_highlight_items(itinerary, trip.start_date)
+    day_strip = days_overview(trip, itinerary)
+    highlight_groups = [
+        (
+            day_num,
+            trip.start_date + timedelta(days=day_num - 1),
+            items,
+        )
+        for day_num, items in sorted(highlights.items())
+    ]
+    total_spend_by_currency: Dict[str, float] = {}
+    for by_cur in stats.spend_by_category.values():
+        for cur, tot in by_cur.items():
+            total_spend_by_currency[cur] = (
+                total_spend_by_currency.get(cur, 0.0) + tot
+            )
+
+    pins = _build_pins_for_trip(trip)
+    static_map_url = build_static_map_url(
+        pins, width=600, height=360, token=MAPBOX_TOKEN,
+    )
+
+    view_model = {
+        "trip": trip,
+        "stats": stats,
+        "highlights": highlights,
+        "highlight_groups": highlight_groups,
+        "day_strip": day_strip,
+        "total_spend_by_currency": total_spend_by_currency,
+        "pins_geojson": {"type": "FeatureCollection", "features": []},
+        "static_map_url": static_map_url,
+        "bookings": bookings,
+        "view_mode": "public",
+        "user_role": "viewer",
+        "mapbox_token": None,  # public view never mounts interactive map
+    }
+    view_model = sanitize_public_view(
+        view_model,
+        show_notes=trip.yearbook_public_show_notes,
+        show_spend=trip.yearbook_public_show_spend,
+    )
+    response = make_response(render_template("yearbook_public.html", **view_model))
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
 
 
 @app.route("/trips/<int:trip_id>/yearbook/visibility", methods=["POST"])

@@ -1,0 +1,174 @@
+{# Shared Yearbook body — included by both yearbook.html (auth view)
+   and yearbook_public.html (public share view). All conditional
+   rendering keys off `view_mode` (preview / final / public) and the
+   `show_notes` / `show_spend` flags set by sanitize_public_view. #}
+
+{% if view_mode != "public" %}
+  <div class="text-muted small mb-2">
+    <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+    &nbsp;›&nbsp; Yearbook
+  </div>
+{% endif %}
+
+<div class="yearbook">
+  <header class="yearbook-hero">
+    <div class="yearbook-emoji" aria-hidden="true">{{ trip.cover_emoji or '🧳' }}</div>
+    <h1 class="yearbook-title">{{ trip.name }}</h1>
+    <p class="yearbook-dates">
+      {{ trip.start_date.strftime('%b %-d') }} – {{ trip.end_date.strftime('%b %-d, %Y') }}
+    </p>
+    {% if view_mode == "preview" %}
+      <div class="yearbook-preview-banner" role="status">
+        🚧 Trip still in progress — this is a preview of your yearbook.
+      </div>
+    {% endif %}
+  </header>
+
+  <section class="yearbook-numbers" aria-label="Trip stats">
+    <div class="yb-chip">📅 {{ stats.days_away }} day{{ '' if stats.days_away == 1 else 's' }}</div>
+    {% if stats.country_count %}
+      <div class="yb-chip">🌍 {{ stats.country_count }} countr{{ 'y' if stats.country_count == 1 else 'ies' }}</div>
+    {% endif %}
+    {% if stats.city_count %}
+      <div class="yb-chip">🏙️ {{ stats.city_count }} cit{{ 'y' if stats.city_count == 1 else 'ies' }}</div>
+    {% endif %}
+    {% for type, n in stats.bookings_by_type.items() %}
+      <div class="yb-chip">{{ booking_type_emoji(type) }} {{ n }} {{ booking_type_label(type) }}</div>
+    {% endfor %}
+  </section>
+
+  {% if show_spend and total_spend_by_currency %}
+    <section class="yearbook-spend" aria-label="Spend totals">
+      <div class="yb-chip yb-chip--spend">
+        💰
+        {% for currency in total_spend_by_currency.keys()|sort %}
+          {{ format_money(total_spend_by_currency[currency], currency) }}{% if not loop.last %} + {% endif %}
+        {% endfor %}
+      </div>
+      {% if stats.biggest_spend_category %}
+        <span class="yearbook-spend-note">
+          · Biggest: {{ booking_type_label(stats.biggest_spend_category) }}
+        </span>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {% if static_map_url or (pins_geojson and pins_geojson.features and mapbox_token) %}
+    <section class="yearbook-map" aria-label="Trip route">
+      {% if static_map_url %}
+        <img class="yearbook-map__static" src="{{ static_map_url }}" alt="Trip route map">
+      {% endif %}
+      {% if view_mode != "public" and pins_geojson and pins_geojson.features and mapbox_token %}
+        <div id="yearbook-map"
+             class="yearbook-map__interactive"
+             data-pins='{{ pins_geojson | tojson | e }}'
+             data-token="{{ mapbox_token }}"></div>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  <section class="yearbook-highlights" aria-label="Highlights">
+    <h2 class="yearbook-section-h">
+      ★ Highlights{% if stats.starred_count %} ({{ stats.starred_count }}){% endif %}
+    </h2>
+    {% if highlight_groups %}
+      {% for day_num, day_date, items in highlight_groups %}
+        <div class="yearbook-day">
+          <h3 class="yearbook-day-h">
+            Day {{ day_num }} · {{ day_date.strftime('%b %-d') }}
+          </h3>
+          <div class="yearbook-day-cards">
+            {% for item in items %}
+              {% include "_yearbook_highlight_card.html" %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    {% elif view_mode != "public" %}
+      <p class="yearbook-highlights-nudge">
+        {% if view_mode == "preview" %}
+          ★ Star items on your itinerary as the trip unfolds — they'll show up here.
+        {% else %}
+          ★ Star items on your itinerary to remember the standouts.
+        {% endif %}
+        <a href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Go to itinerary →</a>
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="yearbook-days" aria-label="All days at a glance">
+    <h2 class="yearbook-section-h">All days at a glance</h2>
+    {% for day in day_strip %}
+      <div class="yearbook-day-row">
+        <div class="yearbook-day-row__header">
+          Day {{ day.number }} · {{ day.date.strftime('%a %b %-d') }}
+        </div>
+        <div class="yearbook-day-row__chips">
+          {% if day.items %}
+            {% for item in day.items %}
+              <span class="yb-day-chip {{ category_css(item.category) }}"
+                    title="{{ item.title }}{% if item.start_time %} · {{ format_time_range(item.start_time, item.end_time) }}{% endif %}">
+                <span aria-hidden="true">{{ category_emoji(item.category) }}</span>
+                {{ item.title }}
+              </span>
+            {% endfor %}
+          {% else %}
+            <span class="yearbook-day-row__empty">—</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </section>
+
+  {% if show_notes and trip.notes %}
+    <section class="yearbook-notes card">
+      <div class="card-body markdown">{{ trip.notes | markdown | safe }}</div>
+    </section>
+  {% endif %}
+
+  {# Share UI — only on the authenticated final view, for editors+. #}
+  {% if view_mode == "final" and user_role in ("editor", "owner") %}
+    <section class="yearbook-share" aria-label="Share publicly">
+      <h2 class="yearbook-section-h">Share publicly</h2>
+      {% if trip.yearbook_share_token %}
+        <div class="yearbook-share__on">
+          <input type="text" class="form-control" readonly
+                 id="share-url"
+                 value="{{ url_for('yearbook_public', token=trip.yearbook_share_token, _external=True) }}">
+          <div class="yearbook-share__actions">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-share-action="copy">Copy</button>
+            <button type="button" class="btn btn-sm btn-outline-warning"
+                    data-share-action="rotate"
+                    data-trip-id="{{ trip.id }}"
+                    data-confirm="Replace the current public link?">New link</button>
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    data-share-action="disable"
+                    data-trip-id="{{ trip.id }}"
+                    data-confirm="Revoke the public link?">Revoke</button>
+          </div>
+          <div class="yearbook-share__visibility">
+            <label>
+              <input type="checkbox" data-vis="show_notes" data-trip-id="{{ trip.id }}"
+                     {% if trip.yearbook_public_show_notes %}checked{% endif %}>
+              Include notes
+            </label>
+            <label>
+              <input type="checkbox" data-vis="show_spend" data-trip-id="{{ trip.id }}"
+                     {% if trip.yearbook_public_show_spend %}checked{% endif %}>
+              Include spend totals
+            </label>
+          </div>
+        </div>
+      {% else %}
+        <div class="yearbook-share__off">
+          <p class="text-muted mb-2">🔒 Yearbook is private.</p>
+          <button type="button" class="btn btn-primary btn-sm"
+                  data-share-action="enable"
+                  data-trip-id="{{ trip.id }}">
+            Create public link
+          </button>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+</div>

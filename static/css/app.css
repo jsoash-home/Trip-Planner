@@ -1781,3 +1781,48 @@
 }
 
 .yearbook-notes { margin-top: 1.5rem; }
+.yearbook-map__static {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+}
+
+/* Share UI on the auth final view. */
+.yearbook-share { margin-top: 2rem; padding: 1rem 0; border-top: 1px solid var(--vp-border); }
+.yearbook-share__on,
+.yearbook-share__off { max-width: 540px; }
+.yearbook-share__actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.yearbook-share__visibility {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--vp-text-muted);
+}
+.yearbook-share__visibility label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  cursor: pointer;
+}
+.yearbook-share__copied {
+  margin-left: 0.5rem;
+  color: var(--vp-success, #3a8c70);
+  font-size: 0.85rem;
+}
+
+/* Public yearbook layout (no navbar). */
+body.vp-public main { padding-top: 2rem; }
+.vp-public-footer {
+  border-top: 1px solid var(--vp-border);
+  text-align: center;
+  padding: 1.5rem 0 2.5rem;
+  margin-top: 3rem;
+}
+.vp-public-footer a { color: var(--vp-accent); text-decoration: none; }
