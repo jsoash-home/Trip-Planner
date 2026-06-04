@@ -1453,3 +1453,116 @@ def test_lifetime_map_data_includes_owned_completed_trips(
     titles = [f["properties"]["title"] for f in payload["features"]]
     assert "X" in titles
     assert "Y" not in titles  # future trip excluded
+
+
+# ───────────────  Yearbook Task 3: Star toggle route  ─────────────────
+
+
+def _make_starrable_item(trip_id: int) -> ItineraryItem:
+    item = ItineraryItem(
+        trip_id=trip_id,
+        day_date=date(2026, 6, 2),
+        title="Vasa Museum",
+    )
+    db.session.add(item)
+    db.session.commit()
+    return item
+
+
+def test_star_toggle_editor_flips_false_to_true(app, trip, editor):
+    item = _make_starrable_item(trip.id)
+    assert item.starred is False
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(editor.id)
+
+    resp = client.post(f"/trips/{trip.id}/items/{item.id}/star")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"starred": True}
+    db.session.refresh(item)
+    assert item.starred is True
+
+
+def test_star_toggle_editor_flips_true_to_false(app, trip, editor):
+    item = _make_starrable_item(trip.id)
+    item.starred = True
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(editor.id)
+
+    resp = client.post(f"/trips/{trip.id}/items/{item.id}/star")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"starred": False}
+    db.session.refresh(item)
+    assert item.starred is False
+
+
+def test_star_toggle_owner_allowed(app, trip, owner):
+    item = _make_starrable_item(trip.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    resp = client.post(f"/trips/{trip.id}/items/{item.id}/star")
+    assert resp.status_code == 200
+    db.session.refresh(item)
+    assert item.starred is True
+
+
+def test_star_toggle_viewer_forbidden(app, trip, viewer):
+    item = _make_starrable_item(trip.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+
+    resp = client.post(f"/trips/{trip.id}/items/{item.id}/star")
+    # Project convention: insufficient role returns 404 so the trip's
+    # existence can't be probed by guess. Accept 403 too in case a
+    # later refactor distinguishes the cases.
+    assert resp.status_code in (403, 404)
+    db.session.refresh(item)
+    assert item.starred is False  # unchanged
+
+
+def test_star_toggle_non_collaborator_404(app, trip):
+    item = _make_starrable_item(trip.id)
+    stranger = User(google_id="g99", email="stranger@e.com", name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(stranger.id)
+
+    resp = client.post(f"/trips/{trip.id}/items/{item.id}/star")
+    assert resp.status_code == 404
+
+
+def test_star_toggle_item_belongs_to_different_trip_404(app, owner, trip, editor):
+    # Item on a second trip — but editor only has access to the first.
+    other_trip = Trip(owner_id=owner.id, name="Other",
+                     start_date=date(2026, 7, 1), end_date=date(2026, 7, 5))
+    db.session.add(other_trip)
+    db.session.commit()
+    other_item = _make_starrable_item(other_trip.id)
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(editor.id)
+
+    # Editor has access to `trip`, but we POST with other_item.id in the
+    # path — the trip_id/item_id mismatch must 404.
+    resp = client.post(f"/trips/{trip.id}/items/{other_item.id}/star")
+    assert resp.status_code == 404
+
+
+def test_star_toggle_unknown_item_404(app, trip, editor):
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(editor.id)
+
+    resp = client.post(f"/trips/{trip.id}/items/999999/star")
+    assert resp.status_code == 404

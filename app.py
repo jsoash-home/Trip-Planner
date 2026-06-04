@@ -1673,6 +1673,24 @@ def itinerary_delete(trip_id, item_id):
     return redirect(url_for("trip_itinerary", trip_id=trip.id))
 
 
+@app.route("/trips/<int:trip_id>/items/<int:item_id>/star", methods=["POST"])
+@login_required
+def itinerary_item_star_toggle(trip_id, item_id):
+    """Flip an itinerary item's `starred` flag for the Yearbook
+    Highlights section. Editor+ only; returns the new value as JSON
+    so the page can update the glyph without reloading."""
+    _trip, item, _user_role = _itinerary_item_with_access_or_404(
+        trip_id, item_id, role="editor"
+    )
+    item.starred = not bool(item.starred)
+    db.session.commit()
+    logger.info(
+        "Star toggle: item id=%s trip_id=%s -> starred=%s",
+        item.id, trip_id, item.starred,
+    )
+    return jsonify({"starred": item.starred})
+
+
 @app.route("/trips/<int:trip_id>/itinerary/drift-review")
 @login_required
 def itinerary_drift_review(trip_id):
