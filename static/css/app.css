@@ -1672,4 +1672,13 @@
 }
 .yb-chip--spend { font-weight: 600; }
 .yearbook-spend-note { color: var(--vp-text-muted); font-size: 0.9rem; align-self: center; }
+.yearbook-map { margin: 1.5rem 0; }
+#yearbook-map {
+  height: 360px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  #yearbook-map { height: 240px; }
+}
 .yearbook-notes { margin-top: 1.5rem; }

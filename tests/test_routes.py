@@ -1702,3 +1702,61 @@ def test_yearbook_skips_notes_section_when_blank(app, owner):
     resp = client.get(f"/trips/{t.id}/yearbook")
     body = resp.get_data(as_text=True)
     assert "yearbook-notes" not in body
+
+
+# ───────────────  Yearbook Task 6: interactive map block  ─────────────
+
+
+def test_yearbook_renders_map_block_when_pins_exist(app, owner, monkeypatch):
+    monkeypatch.setattr("app.MAPBOX_TOKEN", "pk.test")
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    db.session.add(Booking(
+        trip_id=t.id, type="hotel", title="Plaza",
+        location="Plaza Hotel",
+        geocoded_lat=59.33, geocoded_lng=18.07,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    assert 'id="yearbook-map"' in body
+    # Map JS + CSS only load when there are pins.
+    assert "mapbox-gl.css" in body
+
+
+def test_yearbook_omits_map_block_when_no_pins(app, owner, monkeypatch):
+    monkeypatch.setattr("app.MAPBOX_TOKEN", "pk.test")
+    # No bookings + no itinerary → no pins.
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    assert 'id="yearbook-map"' not in body
+    # No need to pull mapbox-gl when there's nothing to map.
+    assert "mapbox-gl.css" not in body
+
+
+def test_yearbook_passes_geojson_to_template(app, owner, monkeypatch):
+    monkeypatch.setattr("app.MAPBOX_TOKEN", "pk.test")
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    db.session.add(Booking(
+        trip_id=t.id, type="hotel", title="Vasa Museum",
+        location="Galärvarvsvägen 14",
+        geocoded_lat=59.328, geocoded_lng=18.092,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    # The pins payload is rendered into the data-pins attribute.
+    assert "data-pins=" in body
+    assert "FeatureCollection" in body
+    assert "Vasa Museum" in body

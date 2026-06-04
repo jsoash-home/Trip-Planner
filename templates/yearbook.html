@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Yearbook — {{ trip.name }}{% endblock %}
 
+{% block head_extra %}
+  {% if pins_geojson and pins_geojson.features and mapbox_token %}
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  {% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="text-muted small mb-2">
   <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
@@ -50,7 +57,15 @@
     </section>
   {% endif %}
 
-  {# Tasks 6 + 7 will insert the map and highlights here. #}
+  {% if pins_geojson and pins_geojson.features and mapbox_token %}
+    <section class="yearbook-map" aria-label="Trip route">
+      <div id="yearbook-map"
+           data-pins='{{ pins_geojson | tojson | e }}'
+           data-token="{{ mapbox_token }}"></div>
+    </section>
+  {% endif %}
+
+  {# Task 7 will insert highlights + all-days strip here. #}
 
   {% if trip.notes %}
     <section class="yearbook-notes card">

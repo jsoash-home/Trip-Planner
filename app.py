@@ -1772,6 +1772,11 @@ def yearbook(trip_id):
                 total_spend_by_currency.get(cur, 0.0) + tot
             )
 
+    # Pins for the interactive Mapbox block. Empty FeatureCollection when
+    # no geocoded rows — template hides the map section in that case.
+    pins = _build_pins_for_trip(trip)
+    pins_geojson = pins_to_geojson(pins, lambda p: color_for_category(p.category))
+
     return render_template(
         "yearbook.html",
         trip=trip,
@@ -1780,6 +1785,7 @@ def yearbook(trip_id):
         countries=countries,
         day_strip=day_strip,
         total_spend_by_currency=total_spend_by_currency,
+        pins_geojson=pins_geojson,
         view_mode=view_mode,
         user_role=user_role,
     )

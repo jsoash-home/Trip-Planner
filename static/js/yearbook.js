@@ -77,4 +77,60 @@
       if (chip.parentNode) chip.parentNode.removeChild(chip);
     }, 2200);
   }
+
+  // ─── Yearbook map mount ───────────────────────────────────────
+  var mapEl = document.getElementById('yearbook-map');
+  if (mapEl && window.mapboxgl) {
+    mountYearbookMap(mapEl);
+  }
+
+  function mountYearbookMap(el) {
+    var token = el.getAttribute('data-token');
+    var pinsRaw = el.getAttribute('data-pins');
+    if (!token || !pinsRaw) return;
+
+    var fc;
+    try {
+      fc = JSON.parse(pinsRaw);
+    } catch (e) {
+      if (window.console) console.warn('yearbook map: bad pins payload', e);
+      return;
+    }
+    if (!fc || !fc.features || !fc.features.length) return;
+
+    window.mapboxgl.accessToken = token;
+    var map = new window.mapboxgl.Map({
+      container: el,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      attributionControl: true,
+    });
+
+    map.on('load', function () {
+      map.addSource('yearbook-pins', { type: 'geojson', data: fc });
+      map.addLayer({
+        id: 'yearbook-pin-circles',
+        type: 'circle',
+        source: 'yearbook-pins',
+        paint: {
+          'circle-radius': 7,
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+
+      // Fit bounds to the pins. Single-pin trip → center + fixed zoom.
+      if (fc.features.length === 1) {
+        var c = fc.features[0].geometry.coordinates;
+        map.setCenter(c);
+        map.setZoom(10);
+        return;
+      }
+      var bounds = new window.mapboxgl.LngLatBounds();
+      fc.features.forEach(function (f) {
+        bounds.extend(f.geometry.coordinates);
+      });
+      map.fitBounds(bounds, { padding: 40, maxZoom: 11, duration: 0 });
+    });
+  }
 }());
