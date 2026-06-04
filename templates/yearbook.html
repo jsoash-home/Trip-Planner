@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Yearbook — {{ trip.name }}{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Yearbook
+</div>
+
+<div class="yearbook">
+  <header class="yearbook-hero">
+    <div class="yearbook-emoji" aria-hidden="true">{{ trip.cover_emoji or '🧳' }}</div>
+    <h1 class="yearbook-title">{{ trip.name }}</h1>
+    <p class="yearbook-dates">
+      {{ trip.start_date.strftime('%b %-d') }} – {{ trip.end_date.strftime('%b %-d, %Y') }}
+    </p>
+    {% if view_mode == "preview" %}
+      <div class="yearbook-preview-banner" role="status">
+        🚧 Trip still in progress — this is a preview of your yearbook.
+      </div>
+    {% endif %}
+  </header>
+
+  <section class="yearbook-numbers" aria-label="Trip stats">
+    <div class="yb-chip">📅 {{ stats.days_away }} day{{ '' if stats.days_away == 1 else 's' }}</div>
+    {% if stats.country_count %}
+      <div class="yb-chip">🌍 {{ stats.country_count }} countr{{ 'y' if stats.country_count == 1 else 'ies' }}</div>
+    {% endif %}
+    {% if stats.city_count %}
+      <div class="yb-chip">🏙️ {{ stats.city_count }} cit{{ 'y' if stats.city_count == 1 else 'ies' }}</div>
+    {% endif %}
+    {% for type, n in stats.bookings_by_type.items() %}
+      <div class="yb-chip">{{ booking_type_emoji(type) }} {{ n }} {{ booking_type_label(type) }}</div>
+    {% endfor %}
+  </section>
+
+  {% if total_spend_by_currency %}
+    <section class="yearbook-spend" aria-label="Spend totals">
+      <div class="yb-chip yb-chip--spend">
+        💰
+        {% for currency in total_spend_by_currency.keys()|sort %}
+          {{ format_money(total_spend_by_currency[currency], currency) }}{% if not loop.last %} + {% endif %}
+        {% endfor %}
+      </div>
+      {% if stats.biggest_spend_category %}
+        <span class="yearbook-spend-note">
+          · Biggest: {{ booking_type_label(stats.biggest_spend_category) }}
+        </span>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {# Tasks 6 + 7 will insert the map and highlights here. #}
+
+  {% if trip.notes %}
+    <section class="yearbook-notes card">
+      <div class="card-body markdown">{{ trip.notes | markdown | safe }}</div>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/yearbook.js') }}" defer></script>
+{% endblock %}

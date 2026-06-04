@@ -2,16 +2,26 @@
 
    `tiles` is a list of dicts: {emoji, name, summary, url, status}
    where status is "ready" or "soon" (controls the muted styling).
+   When `url` is None the tile renders as a plain (non-link) <div>
+   so a not-yet-available section can't be clicked.
 #}
 {% macro section_tiles(tiles) %}
 <div class="section-tiles">
   {% for tile in tiles %}
-    <a class="section-tile section-tile--{{ tile.status }}"
-       href="{{ tile.url }}">
-      <div class="section-tile-emoji" aria-hidden="true">{{ tile.emoji }}</div>
-      <div class="section-tile-name">{{ tile.name }}</div>
-      <div class="section-tile-summary">{{ tile.summary }}</div>
-    </a>
+    {% if tile.url %}
+      <a class="section-tile section-tile--{{ tile.status }}"
+         href="{{ tile.url }}">
+        <div class="section-tile-emoji" aria-hidden="true">{{ tile.emoji }}</div>
+        <div class="section-tile-name">{{ tile.name }}</div>
+        <div class="section-tile-summary">{{ tile.summary }}</div>
+      </a>
+    {% else %}
+      <div class="section-tile section-tile--{{ tile.status }}" aria-disabled="true">
+        <div class="section-tile-emoji" aria-hidden="true">{{ tile.emoji }}</div>
+        <div class="section-tile-name">{{ tile.name }}</div>
+        <div class="section-tile-summary">{{ tile.summary }}</div>
+      </div>
+    {% endif %}
   {% endfor %}
 </div>
 {% endmacro %}

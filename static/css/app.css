@@ -1636,3 +1636,40 @@
   transition: opacity 0.6s ease;
 }
 .star-toggle-error.is-fading { opacity: 0; }
+
+/* ── Yearbook page ─────────────────────────────────────────────── */
+.yearbook { max-width: 920px; margin: 0 auto; }
+.yearbook-hero {
+  text-align: center;
+  padding: 2rem 1rem 1.25rem;
+}
+.yearbook-emoji { font-size: 3rem; line-height: 1; }
+.yearbook-title { margin: 0.5rem 0 0.25rem; }
+.yearbook-dates { color: var(--vp-text-muted); margin: 0; }
+.yearbook-preview-banner {
+  margin: 1rem auto 0;
+  max-width: 540px;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  background: #fff4d6;
+  color: #6b4a00;
+  border: 1px solid #f1d27a;
+}
+.yearbook-numbers,
+.yearbook-spend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.yb-chip {
+  background: var(--vp-bg);
+  border: 1px solid var(--vp-border);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.9rem;
+}
+.yb-chip--spend { font-weight: 600; }
+.yearbook-spend-note { color: var(--vp-text-muted); font-size: 0.9rem; align-self: center; }
+.yearbook-notes { margin-top: 1.5rem; }

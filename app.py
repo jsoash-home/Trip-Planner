@@ -60,6 +60,8 @@ from src.booking_helpers import (
     NewItemSuggestion,
     auto_itinerary_items_for_booking,
     booking_form_values,
+    booking_type_emoji,
+    booking_type_label,
     clear_stale_geocode_on_booking_edit,
     detect_drift,
     format_datetime_range,
@@ -123,6 +125,13 @@ from src.trip_helpers import (
     status_label,
     themed_countdown_label,
     trip_form_values,
+)
+from src.yearbook import (
+    compute_country_list,
+    compute_highlight_items,
+    compute_trip_stats,
+    days_overview,
+    derive_yearbook_view,
 )
 
 # ─── Logging ────────────────────────────────────────────────────────
@@ -325,6 +334,8 @@ app.jinja_env.globals.update(
     format_time_range=format_time_range,
     category_emoji=category_emoji,
     category_css=category_css,
+    booking_type_emoji=booking_type_emoji,
+    booking_type_label=booking_type_label,
     can_edit=can_edit,
     is_owner=is_owner,
     packing_progress_for_group=packing_progress_for_group,
@@ -695,7 +706,46 @@ def _section_tiles_for(trip: Trip):
             "url": url_for("trip_share", trip_id=trip.id),
             "status": "ready",
         },
+        _yearbook_tile(trip),
     ]
+
+
+def _yearbook_tile(trip: Trip) -> dict:
+    """Build the Yearbook section tile.
+
+    Subtitle and clickability change with the trip's date-derived
+    state — hidden tiles are non-links until the trip starts.
+    """
+    today = date.today()
+    view = derive_yearbook_view(trip, today)
+    if view == "hidden":
+        return {
+            "emoji": "📓",
+            "name": "Yearbook",
+            "summary": "After the trip",
+            "url": None,
+            "status": "soon",
+        }
+    if view == "preview":
+        return {
+            "emoji": "📓",
+            "name": "Yearbook",
+            "summary": "Preview while in progress",
+            "url": url_for("yearbook", trip_id=trip.id),
+            "status": "ready",
+        }
+    # final
+    n = ItineraryItem.query.filter_by(trip_id=trip.id, starred=True).count()
+    summary = (
+        f"{n} highlight{'s' if n != 1 else ''}" if n else "Yearbook ready"
+    )
+    return {
+        "emoji": "📓",
+        "name": "Yearbook",
+        "summary": summary,
+        "url": url_for("yearbook", trip_id=trip.id),
+        "status": "ready",
+    }
 
 
 def _map_tile_summary(trip: Trip) -> str:
@@ -1689,6 +1739,50 @@ def itinerary_item_star_toggle(trip_id, item_id):
         item.id, trip_id, item.starred,
     )
     return jsonify({"starred": item.starred})
+
+
+@app.route("/trips/<int:trip_id>/yearbook")
+@login_required
+def yearbook(trip_id):
+    """Trip Yearbook — per-trip retrospective.
+
+    View modes:
+      - preview: trip is in progress; same content + a banner
+      - final:   trip is completed; the keepsake view
+      - hidden:  trip hasn't started → 404
+    """
+    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
+    today = date.today()
+    view_mode = derive_yearbook_view(trip, today)
+    if view_mode == "hidden":
+        abort(404)
+
+    bookings = list(trip.bookings)
+    itinerary = list(trip.itinerary_items)
+    stats = compute_trip_stats(trip, bookings, itinerary)
+    highlights = compute_highlight_items(itinerary, trip.start_date)
+    countries = compute_country_list(bookings, itinerary)
+    day_strip = days_overview(trip, itinerary)
+
+    # Flat per-currency spend used by the chip row; saves a Jinja filter.
+    total_spend_by_currency: Dict[str, float] = {}
+    for by_cur in stats.spend_by_category.values():
+        for cur, tot in by_cur.items():
+            total_spend_by_currency[cur] = (
+                total_spend_by_currency.get(cur, 0.0) + tot
+            )
+
+    return render_template(
+        "yearbook.html",
+        trip=trip,
+        stats=stats,
+        highlights=highlights,
+        countries=countries,
+        day_strip=day_strip,
+        total_spend_by_currency=total_spend_by_currency,
+        view_mode=view_mode,
+        user_role=user_role,
+    )
 
 
 @app.route("/trips/<int:trip_id>/itinerary/drift-review")

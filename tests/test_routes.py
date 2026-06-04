@@ -1566,3 +1566,139 @@ def test_star_toggle_unknown_item_404(app, trip, editor):
 
     resp = client.post(f"/trips/{trip.id}/items/999999/star")
     assert resp.status_code == 404
+
+
+# ───────────────  Yearbook Task 5: page route + skeleton  ─────────────
+
+
+from datetime import timedelta as _td
+
+
+def _make_trip(owner_id: int, *, start_offset: int, end_offset: int, **kw):
+    """Create a Trip whose dates land in a chosen state relative to today.
+
+    start_offset / end_offset are days from today. So
+    (-30, -20) → completed, (-1, +5) → in_progress, (+30, +35) → planning.
+    """
+    today = date.today()
+    t = Trip(
+        owner_id=owner_id,
+        name=kw.get("name", "Test trip"),
+        start_date=today + _td(days=start_offset),
+        end_date=today + _td(days=end_offset),
+        notes=kw.get("notes"),
+    )
+    db.session.add(t)
+    db.session.commit()
+    return t
+
+
+def test_yearbook_planning_returns_404(app, owner):
+    t = _make_trip(owner.id, start_offset=30, end_offset=35)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    assert resp.status_code == 404
+
+
+def test_yearbook_upcoming_returns_404(app, owner):
+    # "Upcoming" maps to planning in derive_status — hidden either way.
+    t = _make_trip(owner.id, start_offset=1, end_offset=5)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    assert resp.status_code == 404
+
+
+def test_yearbook_in_progress_returns_200_with_preview_banner(app, owner):
+    t = _make_trip(owner.id, start_offset=-1, end_offset=5)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "preview of your yearbook" in body
+
+
+def test_yearbook_completed_returns_200_no_preview_banner(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-20)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "preview of your yearbook" not in body
+
+
+def test_yearbook_viewer_allowed(app, owner, trip, viewer):
+    # Bring the shared `trip` fixture into completed state.
+    today = date.today()
+    trip.start_date = today - _td(days=30)
+    trip.end_date = today - _td(days=20)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+    resp = client.get(f"/trips/{trip.id}/yearbook")
+    assert resp.status_code == 200
+
+
+def test_yearbook_non_collaborator_404(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-20)
+    stranger = User(google_id="g99", email="stranger@e.com", name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(stranger.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    assert resp.status_code == 404
+
+
+def test_yearbook_renders_stats_chips(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    db.session.add_all([
+        Booking(trip_id=t.id, type="flight", title="UA101"),
+        Booking(trip_id=t.id, type="hotel", title="Plaza"),
+    ])
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    # 6-day trip, 1 flight, 1 hotel — all three chips should appear.
+    assert "6 days" in body
+    assert "1 Flights" in body
+    assert "1 Hotels" in body
+
+
+def test_yearbook_renders_notes_when_present(app, owner):
+    t = _make_trip(
+        owner.id, start_offset=-30, end_offset=-20,
+        notes="What a **trip**.",
+    )
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    assert "yearbook-notes" in body
+    assert "<strong>trip</strong>" in body  # markdown rendered
+
+
+def test_yearbook_skips_notes_section_when_blank(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-20, notes=None)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    assert "yearbook-notes" not in body
