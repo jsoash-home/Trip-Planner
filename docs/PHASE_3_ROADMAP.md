@@ -37,7 +37,7 @@ Two threads:
 
 | #  | Feature                              | Effort        | Status      | Plan |
 |----|--------------------------------------|---------------|-------------|------|
-| A1 | Trip Yearbook                        | medium        | speccing    | _to be written_ |
+| A1 | Trip Yearbook                        | medium        | ✓ shipped   | [2026-05-31-trip-yearbook.md](superpowers/plans/2026-05-31-trip-yearbook.md) |
 | A3 | "On this day" tickler                | small         | not started | _to be written_ |
 | A2 | Lifetime stats dashboard             | small         | not started | _to be written_ |
 | B1 | Weather forecast on itinerary        | small-medium  | not started | _to be written_ |
