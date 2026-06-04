@@ -244,6 +244,30 @@ def _ensure_trip_columns() -> None:
                 logger.warning("Migration skipped (%s): %s", stmt, e)
 
 
+def _ensure_yearbook_columns() -> None:
+    """
+    Add yearbook columns introduced by the Trip Yearbook feature: a
+    star flag per itinerary item, plus a share token + two visibility
+    toggles per trip. Same swallow-on-duplicate pattern as the other
+    _ensure_* helpers — re-runs are no-ops.
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE itinerary_item ADD COLUMN starred BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE trip ADD COLUMN yearbook_share_token VARCHAR(32)",
+        "CREATE UNIQUE INDEX ix_trip_yearbook_share_token ON trip (yearbook_share_token)",
+        "ALTER TABLE trip ADD COLUMN yearbook_public_show_notes BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE trip ADD COLUMN yearbook_public_show_spend BOOLEAN NOT NULL DEFAULT 1",
+    ]
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+                logger.info("Migration: applied %s", stmt)
+            except Exception as e:
+                logger.warning("Migration skipped (%s): %s", stmt, e)
+
+
 def _ensure_geocoding_columns() -> None:
     """
     Add geocoding columns to booking + itinerary_item (added by the
@@ -280,6 +304,7 @@ with app.app_context():
     _ensure_drift_columns()
     _ensure_trip_columns()
     _ensure_geocoding_columns()
+    _ensure_yearbook_columns()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)

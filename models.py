@@ -56,6 +56,15 @@ class Trip(db.Model):
     primary_currency = db.Column(db.String(3), nullable=False, default="USD")
     notes = db.Column(db.Text, nullable=True)
 
+    # ── Yearbook public-share (Phase 3) ───────────────────────────────
+    # Opaque token that grants read access to /yearbook/<token>. NULL
+    # means the yearbook is private. Generated/rotated/revoked from the
+    # share UI on the authenticated yearbook page.
+    yearbook_share_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
+    # Per-trip toggles that gate what the public view exposes.
+    yearbook_public_show_notes = db.Column(db.Boolean, nullable=False, default=False)
+    yearbook_public_show_spend = db.Column(db.Boolean, nullable=False, default=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -164,6 +173,10 @@ class ItineraryItem(db.Model):
     category = db.Column(db.String(20), nullable=False, default="other")
     location = db.Column(db.String(300), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+
+    # Yearbook ★ highlight flag — set from the itinerary page, surfaced
+    # in the Highlights section of /yearbook.
+    starred = db.Column(db.Boolean, nullable=False, default=False)
 
     # Sort order for items at the same time / untimed items on the same day.
     order_within_day = db.Column(db.Integer, nullable=False, default=0)
