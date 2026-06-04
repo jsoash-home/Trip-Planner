@@ -1764,6 +1764,18 @@ def yearbook(trip_id):
     countries = compute_country_list(bookings, itinerary)
     day_strip = days_overview(trip, itinerary)
 
+    # Turn the highlights dict into a sorted list of (day_num, day_date,
+    # items) so the template can render the day header date without a
+    # custom date-from-day-num filter.
+    highlight_groups = [
+        (
+            day_num,
+            trip.start_date + timedelta(days=day_num - 1),
+            items,
+        )
+        for day_num, items in sorted(highlights.items())
+    ]
+
     # Flat per-currency spend used by the chip row; saves a Jinja filter.
     total_spend_by_currency: Dict[str, float] = {}
     for by_cur in stats.spend_by_category.values():
@@ -1784,6 +1796,7 @@ def yearbook(trip_id):
         highlights=highlights,
         countries=countries,
         day_strip=day_strip,
+        highlight_groups=highlight_groups,
         total_spend_by_currency=total_spend_by_currency,
         pins_geojson=pins_geojson,
         view_mode=view_mode,

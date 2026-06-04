@@ -65,7 +65,58 @@
     </section>
   {% endif %}
 
-  {# Task 7 will insert highlights + all-days strip here. #}
+  <section class="yearbook-highlights" aria-label="Highlights">
+    <h2 class="yearbook-section-h">
+      ★ Highlights{% if stats.starred_count %} ({{ stats.starred_count }}){% endif %}
+    </h2>
+    {% if highlight_groups %}
+      {% for day_num, day_date, items in highlight_groups %}
+        <div class="yearbook-day">
+          <h3 class="yearbook-day-h">
+            Day {{ day_num }} · {{ day_date.strftime('%b %-d') }}
+          </h3>
+          <div class="yearbook-day-cards">
+            {% for item in items %}
+              {% include "_yearbook_highlight_card.html" %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="yearbook-highlights-nudge">
+        {% if view_mode == "preview" %}
+          ★ Star items on your itinerary as the trip unfolds — they'll show up here.
+        {% else %}
+          ★ Star items on your itinerary to remember the standouts.
+        {% endif %}
+        <a href="{{ url_for('trip_itinerary', trip_id=trip.id) }}">Go to itinerary →</a>
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="yearbook-days" aria-label="All days at a glance">
+    <h2 class="yearbook-section-h">All days at a glance</h2>
+    {% for day in day_strip %}
+      <div class="yearbook-day-row">
+        <div class="yearbook-day-row__header">
+          Day {{ day.number }} · {{ day.date.strftime('%a %b %-d') }}
+        </div>
+        <div class="yearbook-day-row__chips">
+          {% if day.items %}
+            {% for item in day.items %}
+              <span class="yb-day-chip {{ category_css(item.category) }}"
+                    title="{{ item.title }}{% if item.start_time %} · {{ format_time_range(item.start_time, item.end_time) }}{% endif %}">
+                <span aria-hidden="true">{{ category_emoji(item.category) }}</span>
+                {{ item.title }}
+              </span>
+            {% endfor %}
+          {% else %}
+            <span class="yearbook-day-row__empty">—</span>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </section>
 
   {% if trip.notes %}
     <section class="yearbook-notes card">

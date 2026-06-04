@@ -1,0 +1,19 @@
+{# One starred item rendered as a card in the Yearbook Highlights
+   section. `item` is an ItineraryItem; access is read-only here. #}
+<div class="yearbook-card {{ category_css(item.category) }}">
+  <div class="yearbook-card__title">
+    <span aria-hidden="true">{{ category_emoji(item.category) }}</span>
+    {{ item.title }}
+  </div>
+  {% if item.start_time or item.end_time %}
+    <div class="yearbook-card__time">
+      {{ format_time_range(item.start_time, item.end_time) }}
+    </div>
+  {% endif %}
+  {% if item.location %}
+    <div class="yearbook-card__location">📍 {{ item.location }}</div>
+  {% endif %}
+  {% if item.notes %}
+    <div class="yearbook-card__notes markdown">{{ item.notes | markdown | safe }}</div>
+  {% endif %}
+</div>

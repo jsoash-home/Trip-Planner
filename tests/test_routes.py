@@ -1760,3 +1760,121 @@ def test_yearbook_passes_geojson_to_template(app, owner, monkeypatch):
     assert "data-pins=" in body
     assert "FeatureCollection" in body
     assert "Vasa Museum" in body
+
+
+# ───────────────  Yearbook Task 7: highlights + all-days strip  ─────
+
+
+def test_yearbook_highlights_section_with_zero_stars_shows_nudge(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    db.session.add(ItineraryItem(
+        trip_id=t.id, day_date=t.start_date, title="Walk", starred=False,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    assert "yearbook-highlights-nudge" in body
+    assert "Star items on your itinerary" in body
+
+
+def test_yearbook_highlights_section_with_stars_renders_day_groups(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    # Two starred items on different days.
+    db.session.add_all([
+        ItineraryItem(trip_id=t.id, day_date=t.start_date,
+                      title="Vasa Museum", starred=True),
+        ItineraryItem(trip_id=t.id, day_date=t.start_date + _td(days=2),
+                      title="Skansen", starred=True),
+        ItineraryItem(trip_id=t.id, day_date=t.start_date + _td(days=1),
+                      title="Coffee", starred=False),
+    ])
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    # Both starred items should render, unstarred one should not appear
+    # in a highlight card.
+    assert body.count("yearbook-card") >= 2
+    assert "Vasa Museum" in body
+    assert "Skansen" in body
+    # Day headers for days 1 and 3 (not day 2 — no starred on day 2).
+    assert "Day 1 ·" in body
+    assert "Day 3 ·" in body
+    assert "Day 2 ·" not in body or body.find("Day 2 ·") > body.find("All days at a glance")
+
+
+def test_yearbook_all_days_strip_renders_every_day_in_range(app, owner):
+    t = _make_trip(owner.id, start_offset=-12, end_offset=-5)  # 8-day trip
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    # All-days strip rows — Day 1 through Day 8 each have their own row.
+    for n in range(1, 9):
+        assert f"Day {n} ·" in body
+
+
+def test_yearbook_all_days_empty_day_renders_empty_chip_row(app, owner):
+    t = _make_trip(owner.id, start_offset=-12, end_offset=-10)  # 3-day trip
+    # Item on day 2 only.
+    db.session.add(ItineraryItem(
+        trip_id=t.id, day_date=t.start_date + _td(days=1), title="Brunch",
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}/yearbook")
+    body = resp.get_data(as_text=True)
+    # The em-dash placeholder appears on the two empty days.
+    assert body.count("yearbook-day-row__empty") == 2
+    assert "Brunch" in body
+
+
+def test_yearbook_tile_subtitle_planning_says_after_trip(app, owner):
+    t = _make_trip(owner.id, start_offset=30, end_offset=35)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}")
+    body = resp.get_data(as_text=True)
+    assert "After the trip" in body
+
+
+def test_yearbook_tile_subtitle_in_progress_says_preview(app, owner):
+    t = _make_trip(owner.id, start_offset=-1, end_offset=5)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}")
+    body = resp.get_data(as_text=True)
+    assert "Preview while in progress" in body
+
+
+def test_yearbook_tile_subtitle_completed_shows_starred_count(app, owner):
+    t = _make_trip(owner.id, start_offset=-30, end_offset=-25)
+    db.session.add_all([
+        ItineraryItem(trip_id=t.id, day_date=t.start_date,
+                      title="A", starred=True),
+        ItineraryItem(trip_id=t.id, day_date=t.start_date,
+                      title="B", starred=True),
+        ItineraryItem(trip_id=t.id, day_date=t.start_date,
+                      title="C", starred=False),
+    ])
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get(f"/trips/{t.id}")
+    body = resp.get_data(as_text=True)
+    assert "2 highlights" in body
