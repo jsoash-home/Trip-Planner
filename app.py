@@ -89,7 +89,13 @@ from src.itinerary import (
     parse_itinerary_form,
     sort_within_day,
 )
-from src.map_helpers import Pin, color_for_category, color_for_year, pins_to_geojson
+from src.map_helpers import (
+    Pin,
+    build_static_map_url,
+    color_for_category,
+    color_for_year,
+    pins_to_geojson,
+)
 from src.packing import (
     DEFAULT_PACKING_ITEMS,
     PACKING_CATEGORIES,
@@ -132,6 +138,8 @@ from src.yearbook import (
     compute_trip_stats,
     days_overview,
     derive_yearbook_view,
+    generate_share_token,
+    sanitize_public_view,
 )
 
 # ─── Logging ────────────────────────────────────────────────────────
@@ -1802,6 +1810,83 @@ def yearbook(trip_id):
         view_mode=view_mode,
         user_role=user_role,
     )
+
+
+@app.route("/trips/<int:trip_id>/yearbook/share", methods=["POST"])
+@login_required
+def yearbook_share(trip_id):
+    """Enable / rotate / disable the public yearbook share link.
+
+    Only usable on completed trips (final view) — sharing a preview
+    in-progress yearbook would expose data that's still changing.
+    Editor+ only.
+    """
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+    today = date.today()
+    if derive_yearbook_view(trip, today) != "final":
+        return (
+            jsonify({"error": "available after trip completes"}),
+            400,
+        )
+
+    payload = request.get_json(silent=True) or {}
+    action = (payload.get("action") or "").strip().lower()
+    if action not in ("enable", "rotate", "disable"):
+        return jsonify({"error": "unknown action"}), 400
+
+    if action == "enable":
+        if not trip.yearbook_share_token:
+            trip.yearbook_share_token = generate_share_token()
+    elif action == "rotate":
+        trip.yearbook_share_token = generate_share_token()
+    else:  # disable
+        trip.yearbook_share_token = None
+    db.session.commit()
+    logger.info(
+        "Yearbook share %s for trip id=%s — token now %s",
+        action, trip.id, "set" if trip.yearbook_share_token else "cleared",
+    )
+
+    url = (
+        url_for(
+            "yearbook_public",
+            token=trip.yearbook_share_token,
+            _external=True,
+        )
+        if trip.yearbook_share_token
+        else None
+    )
+    return jsonify({"token": trip.yearbook_share_token, "url": url})
+
+
+@app.route("/yearbook/<string:token>")
+def yearbook_public(token):
+    """Placeholder — populated in Task 9 with the public read view.
+
+    Defined now so url_for('yearbook_public', token=...) inside the
+    share route can resolve. Until T9 ships, any access 404s.
+    """
+    abort(404)
+
+
+@app.route("/trips/<int:trip_id>/yearbook/visibility", methods=["POST"])
+@login_required
+def yearbook_visibility(trip_id):
+    """Update which fields appear on the public yearbook.
+
+    Settings persist on the trip even when the share token is None —
+    the user can pre-configure visibility before flipping the link on.
+    Editor+ only.
+    """
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+    payload = request.get_json(silent=True) or {}
+    trip.yearbook_public_show_notes = bool(payload.get("show_notes"))
+    trip.yearbook_public_show_spend = bool(payload.get("show_spend"))
+    db.session.commit()
+    return jsonify({
+        "show_notes": trip.yearbook_public_show_notes,
+        "show_spend": trip.yearbook_public_show_spend,
+    })
 
 
 @app.route("/trips/<int:trip_id>/itinerary/drift-review")

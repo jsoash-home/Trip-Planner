@@ -4,6 +4,7 @@ import pytest
 
 from src.map_helpers import (
     Pin,
+    build_static_map_url,
     color_for_category,
     color_for_year,
     normalize_location,
@@ -178,3 +179,65 @@ def test_pins_to_geojson_color_fn_called_per_pin():
 def test_pins_to_geojson_empty():
     gj = pins_to_geojson([], color_fn=lambda p: "#000000")
     assert gj == {"type": "FeatureCollection", "features": []}
+
+
+# ─────────────────────────── build_static_map_url ────────────────────
+
+
+def _static_pin(lng: float, lat: float, category: str = "other") -> Pin:
+    return Pin(
+        row_type="booking", row_id=1, trip_id=1, trip_name="T",
+        title="X", location_text="Y",
+        lat=lat, lng=lng,
+        geocoded_city=None, geocoded_country_code=None,
+        year=2026, category=category,
+        datetime_iso=None, day_index=None,
+    )
+
+
+def test_build_static_map_url_empty_pins_returns_none():
+    assert build_static_map_url([], token="pk.test") is None
+
+
+def test_build_static_map_url_no_token_returns_none():
+    assert build_static_map_url([_static_pin(18.07, 59.33)], token=None) is None
+
+
+def test_build_static_map_url_single_pin_format():
+    url = build_static_map_url(
+        [_static_pin(18.07, 59.33, category="other")],
+        token="pk.test",
+    )
+    assert url.startswith("https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/")
+    assert "/auto/600x360@2x" in url
+    assert url.endswith("?access_token=pk.test")
+    # The marker segment is URL-encoded: parens and commas become %xx.
+    assert "%28" in url and "%29" in url  # ( and )
+    assert "pin-s%2B" in url               # the literal "+" before the color
+
+
+def test_build_static_map_url_multiple_pins_comma_separated():
+    url = build_static_map_url(
+        [_static_pin(18.07, 59.33), _static_pin(2.35, 48.86)],
+        token="pk.test",
+    )
+    # Two markers → encoded comma %2C between them.
+    assert url.count("pin-s%2B") == 2
+    assert "%2C" in url
+
+
+def test_build_static_map_url_includes_width_height_in_path():
+    url = build_static_map_url(
+        [_static_pin(18.07, 59.33)],
+        width=800, height=400, token="pk.test",
+    )
+    assert "/auto/800x400@2x" in url
+
+
+def test_build_static_map_url_uses_color_for_category():
+    url_meal = build_static_map_url([_static_pin(0, 0, "meal")], token="pk.test")
+    url_other = build_static_map_url([_static_pin(0, 0, "other")], token="pk.test")
+    # color_for_category("meal") = #E07B5B → "e07b5b" in URL.
+    assert "e07b5b" in url_meal.lower()
+    # And category "other" should differ from "meal".
+    assert url_other != url_meal

@@ -143,6 +143,46 @@ def stats_for_pins(pins: List[Pin]) -> dict:
 # ───────────────────────────── GeoJSON builder ───────────────────────
 
 
+def build_static_map_url(
+    pins: List[Pin],
+    width: int = 600,
+    height: int = 360,
+    style: str = "streets-v12",
+    token: Optional[str] = None,
+) -> Optional[str]:
+    """Build a Mapbox Static Images API URL with one marker per pin.
+
+    Returns None when there are no pins OR no Mapbox token — both cases
+    mean there's nothing to show, and the caller should hide the image.
+
+    URL shape (Mapbox Static Images, ``auto`` viewport):
+
+        https://api.mapbox.com/styles/v1/mapbox/{style}/static
+          /{markers}/auto/{width}x{height}@2x?access_token={token}
+
+    `markers` is a comma-separated list of ``pin-s+{color}(lng,lat)``
+    entries, where ``color`` is the category color (hex without the
+    leading ``#``). The whole markers segment is URL-encoded so the
+    parens and commas survive the path.
+    """
+    if not pins or not token:
+        return None
+
+    from urllib.parse import quote
+
+    parts: List[str] = []
+    for p in pins:
+        hexcolor = color_for_category(p.category).lstrip("#")
+        parts.append(f"pin-s+{hexcolor}({p.lng},{p.lat})")
+    markers = ",".join(parts)
+    markers_enc = quote(markers, safe="")
+
+    return (
+        f"https://api.mapbox.com/styles/v1/mapbox/{style}/static/"
+        f"{markers_enc}/auto/{width}x{height}@2x?access_token={token}"
+    )
+
+
 def pins_to_geojson(pins: List[Pin], color_fn: Callable[[Pin], str]) -> dict:
     """Build a GeoJSON FeatureCollection. `color_fn` is called per pin.
 

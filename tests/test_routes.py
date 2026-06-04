@@ -1878,3 +1878,129 @@ def test_yearbook_tile_subtitle_completed_shows_starred_count(app, owner):
     resp = client.get(f"/trips/{t.id}")
     body = resp.get_data(as_text=True)
     assert "2 highlights" in body
+
+
+# ───────────────  Yearbook Task 8: share + visibility routes  ─────────
+
+
+def _completed_trip(owner_id: int) -> Trip:
+    return _make_trip(owner_id, start_offset=-30, end_offset=-25)
+
+
+def test_share_enable_creates_token(app, owner):
+    t = _completed_trip(owner.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    resp = client.post(f"/trips/{t.id}/yearbook/share",
+                       json={"action": "enable"})
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["token"] is not None
+    assert len(payload["token"]) >= 20  # token_urlsafe(24) -> ~32 chars
+    assert payload["url"] and payload["token"] in payload["url"]
+    db.session.refresh(t)
+    assert t.yearbook_share_token == payload["token"]
+
+
+def test_share_enable_again_is_idempotent(app, owner):
+    t = _completed_trip(owner.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    r1 = client.post(f"/trips/{t.id}/yearbook/share",
+                     json={"action": "enable"})
+    r2 = client.post(f"/trips/{t.id}/yearbook/share",
+                     json={"action": "enable"})
+    assert r1.get_json()["token"] == r2.get_json()["token"]
+
+
+def test_share_rotate_replaces_token(app, owner):
+    t = _completed_trip(owner.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    r1 = client.post(f"/trips/{t.id}/yearbook/share",
+                     json={"action": "enable"})
+    r2 = client.post(f"/trips/{t.id}/yearbook/share",
+                     json={"action": "rotate"})
+    assert r1.get_json()["token"] != r2.get_json()["token"]
+
+
+def test_share_disable_clears_token(app, owner):
+    t = _completed_trip(owner.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    client.post(f"/trips/{t.id}/yearbook/share", json={"action": "enable"})
+    resp = client.post(f"/trips/{t.id}/yearbook/share",
+                       json={"action": "disable"})
+    assert resp.get_json()["token"] is None
+    assert resp.get_json()["url"] is None
+    db.session.refresh(t)
+    assert t.yearbook_share_token is None
+
+
+def test_share_on_in_progress_trip_returns_400(app, owner):
+    t = _make_trip(owner.id, start_offset=-1, end_offset=5)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(f"/trips/{t.id}/yearbook/share",
+                       json={"action": "enable"})
+    assert resp.status_code == 400
+    assert "after trip completes" in resp.get_json()["error"]
+
+
+def test_share_on_planning_trip_returns_400(app, owner):
+    t = _make_trip(owner.id, start_offset=30, end_offset=35)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(f"/trips/{t.id}/yearbook/share",
+                       json={"action": "enable"})
+    assert resp.status_code == 400
+
+
+def test_share_viewer_forbidden(app, owner, trip, viewer):
+    # Move shared trip to completed state.
+    today = date.today()
+    trip.start_date = today - _td(days=30)
+    trip.end_date = today - _td(days=25)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+    resp = client.post(f"/trips/{trip.id}/yearbook/share",
+                       json={"action": "enable"})
+    assert resp.status_code in (403, 404)
+
+
+def test_visibility_toggle_persists(app, owner):
+    t = _completed_trip(owner.id)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    resp = client.post(f"/trips/{t.id}/yearbook/visibility",
+                       json={"show_notes": True, "show_spend": False})
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload == {"show_notes": True, "show_spend": False}
+    db.session.refresh(t)
+    assert t.yearbook_public_show_notes is True
+    assert t.yearbook_public_show_spend is False
+
+
+def test_visibility_viewer_forbidden(app, owner, trip, viewer):
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+    resp = client.post(f"/trips/{trip.id}/yearbook/visibility",
+                       json={"show_notes": True, "show_spend": True})
+    assert resp.status_code in (403, 404)
