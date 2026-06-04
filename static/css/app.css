@@ -1826,3 +1826,48 @@ body.vp-public main { padding-top: 2rem; }
   margin-top: 3rem;
 }
 .vp-public-footer a { color: var(--vp-accent); text-decoration: none; }
+
+.yearbook-print-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 1.5rem 0 0;
+}
+
+/* ── Yearbook print stylesheet ─────────────────────────────────────
+   Make the page a keepsake printout: hide chrome, swap the
+   interactive map for the static image, control page breaks, and
+   bump body type a touch for paper readability. */
+@media print {
+  /* Hide all chrome. */
+  .vp-navbar,
+  .vp-active-ribbon,
+  .vp-public-footer,
+  .yearbook-share,
+  .yearbook-print-row,
+  .yearbook-preview-banner,
+  .yearbook-highlights-nudge,
+  .star-toggle,
+  .btn,
+  .vp-flash { display: none !important; }
+
+  /* Map: hide interactive, force the static <img> visible. */
+  #yearbook-map,
+  .yearbook-map__interactive { display: none !important; }
+  .yearbook-map__static { display: block !important; max-width: 100% !important; }
+
+  /* Page-break control. */
+  .yearbook-day,
+  .yearbook-day-row { page-break-inside: avoid; break-inside: avoid; }
+  .yearbook-highlights,
+  .yearbook-days,
+  .yearbook-notes { page-break-before: auto; }
+
+  /* Typography for paper. */
+  body { font-size: 11pt; background: white; color: black; }
+  .yearbook-title { font-size: 24pt; }
+  .yearbook-section-h { font-size: 14pt; }
+  .yearbook-dates { color: #555; }
+
+  /* Page margins. */
+  @page { margin: 1.5cm; }
+}

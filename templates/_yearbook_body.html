@@ -126,6 +126,15 @@
     </section>
   {% endif %}
 
+  {% if view_mode != "public" %}
+    <div class="yearbook-print-row">
+      <button type="button" class="btn btn-outline-secondary btn-sm yearbook-print-btn"
+              onclick="window.print()">
+        🖨️ Print this page
+      </button>
+    </div>
+  {% endif %}
+
   {# Share UI — only on the authenticated final view, for editors+. #}
   {% if view_mode == "final" and user_role in ("editor", "owner") %}
     <section class="yearbook-share" aria-label="Share publicly">

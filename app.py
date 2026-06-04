@@ -1797,6 +1797,11 @@ def yearbook(trip_id):
     # no geocoded rows — template hides the map section in that case.
     pins = _build_pins_for_trip(trip)
     pins_geojson = pins_to_geojson(pins, lambda p: color_for_category(p.category))
+    # Static map URL too — used as the print fallback (the interactive
+    # Mapbox div is hidden by @media print, the <img> shows in its place).
+    static_map_url = build_static_map_url(
+        pins, width=600, height=360, token=MAPBOX_TOKEN,
+    )
 
     return render_template(
         "yearbook.html",
@@ -1808,7 +1813,7 @@ def yearbook(trip_id):
         highlight_groups=highlight_groups,
         total_spend_by_currency=total_spend_by_currency,
         pins_geojson=pins_geojson,
-        static_map_url=None,  # Task 10 wires this in for the auth view too.
+        static_map_url=static_map_url,
         show_notes=True,
         show_spend=True,
         view_mode=view_mode,
