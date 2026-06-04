@@ -90,6 +90,15 @@
           {% for it in items %}
             <div class="itin-chip {{ category_css(it.category) }}"
                  {% if it.id|string in just_synced_ids %}data-just-synced="true"{% endif %}>
+              <button type="button"
+                      class="star-toggle"
+                      data-item-id="{{ it.id }}"
+                      data-trip-id="{{ trip.id }}"
+                      aria-pressed="{{ 'true' if it.starred else 'false' }}"
+                      aria-label="{{ 'Unstar' if it.starred else 'Star' }} this highlight"
+                      {% if not can_edit(user_role) %}disabled{% endif %}>
+                <span class="star-icon" aria-hidden="true">{{ '★' if it.starred else '☆' }}</span>
+              </button>
               <div class="itin-chip-time">{{ format_time_range(it.start_time, it.end_time) }}</div>
               <div class="itin-chip-title">
                 <span class="itin-chip-emoji" aria-hidden="true">{{ category_emoji(it.category) }}</span>
@@ -153,4 +162,5 @@
 
 {% block scripts %}
   <script src="{{ url_for('static', filename='js/itinerary.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/yearbook.js') }}" defer></script>
 {% endblock %}

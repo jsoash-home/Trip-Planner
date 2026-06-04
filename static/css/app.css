@@ -1599,3 +1599,40 @@
   justify-content: flex-end;
   margin-top: 0.5rem;
 }
+
+/* ── Yearbook ★ star toggle on itinerary cards ─────────────────── */
+.star-toggle {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  background: transparent;
+  border: 0;
+  padding: 0.1rem 0.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--vp-text-muted);
+  font-size: 1.1rem;
+}
+.star-toggle:hover:not(:disabled) { color: #f5b400; }
+.star-toggle[aria-pressed="true"] .star-icon { color: #f5b400; }
+.star-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.star-toggle:focus-visible {
+  outline: 2px solid var(--vp-accent, #4c6ef5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.star-icon { display: inline-block; }
+/* Leave room on the right of the title row so the absolute star
+   doesn't overlap the title or link icon. */
+.itin-chip-title { padding-right: 1.5rem; }
+.star-toggle-error {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--vp-danger, #b54343);
+  transition: opacity 0.6s ease;
+}
+.star-toggle-error.is-fading { opacity: 0; }
