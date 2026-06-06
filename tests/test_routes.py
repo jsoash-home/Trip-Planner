@@ -2140,3 +2140,46 @@ def test_auth_yearbook_still_renders_after_partial_extraction(app, owner):
     body = resp.get_data(as_text=True)
     assert "yearbook-hero" in body
     assert "All days at a glance" in body
+
+
+def test_dashboard_renders_on_this_day_section_when_past_trip_matches(app, owner):
+    """Dashboard route includes on_this_day_entries in template context.
+
+    Build a past trip in a prior calendar year whose [start, end] range
+    contains today's (month, day). The dashboard should render 200 and
+    the trip's name should appear in the body (via the existing Past
+    section).
+
+    TODO (T4): once templates/trips_list.html renders the new section,
+    strengthen this assertion to look for the "On this day" header
+    markup as well.
+    """
+    today = date.today()
+    prior_year = today.year - 1
+    # Build a range spanning today's (month, day) in the prior year.
+    # Pad +/- a few days so we don't run off month boundaries.
+    try:
+        start_date = date(prior_year, today.month, max(1, today.day - 2))
+        end_date = date(prior_year, today.month, min(28, today.day + 2))
+    except ValueError:
+        # Defensive — shouldn't trigger for any real today, but keeps
+        # the test robust if today is e.g. Feb 29.
+        start_date = date(prior_year, today.month, 1)
+        end_date = date(prior_year, today.month, 28)
+
+    t = Trip(
+        owner_id=owner.id,
+        name="On This Day Trip",
+        start_date=start_date,
+        end_date=end_date,
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get("/trips")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "On This Day Trip" in body

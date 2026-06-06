@@ -140,6 +140,7 @@ from src.yearbook import (
     days_overview,
     derive_yearbook_view,
     generate_share_token,
+    on_this_day,
     sanitize_public_view,
 )
 
@@ -816,12 +817,14 @@ def trips_list():
     grouped = group_trips_by_state(trips, today)
     has_any = any(grouped.values())
     counts = _drift_counts_for_trips(trips)
+    on_this_day_entries = on_this_day(trips, today)
     return render_template(
         "trips_list.html",
         grouped=grouped,
         has_any_trips=has_any,
         today=today,
         counts=counts,
+        on_this_day_entries=on_this_day_entries,
     )
 
 
