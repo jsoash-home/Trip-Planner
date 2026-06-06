@@ -2144,16 +2144,11 @@ def test_auth_yearbook_still_renders_after_partial_extraction(app, owner):
 
 
 def test_dashboard_renders_on_this_day_section_when_past_trip_matches(app, owner):
-    """Dashboard route includes on_this_day_entries in template context.
+    """Dashboard renders the ✨ On this day section when a past trip in
+    a prior calendar year overlaps today's (month, day).
 
-    Build a past trip in a prior calendar year whose [start, end] range
-    contains today's (month, day). The dashboard should render 200 and
-    the trip's name should appear in the body (via the existing Past
-    section).
-
-    TODO (T4): once templates/trips_list.html renders the new section,
-    strengthen this assertion to look for the "On this day" header
-    markup as well.
+    Builds such a trip and asserts that the section header markup and
+    the trip's name both appear in the response body.
     """
     today = date.today()
     prior_year = today.year - 1
@@ -2182,3 +2177,4 @@ def test_dashboard_renders_on_this_day_section_when_past_trip_matches(app, owner
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "On This Day Trip" in body
+    assert "On this day" in body
