@@ -14,8 +14,10 @@ Six helpers + two dataclasses:
   - sanitize_public_view     — strip private fields for /yearbook/<token>
   - generate_share_token     — opaque URL-safe token for share links
   - days_overview            — one DayOverview per day in [start, end]
+  - on_this_day              — past-trip matches for today's (month, day)
 """
 
+import calendar
 import logging
 import secrets
 from dataclasses import dataclass, field, replace
@@ -287,3 +289,53 @@ def days_overview(trip, itinerary_items) -> List[DayOverview]:
         items = sort_within_day(by_day.get(d, []))
         out.append(DayOverview(number=i + 1, date=d, items=items))
     return out
+
+
+@dataclass
+class OnThisDayEntry:
+    """One past-trip match for the "On this day" dashboard block."""
+
+    trip: object       # Trip-like row; carries id, name, cover_emoji, etc.
+    day_number: int    # 1-based day of trip on the matched calendar date
+    years_ago: int     # 1 for last year, 2 for two years ago, ...
+    matched_date: date  # the actual calendar date that matched (for tests)
+
+
+def on_this_day(trips, today: date) -> List[OnThisDayEntry]:
+    """
+    Return one OnThisDayEntry per past trip whose [start_date, end_date]
+    range contains a date with the same (month, day) as `today` in any
+    prior calendar year. Sorted most-recent year first.
+
+    Excludes:
+      - trips with start_date.year >= today.year (current/future-year
+        trips don't count as "prior years")
+      - trips whose range doesn't contain any matching date
+
+    Leap-day handling: when today is Feb 29 and the target year is not
+    a leap year, the candidate match day for that year is Feb 28.
+    """
+    trips_list = [t for t in (trips or []) if t.start_date.year < today.year]
+    if not trips_list:
+        return []
+
+    oldest_year = min(t.start_date.year for t in trips_list)
+
+    entries: List[OnThisDayEntry] = []
+    for year in range(today.year - 1, oldest_year - 1, -1):
+        day = today.day
+        if today.month == 2 and today.day == 29 and not calendar.isleap(year):
+            day = 28
+        candidate = date(year, today.month, day)
+
+        for trip in trips_list:
+            if trip.start_date <= candidate <= trip.end_date:
+                entries.append(OnThisDayEntry(
+                    trip=trip,
+                    day_number=(candidate - trip.start_date).days + 1,
+                    years_ago=today.year - year,
+                    matched_date=candidate,
+                ))
+
+    entries.sort(key=lambda e: e.years_ago)
+    return entries

@@ -6,6 +6,7 @@ from typing import Any, List, Optional
 
 from src.yearbook import (
     DayOverview,
+    OnThisDayEntry,
     TripStats,
     compute_country_list,
     compute_highlight_items,
@@ -13,6 +14,7 @@ from src.yearbook import (
     days_overview,
     derive_yearbook_view,
     generate_share_token,
+    on_this_day,
     sanitize_public_view,
 )
 
@@ -27,6 +29,7 @@ class FakeTrip:
     primary_currency: str = "USD"
     notes: Optional[str] = None
     status: str = "planning"
+    id: int = 1
 
 
 @dataclass
@@ -357,3 +360,84 @@ def test_days_overview_groups_items_by_day_date():
     out = days_overview(trip, items)
     assert {it.id for it in out[0].items} == {1, 2}
     assert {it.id for it in out[1].items} == {3}
+
+
+# ─────────────────────────────  on_this_day  ──────────────────────────
+
+
+def test_on_this_day_empty_trips_returns_empty():
+    assert on_this_day([], date(2026, 6, 6)) == []
+
+
+def test_on_this_day_past_trip_overlap_returns_entry():
+    # Trip ran Jun 1–10, 2025. Today is Jun 6, 2026 → matches Jun 6, 2025.
+    trip = FakeTrip(date(2025, 6, 1), date(2025, 6, 10), id=1)
+    out = on_this_day([trip], date(2026, 6, 6))
+    assert len(out) == 1
+    entry = out[0]
+    assert isinstance(entry, OnThisDayEntry)
+    assert entry.trip is trip
+    assert entry.matched_date == date(2025, 6, 6)
+    assert entry.day_number == 6  # Jun 6 is day 6 of a trip starting Jun 1
+    assert entry.years_ago == 1
+
+
+def test_on_this_day_past_trip_no_overlap_returns_empty():
+    # Trip ran Jul 1–10, 2025. Today is Jun 6, 2026 → no overlap.
+    trip = FakeTrip(date(2025, 7, 1), date(2025, 7, 10))
+    assert on_this_day([trip], date(2026, 6, 6)) == []
+
+
+def test_on_this_day_current_year_trip_excluded():
+    # Trip in same year as today must not appear, even if range covers today.
+    trip = FakeTrip(date(2026, 6, 1), date(2026, 6, 10))
+    assert on_this_day([trip], date(2026, 6, 6)) == []
+
+
+def test_on_this_day_future_trip_excluded():
+    # Trip starts after today's year — never qualifies.
+    trip = FakeTrip(date(2027, 6, 1), date(2027, 6, 10))
+    assert on_this_day([trip], date(2026, 6, 6)) == []
+
+
+def test_on_this_day_feb_29_today_matches_feb_28_in_non_leap_year():
+    # Today is Feb 29, 2028 (leap year). Last year 2027 isn't leap →
+    # candidate match date becomes Feb 28, 2027.
+    trip = FakeTrip(date(2027, 2, 20), date(2027, 3, 5))
+    out = on_this_day([trip], date(2028, 2, 29))
+    assert len(out) == 1
+    assert out[0].matched_date == date(2027, 2, 28)
+    assert out[0].years_ago == 1
+
+
+def test_on_this_day_multiple_matches_sorted_most_recent_first():
+    # Three past trips, all covering Jun 6 in their respective years.
+    trip_2023 = FakeTrip(date(2023, 6, 1), date(2023, 6, 10), id=23)
+    trip_2024 = FakeTrip(date(2024, 6, 1), date(2024, 6, 10), id=24)
+    trip_2025 = FakeTrip(date(2025, 6, 1), date(2025, 6, 10), id=25)
+    out = on_this_day([trip_2023, trip_2025, trip_2024], date(2026, 6, 6))
+    assert [e.trip.id for e in out] == [25, 24, 23]
+    assert [e.years_ago for e in out] == [1, 2, 3]
+
+
+def test_on_this_day_years_ago_computed_correctly():
+    # Trip from 5 years ago.
+    trip = FakeTrip(date(2021, 6, 1), date(2021, 6, 10))
+    out = on_this_day([trip], date(2026, 6, 6))
+    assert len(out) == 1
+    assert out[0].years_ago == 5
+    assert out[0].matched_date == date(2021, 6, 6)
+
+
+def test_on_this_day_year_boundary_trip_matches_both_calendar_years():
+    # Trip spans Dec 28, 2024 → Jan 5, 2025. Today is Jan 2, 2026.
+    # Candidate match Jan 2, 2025 falls inside the range → entry for 2025.
+    # Candidate match Jan 2, 2024 (years_ago=2) is NOT inside the range
+    # (range starts Dec 28, 2024), so we expect exactly one entry.
+    trip = FakeTrip(date(2024, 12, 28), date(2025, 1, 5))
+    out = on_this_day([trip], date(2026, 1, 2))
+    assert len(out) == 1
+    assert out[0].matched_date == date(2025, 1, 2)
+    assert out[0].years_ago == 1
+    # Day number: Jan 2, 2025 is the 6th day of a trip starting Dec 28, 2024.
+    assert out[0].day_number == 6
