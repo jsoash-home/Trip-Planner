@@ -1871,3 +1871,29 @@ body.vp-public main { padding-top: 2rem; }
   /* Page margins. */
   @page { margin: 1.5cm; }
 }
+
+/* ── "On this day" tickler ───────────────────────────────────────
+   Small warm-amber pill rendered in the trip card's pill row, and
+   a muted text-link to expand the section past the first 3 cards. */
+.vp-otd-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--vp-pill-drift-bg);
+  color: var(--vp-pill-drift-fg);
+  border: 1px solid var(--vp-pill-drift-border);
+  white-space: nowrap;
+}
+
+.vp-otd-expand {
+  font-size: 0.9rem;
+  color: var(--vp-text-muted);
+  text-decoration: none;
+  padding: 0;
+  margin: 0.5rem 0 1.5rem;
+}
+.vp-otd-expand:hover {
+  color: var(--vp-text);
+  text-decoration: underline;
+}

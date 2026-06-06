@@ -43,6 +43,29 @@
     </div>
   {% endif %}
 
+  {% if on_this_day_entries %}
+    <h2 class="vp-section-title">✨ On this day</h2>
+    <div class="row g-3">
+      {% for entry in on_this_day_entries[:3] %}
+        <div class="col-md-6 col-lg-4">
+          {{ trip_card(entry.trip, today, counts, on_this_day=entry) }}
+        </div>
+      {% endfor %}
+      {% for entry in on_this_day_entries[3:] %}
+        <div class="col-md-6 col-lg-4" data-on-this-day-extra hidden>
+          {{ trip_card(entry.trip, today, counts, on_this_day=entry) }}
+        </div>
+      {% endfor %}
+    </div>
+    {% if on_this_day_entries|length > 3 %}
+      <button type="button"
+              class="btn btn-link vp-otd-expand"
+              data-on-this-day-expand>
+        + {{ on_this_day_entries|length - 3 }} more …
+      </button>
+    {% endif %}
+  {% endif %}
+
   {% if grouped.past %}
     <h2 class="vp-section-title">Past</h2>
     <div class="row g-3">
@@ -52,4 +75,19 @@
     </div>
   {% endif %}
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      var btn = document.querySelector('[data-on-this-day-expand]');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('[data-on-this-day-extra]').forEach(function (el) {
+          el.removeAttribute('hidden');
+        });
+        btn.remove();
+      });
+    }());
+  </script>
 {% endblock %}
