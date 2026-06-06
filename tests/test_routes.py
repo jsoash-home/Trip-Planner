@@ -2,6 +2,7 @@
 in-memory SQLite database. Uses Flask's test_client and a fresh DB
 per test via a pytest fixture."""
 
+import calendar
 from datetime import date, datetime
 
 import pytest
@@ -2157,15 +2158,13 @@ def test_dashboard_renders_on_this_day_section_when_past_trip_matches(app, owner
     today = date.today()
     prior_year = today.year - 1
     # Build a range spanning today's (month, day) in the prior year.
-    # Pad +/- a few days so we don't run off month boundaries.
-    try:
-        start_date = date(prior_year, today.month, max(1, today.day - 2))
-        end_date = date(prior_year, today.month, min(28, today.day + 2))
-    except ValueError:
-        # Defensive — shouldn't trigger for any real today, but keeps
-        # the test robust if today is e.g. Feb 29.
-        start_date = date(prior_year, today.month, 1)
-        end_date = date(prior_year, today.month, 28)
+    # Pad +/- a few days, clamped to the actual month length so we
+    # don't run off month boundaries (e.g. Dec 31 or Feb 29).
+    last_day_of_month = calendar.monthrange(prior_year, today.month)[1]
+    start_day = max(1, today.day - 2)
+    end_day = min(last_day_of_month, today.day + 2)
+    start_date = date(prior_year, today.month, start_day)
+    end_date = date(prior_year, today.month, end_day)
 
     t = Trip(
         owner_id=owner.id,
