@@ -2,11 +2,11 @@
    `today` is a date passed in from the route so we don't recompute it per card.
    `counts` is the {trip_id: (drift_count, new_count)} dict from _drift_counts_for_trips. #}
 {% from "_icon.html" import icon %}
-{% macro trip_card(trip, today, counts=None) %}
+{% macro trip_card(trip, today, counts=None, on_this_day=None) %}
   {% set status = derive_status(trip.start_date, trip.end_date, today) %}
   {% set countdown = countdown_label(trip.start_date, trip.end_date, today) %}
   {% set countdown_cls = ('is-active' if status == 'in_progress' else ('is-past' if status == 'completed' else '')) %}
-  <a class="trip-card" href="{{ url_for('trip_overview', trip_id=trip.id) }}">
+  <a class="trip-card" href="{{ url_for('yearbook', trip_id=trip.id) if on_this_day is not none else url_for('trip_overview', trip_id=trip.id) }}">
     {% if trip.cover_image_url %}
       <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
            alt="" loading="lazy" aria-hidden="true">
@@ -50,24 +50,32 @@
     {% else %}
       <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
     {% endif %}
-    {% if counts %}
-      {% set tc = counts.get(trip.id, (0, 0)) %}
-      {% if tc[0] > 0 or tc[1] > 0 %}
-        <div class="trip-card-status-row">
-          {% if tc[0] > 0 %}
-            <span class="trip-card-pill trip-card-pill--drift">
-              {{ icon('exclamation-triangle-fill') }}
-              {{ tc[0] }} out of sync
-            </span>
-          {% endif %}
-          {% if tc[1] > 0 %}
-            <span class="trip-card-pill trip-card-pill--new">
-              {{ icon('plus-circle') }}
-              {{ tc[1] }} suggested
-            </span>
-          {% endif %}
-        </div>
-      {% endif %}
+    {% set tc = counts.get(trip.id, (0, 0)) if counts else (0, 0) %}
+    {% if tc[0] > 0 or tc[1] > 0 or on_this_day %}
+      <div class="trip-card-status-row">
+        {% if tc[0] > 0 %}
+          <span class="trip-card-pill trip-card-pill--drift">
+            {{ icon('exclamation-triangle-fill') }}
+            {{ tc[0] }} out of sync
+          </span>
+        {% endif %}
+        {% if tc[1] > 0 %}
+          <span class="trip-card-pill trip-card-pill--new">
+            {{ icon('plus-circle') }}
+            {{ tc[1] }} suggested
+          </span>
+        {% endif %}
+        {% if on_this_day %}
+          <span class="vp-otd-badge">
+            Day {{ on_this_day.day_number }} ·
+            {% if on_this_day.years_ago == 1 %}
+              Last year
+            {% else %}
+              {{ on_this_day.years_ago }} years ago
+            {% endif %}
+          </span>
+        {% endif %}
+      </div>
     {% endif %}
   </a>
 {% endmacro %}
