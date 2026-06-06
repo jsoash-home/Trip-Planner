@@ -1,12 +1,15 @@
 {# Reusable trip card for the dashboard.
    `today` is a date passed in from the route so we don't recompute it per card.
-   `counts` is the {trip_id: (drift_count, new_count)} dict from _drift_counts_for_trips. #}
+   `counts` is the {trip_id: (drift_count, new_count)} dict from _drift_counts_for_trips.
+   `on_this_day` — when set to an `OnThisDayEntry` dataclass, switches the card link
+   to the yearbook page and renders a "Day N · X years ago" badge in the status row. #}
 {% from "_icon.html" import icon %}
 {% macro trip_card(trip, today, counts=None, on_this_day=None) %}
   {% set status = derive_status(trip.start_date, trip.end_date, today) %}
   {% set countdown = countdown_label(trip.start_date, trip.end_date, today) %}
   {% set countdown_cls = ('is-active' if status == 'in_progress' else ('is-past' if status == 'completed' else '')) %}
-  <a class="trip-card" href="{{ url_for('yearbook', trip_id=trip.id) if on_this_day is not none else url_for('trip_overview', trip_id=trip.id) }}">
+  {% set href = url_for('yearbook', trip_id=trip.id) if on_this_day is not none else url_for('trip_overview', trip_id=trip.id) %}
+  <a class="trip-card" href="{{ href }}">
     {% if trip.cover_image_url %}
       <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
            alt="" loading="lazy" aria-hidden="true">
@@ -51,7 +54,7 @@
       <span class="trip-card-countdown {{ countdown_cls }}">{{ countdown }}</span>
     {% endif %}
     {% set tc = counts.get(trip.id, (0, 0)) if counts else (0, 0) %}
-    {% if tc[0] > 0 or tc[1] > 0 or on_this_day %}
+    {% if tc[0] > 0 or tc[1] > 0 or on_this_day is not none %}
       <div class="trip-card-status-row">
         {% if tc[0] > 0 %}
           <span class="trip-card-pill trip-card-pill--drift">
@@ -65,7 +68,8 @@
             {{ tc[1] }} suggested
           </span>
         {% endif %}
-        {% if on_this_day %}
+        {% if on_this_day is not none %}
+          {# Renders as "Day 4 · Last year" / "Day 4 · 3 years ago" #}
           <span class="vp-otd-badge">
             Day {{ on_this_day.day_number }} ·
             {% if on_this_day.years_ago == 1 %}
