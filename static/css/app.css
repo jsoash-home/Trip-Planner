@@ -1919,3 +1919,39 @@ body.vp-public main { padding-top: 2rem; }
   font-weight: 600;
   color: var(--vp-accent);
 }
+
+/* Trips-per-year chart (below the lifetime map). */
+.vp-year-chart {
+  max-width: 720px;
+}
+.vp-year-chart h2 {
+  margin-bottom: 0.5rem;
+}
+.vp-year-chart__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  height: 160px;
+  border-bottom: 1px solid var(--vp-border);
+  padding-bottom: 0.25rem;
+}
+.vp-year-chart__col {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  width: 36px;
+  height: 100%;
+}
+.vp-year-chart__bar {
+  width: 100%;
+  background: var(--vp-accent);
+  border-radius: 4px 4px 0 0;
+  min-height: 0;
+}
+.vp-year-chart__label {
+  font-size: 0.75rem;
+  color: var(--vp-text-muted);
+  margin-top: 0.25rem;
+  text-align: center;
+}

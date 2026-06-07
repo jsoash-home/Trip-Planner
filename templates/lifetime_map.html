@@ -67,6 +67,24 @@
   <a href="#" id="vp-replay-link">Replay animation</a>
 </div>
 
+{% if year_bars %}
+  {% set max_count = year_bars | map(attribute='trip_count') | max %}
+  <div class="vp-year-chart mt-4" aria-label="Trips per year">
+    <h2 class="h6 text-muted">Trips per year</h2>
+    <div class="vp-year-chart__bars">
+      {% for bar in year_bars %}
+        <div class="vp-year-chart__col">
+          <div class="vp-year-chart__bar"
+               style="height: {{ ((bar.trip_count / max_count) * 100) | round if max_count else 0 }}%;"
+               title="{{ bar.year }}: {{ bar.trip_count }} trip{{ '' if bar.trip_count == 1 else 's' }}">
+          </div>
+          <div class="vp-year-chart__label">{{ bar.year }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+
 {% endif %}
 
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
