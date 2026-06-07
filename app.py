@@ -929,11 +929,20 @@ def trip_overview(trip_id):
     # itinerary items and the day number on top of the page.
     today_items = []
     today_day_number = None
+    today_forecast = None
     if status == "in_progress":
         today_day_number = (today - trip.start_date).days + 1
         today_items = sort_within_day(
             ItineraryItem.query.filter_by(trip_id=trip.id, day_date=today).all()
         )
+        if is_in_forecast_window(today, today):
+            coords = pick_day_coords(today_items, _trip_primary_coords(trip))
+            if coords is not None:
+                today_forecast = get_forecast_for_day(
+                    coords[0], coords[1], today,
+                    unit=current_user.weather_units,
+                    db_session=db.session,
+                )
 
     # Step 18: "what changed since your last visit" banner. First-ever
     # visit creates the TripView row and shows nothing. Subsequent visits
@@ -961,6 +970,7 @@ def trip_overview(trip_id):
         today_items=today_items,
         today_day_number=today_day_number,
         today_date=today,
+        today_forecast=today_forecast,
         changes_banner=changes_banner,
         has_pins=has_pins,
     )

@@ -1981,3 +1981,21 @@ body.vp-public main { padding-top: 2rem; }
 .vp-weather-hourly__slot {
   white-space: nowrap;
 }
+
+/* Weather hero on trip overview Today section. */
+.vp-weather-hero {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: var(--vp-accent-soft);
+  border-radius: 999px;
+}
+.vp-weather-hero__emoji {
+  font-size: 1.6rem;
+}
+.vp-weather-hero__temp {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--vp-accent);
+}

@@ -58,6 +58,21 @@
         &middot; {{ today_date.strftime('%a, %b %d') }}
       </h2>
     </div>
+    {% if today_forecast %}
+      <div class="vp-weather-hero mb-2">
+        <span class="vp-weather-hero__emoji" aria-hidden="true">{{ today_forecast.emoji }}</span>
+        <span class="vp-weather-hero__temp">
+          {{ format_temperature(today_forecast.high, today_forecast.temp_unit) }}
+          /
+          {{ format_temperature(today_forecast.low, today_forecast.temp_unit) }}
+        </span>
+        {% if today_forecast.precipitation_probability %}
+          <span class="vp-weather-hero__meta text-muted small">
+            💧 {{ today_forecast.precipitation_probability }}%
+          </span>
+        {% endif %}
+      </div>
+    {% endif %}
     {% if today_items %}
       <ul class="today-section-list">
         {% for it in today_items %}

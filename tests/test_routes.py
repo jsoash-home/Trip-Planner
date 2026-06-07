@@ -2365,3 +2365,34 @@ def test_weather_failure_does_not_break_itinerary_page(app, owner):
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "vp-weather-chip" not in body
+
+
+def test_trip_overview_today_section_renders_hero_chip(app, owner):
+    """The hero weather chip renders at the top of Today when the
+    trip is in progress and the day has a geocoded item."""
+    today = date.today()
+    t = Trip(
+        owner_id=owner.id, name="In-progress trip",
+        start_date=today, end_date=today,
+    )
+    db.session.add(t)
+    db.session.commit()
+    db.session.add(ItineraryItem(
+        trip_id=t.id, day_date=today, title="Walking tour",
+        geocoded_lat=48.85, geocoded_lng=2.35,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    with patch("src.weather.fetch_forecast") as mock_fetch:
+        mock_fetch.return_value = _ok_open_meteo_payload(today)
+        resp = client.get(f"/trips/{t.id}")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "vp-weather-hero" in body
+    assert "⛅" in body
+    assert "22°" in body
