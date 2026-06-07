@@ -80,6 +80,21 @@
         <div class="day-column-header">
           <h2 class="day-column-num">Day {{ day_index }}</h2>
           <div class="day-column-date">{{ day_date.strftime('%a, %b %d') }}</div>
+          {% set day_forecast = day_forecasts.get(day_date) %}
+          {% if day_forecast %}
+            {% set fc = day_forecast %}
+            <button type="button"
+                    class="vp-weather-chip btn btn-link p-0"
+                    data-bs-toggle="popover"
+                    data-bs-html="true"
+                    data-bs-trigger="click focus"
+                    data-bs-title="{{ day_date.strftime('%a, %b %d') }}"
+                    data-bs-content="{% include '_weather_popover.html' %}">
+              <span aria-hidden="true">{{ fc.emoji }}</span>
+              {{ format_temperature(fc.high, fc.temp_unit) }} /
+              {{ format_temperature(fc.low, fc.temp_unit) }}
+            </button>
+          {% endif %}
           <div class="day-column-summary">{{ format_day_items_summary(items) }}</div>
         </div>
 
@@ -163,4 +178,12 @@
 {% block scripts %}
   <script src="{{ url_for('static', filename='js/itinerary.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/yearbook.js') }}" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (typeof bootstrap === 'undefined' || !bootstrap.Popover) return;
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function (el) {
+        new bootstrap.Popover(el);
+      });
+    });
+  </script>
 {% endblock %}

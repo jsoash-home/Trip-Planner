@@ -2252,3 +2252,116 @@ def test_lifetime_map_renders_stats_strip_for_user_with_completed_trip(
     body = resp.get_data(as_text=True)
     assert "<strong>1</strong> trips" in body
     assert "Trips per year" in body
+
+
+# ─────────────────────────  Weather chips (B1)  ────────────────────────
+
+
+def _ok_open_meteo_payload(d):
+    """Minimal Open-Meteo response covering one day for chip tests."""
+    iso = d.isoformat()
+    return {
+        "daily": {
+            "time": [iso],
+            "weather_code": [2],
+            "temperature_2m_max": [22.0],
+            "temperature_2m_min": [14.0],
+            "precipitation_probability_max": [20],
+            "relative_humidity_2m_mean": [64],
+        },
+        "hourly": {
+            "time": [f"{iso}T{h:02d}:00" for h in range(24)],
+            "temperature_2m": [float(h + 10) for h in range(24)],
+            "weather_code": [0] * 24,
+        },
+    }
+
+
+def test_itinerary_renders_weather_chip_for_today(app, owner):
+    """The day-header weather chip renders when today is in the
+    forecast window and the day has a geocoded item."""
+    today = date.today()
+    t = Trip(
+        owner_id=owner.id, name="Weather chip trip",
+        start_date=today, end_date=today + (date(2026, 6, 14) - date(2026, 6, 7)),
+    )
+    db.session.add(t)
+    db.session.commit()
+    db.session.add(ItineraryItem(
+        trip_id=t.id, day_date=today, title="Walking tour",
+        geocoded_lat=48.85, geocoded_lng=2.35,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    with patch("src.weather.fetch_forecast") as mock_fetch:
+        mock_fetch.return_value = _ok_open_meteo_payload(today)
+        resp = client.get(f"/trips/{t.id}/itinerary")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "vp-weather-chip" in body
+    assert "⛅" in body  # WMO 2 = partly cloudy
+    assert "22°" in body
+
+
+def test_itinerary_skips_chip_for_day_beyond_window(app, owner):
+    """A trip 30 days out: no chips render anywhere."""
+    today = date.today()
+    far_start = date(today.year + 1, 1, 1)
+    t = Trip(
+        owner_id=owner.id, name="Future trip",
+        start_date=far_start,
+        end_date=date(far_start.year, far_start.month, far_start.day + 3),
+    )
+    db.session.add(t)
+    db.session.commit()
+    db.session.add(ItineraryItem(
+        trip_id=t.id, day_date=far_start, title="Future thing",
+        geocoded_lat=48.85, geocoded_lng=2.35,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    with patch("src.weather.fetch_forecast") as mock_fetch:
+        resp = client.get(f"/trips/{t.id}/itinerary")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "vp-weather-chip" not in body
+    assert mock_fetch.called is False  # never called for out-of-window days
+
+
+def test_weather_failure_does_not_break_itinerary_page(app, owner):
+    """When the upstream API fails, the page still renders 200 with
+    no chip markup."""
+    today = date.today()
+    t = Trip(
+        owner_id=owner.id, name="Trip",
+        start_date=today, end_date=today,
+    )
+    db.session.add(t)
+    db.session.commit()
+    db.session.add(ItineraryItem(
+        trip_id=t.id, day_date=today, title="Thing",
+        geocoded_lat=48.85, geocoded_lng=2.35,
+    ))
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+
+    with patch("src.weather.fetch_forecast") as mock_fetch:
+        mock_fetch.return_value = None
+        resp = client.get(f"/trips/{t.id}/itinerary")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "vp-weather-chip" not in body

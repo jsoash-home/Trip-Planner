@@ -1955,3 +1955,29 @@ body.vp-public main { padding-top: 2rem; }
   margin-top: 0.25rem;
   text-align: center;
 }
+
+/* Weather chip on itinerary day headers. */
+.vp-weather-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  background: var(--vp-surface-2);
+  color: var(--vp-text);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  margin-top: 0.25rem;
+}
+.vp-weather-chip:hover {
+  background: var(--vp-accent-soft);
+  text-decoration: none;
+}
+.vp-weather-hourly {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.vp-weather-hourly__slot {
+  white-space: nowrap;
+}

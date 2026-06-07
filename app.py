@@ -133,6 +133,12 @@ from src.trip_helpers import (
     themed_countdown_label,
     trip_form_values,
 )
+from src.weather import (
+    format_temperature,
+    get_forecast_for_day,
+    is_in_forecast_window,
+    pick_day_coords,
+)
 from src.yearbook import (
     compute_country_list,
     compute_highlight_items,
@@ -375,6 +381,7 @@ app.jinja_env.globals.update(
     progress_fraction=progress_fraction,
     share_role_label=lambda code: SHARE_ROLE_LABELS.get(code, code),
     themed_countdown_label=themed_countdown_label,
+    format_temperature=format_temperature,
 )
 
 
@@ -1641,6 +1648,24 @@ def _annotate_new_items_for_trip(trip) -> List["NewItemSuggestion"]:
     return out
 
 
+def _trip_primary_coords(trip):
+    """Most common (geocoded_lat, geocoded_lng) pair across the trip's
+    bookings + itinerary items. Used as the day-fallback when no item
+    on a given day has its own coords. Returns None when no row has
+    coords."""
+    from collections import Counter
+    rows = list(trip.bookings or []) + list(trip.itinerary_items or [])
+    pairs = [
+        (r.geocoded_lat, r.geocoded_lng)
+        for r in rows
+        if getattr(r, "geocoded_lat", None) is not None
+        and getattr(r, "geocoded_lng", None) is not None
+    ]
+    if not pairs:
+        return None
+    return Counter(pairs).most_common(1)[0][0]
+
+
 @app.route("/trips/<int:trip_id>/itinerary")
 @login_required
 def trip_itinerary(trip_id):
@@ -1651,6 +1676,25 @@ def trip_itinerary(trip_id):
     new_items_count = len(_annotate_new_items_for_trip(trip))
     days = group_items_by_day(items, trip.start_date, trip.end_date)
     initial_day = initial_day_index(trip.start_date, trip.end_date, date.today())
+
+    today = date.today()
+    trip_fallback = _trip_primary_coords(trip)
+    day_forecasts = {}
+    for day_date, day_items in days:
+        if not is_in_forecast_window(day_date, today):
+            continue
+        coords = pick_day_coords(day_items, trip_fallback)
+        if coords is None:
+            continue
+        lat, lng = coords
+        fc = get_forecast_for_day(
+            lat, lng, day_date,
+            unit=current_user.weather_units,
+            db_session=db.session,
+        )
+        if fc:
+            day_forecasts[day_date] = fc
+
     return render_template(
         "trip_itinerary.html",
         trip=trip,
@@ -1659,6 +1703,7 @@ def trip_itinerary(trip_id):
         initial_day=initial_day,
         drift_count=drift_count,
         new_items_count=new_items_count,
+        day_forecasts=day_forecasts,
     )
 
 

@@ -1,0 +1,34 @@
+{# Popover body for the weather chip on the itinerary page.
+   Caller exposes `fc` (a DayForecast). Rendered to a string and
+   embedded via data-bs-content; HTML escapes via Jinja's |e filter
+   are applied by the caller. #}
+<div class="vp-weather-popover">
+  <div class="mb-1">
+    <span aria-hidden="true">{{ fc.emoji }}</span>
+    <strong>
+      {{ format_temperature(fc.high, fc.temp_unit) }} /
+      {{ format_temperature(fc.low, fc.temp_unit) }}
+    </strong>
+  </div>
+  <div class="small text-muted mb-2">
+    {% if fc.precipitation_probability is not none %}
+      💧 Precip {{ fc.precipitation_probability }}%
+    {% endif %}
+    {% if fc.precipitation_probability is not none and fc.humidity is not none %}
+      ·
+    {% endif %}
+    {% if fc.humidity is not none %}
+      💦 Humidity {{ fc.humidity }}%
+    {% endif %}
+  </div>
+  {% if fc.hourly %}
+    <div class="vp-weather-hourly small">
+      {% for slot in fc.hourly %}
+        <span class="vp-weather-hourly__slot">
+          {{ "%02d"|format(slot.hour) }}h
+          {{ format_temperature(slot.temp, fc.temp_unit) }}
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
