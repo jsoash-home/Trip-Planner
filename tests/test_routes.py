@@ -2178,3 +2178,30 @@ def test_dashboard_renders_on_this_day_section_when_past_trip_matches(app, owner
     body = resp.get_data(as_text=True)
     assert "On This Day Trip" in body
     assert "On this day" in body
+
+
+def test_lifetime_map_renders_stats_strip_for_user_with_completed_trip(
+    app, owner,
+):
+    """/map renders the lifetime stats strip + trips-per-year chart
+    when the user has at least one completed trip."""
+    today = date.today()
+    start = date(today.year - 1, 6, 1)
+    end = date(today.year - 1, 6, 8)
+    t = Trip(
+        owner_id=owner.id,
+        name="Lifetime Stats Trip",
+        start_date=start,
+        end_date=end,
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get("/map")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "<strong>1</strong> trips" in body
+    assert "Trips per year" in body

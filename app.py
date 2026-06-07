@@ -136,7 +136,9 @@ from src.trip_helpers import (
 from src.yearbook import (
     compute_country_list,
     compute_highlight_items,
+    compute_lifetime_stats,
     compute_trip_stats,
+    compute_trips_per_year,
     days_overview,
     derive_yearbook_view,
     generate_share_token,
@@ -1175,9 +1177,18 @@ def lifetime_map():
         if collab_trip_ids else []
     )
     qualifying = [t for t in owned + collab if _trip_is_for_lifetime(t, today)]
+    completed = [
+        t for t in owned + collab
+        if t.start_date and t.end_date
+        and derive_status(t.start_date, t.end_date, today) == "completed"
+    ]
+    lifetime_stats = compute_lifetime_stats(completed)
+    year_bars = compute_trips_per_year(completed)
     return render_template(
         "lifetime_map.html",
         has_any_qualifying_trips=bool(qualifying),
+        lifetime_stats=lifetime_stats,
+        year_bars=year_bars,
     )
 
 
