@@ -814,6 +814,23 @@ def logout():
     return redirect(url_for("index"))
 
 
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    """User preferences page. Currently surfaces weather_units; B3 will
+    extend with home currency."""
+    if request.method == "POST":
+        chosen = (request.form.get("weather_units") or "").strip()
+        if chosen not in ("metric", "imperial"):
+            flash("Invalid units selection.", "danger")
+            return render_template("settings.html")
+        current_user.weather_units = chosen
+        db.session.commit()
+        flash("Settings updated.", "info")
+        return redirect(url_for("settings"))
+    return render_template("settings.html")
+
+
 # ─── Trips ──────────────────────────────────────────────────────────
 @app.route("/trips")
 @login_required

@@ -2180,6 +2180,53 @@ def test_dashboard_renders_on_this_day_section_when_past_trip_matches(app, owner
     assert "On this day" in body
 
 
+def test_settings_get_renders_form_with_current_unit(app, owner):
+    """/settings GET renders the form with the current user's unit
+    pre-selected."""
+    owner.weather_units = "imperial"
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    # Imperial radio should be the one with `checked`.
+    assert 'value="imperial"' in body
+    assert "Fahrenheit" in body
+
+
+def test_settings_post_updates_user_weather_units(app, owner):
+    """POST with a valid unit saves to the User row and redirects."""
+    assert owner.weather_units == "metric"
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(
+        "/settings", data={"weather_units": "imperial"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    db.session.refresh(owner)
+    assert owner.weather_units == "imperial"
+
+
+def test_settings_post_rejects_invalid_unit(app, owner):
+    """An unknown unit doesn't change the User row and re-renders the
+    form with an error flash."""
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(
+        "/settings", data={"weather_units": "kelvin"},
+    )
+    assert resp.status_code == 200
+    db.session.refresh(owner)
+    assert owner.weather_units == "metric"
+
+
 def test_lifetime_map_renders_stats_strip_for_user_with_completed_trip(
     app, owner,
 ):
