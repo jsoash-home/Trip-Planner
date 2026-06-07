@@ -289,6 +289,26 @@ def _ensure_yearbook_columns() -> None:
                 logger.warning("Migration skipped (%s): %s", stmt, e)
 
 
+def _ensure_weather_columns() -> None:
+    """
+    Add the User.weather_units column introduced by B1 (weather
+    forecast on itinerary). Same swallow-on-duplicate pattern as the
+    other _ensure_* helpers — re-runs are no-ops. The new
+    WeatherCache table itself is created by db.create_all().
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE user ADD COLUMN weather_units VARCHAR(10) NOT NULL DEFAULT 'metric'",
+    ]
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+                logger.info("Migration: applied %s", stmt)
+            except Exception as e:
+                logger.warning("Migration skipped (%s): %s", stmt, e)
+
+
 def _ensure_geocoding_columns() -> None:
     """
     Add geocoding columns to booking + itinerary_item (added by the
@@ -326,6 +346,7 @@ with app.app_context():
     _ensure_trip_columns()
     _ensure_geocoding_columns()
     _ensure_yearbook_columns()
+    _ensure_weather_columns()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)

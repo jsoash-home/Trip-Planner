@@ -30,6 +30,11 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String, nullable=False)
     avatar_url = db.Column(db.String, nullable=True)
 
+    # "metric" (default) or "imperial". Drives temperature display app-wide.
+    weather_units = db.Column(
+        db.String(10), nullable=False, default="metric",
+    )
+
     trips = db.relationship("Trip", backref="owner", lazy=True)
 
 
@@ -307,3 +312,33 @@ class GeocodeCache(db.Model):
     country_code = db.Column(db.String(2), nullable=True)
     provider = db.Column(db.String(40), nullable=False, default="mapbox")
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class WeatherCache(db.Model):
+    """De-duplicates Open-Meteo forecast lookups.
+
+    Keyed by (lat_rounded, lng_rounded, forecast_date, temp_unit). The
+    rounded coords coalesce nearby items in the same city to one row.
+    Rows are TTL-based — see CACHE_TTL_SECONDS in src/weather.py.
+    """
+
+    __tablename__ = "weather_cache"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "lat_rounded", "lng_rounded", "forecast_date", "temp_unit",
+            name="uq_weather_cache_key",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    lat_rounded = db.Column(db.Float, nullable=False)
+    lng_rounded = db.Column(db.Float, nullable=False)
+    forecast_date = db.Column(db.Date, nullable=False)
+    temp_unit = db.Column(db.String(10), nullable=False)  # "celsius" | "fahrenheit"
+    high_temp = db.Column(db.Float, nullable=False)
+    low_temp = db.Column(db.Float, nullable=False)
+    precipitation_probability = db.Column(db.Integer, nullable=True)
+    humidity = db.Column(db.Integer, nullable=True)
+    wmo_code = db.Column(db.Integer, nullable=False)
+    hourly_json = db.Column(db.Text, nullable=True)
+    fetched_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
