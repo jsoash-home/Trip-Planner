@@ -59,6 +59,8 @@ class Trip(db.Model):
     cover_emoji = db.Column(db.String(10), nullable=True)
     cover_image_url = db.Column(db.String(800), nullable=True)
     primary_currency = db.Column(db.String(3), nullable=False, default="USD")
+    # IANA timezone (e.g. "Europe/Paris") used by the destination-clock feature.
+    timezone_iana = db.Column(db.String(64), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
     # ── Yearbook public-share (Phase 3) ───────────────────────────────

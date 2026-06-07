@@ -315,6 +315,25 @@ def _ensure_weather_columns() -> None:
                 logger.warning("Migration skipped (%s): %s", stmt, e)
 
 
+def _ensure_timezone_column() -> None:
+    """
+    Add the Trip.timezone_iana column introduced by B2 (destination
+    clock / time zones). Same swallow-on-duplicate pattern as the
+    other _ensure_* helpers — re-runs are no-ops.
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE trip ADD COLUMN timezone_iana VARCHAR(64)",
+    ]
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+                logger.info("Migration: applied %s", stmt)
+            except Exception as e:
+                logger.warning("Migration skipped (%s): %s", stmt, e)
+
+
 def _ensure_geocoding_columns() -> None:
     """
     Add geocoding columns to booking + itinerary_item (added by the
@@ -353,6 +372,7 @@ with app.app_context():
     _ensure_geocoding_columns()
     _ensure_yearbook_columns()
     _ensure_weather_columns()
+    _ensure_timezone_column()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)
