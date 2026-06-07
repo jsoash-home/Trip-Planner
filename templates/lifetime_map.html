@@ -9,6 +9,33 @@
 {% block content %}
 <h1 class="h4 mb-3">🌍 Your travels</h1>
 
+{% if lifetime_stats.trip_count > 0 %}
+  <div class="vp-lifetime-stats mb-3">
+    <span class="vp-lifetime-stat">
+      🌍 <strong>{{ lifetime_stats.country_count }}</strong> countries
+    </span>
+    <span class="vp-lifetime-stat">
+      🏙️ <strong>{{ lifetime_stats.city_count }}</strong> cities
+    </span>
+    <span class="vp-lifetime-stat">
+      📅 <strong>{{ lifetime_stats.days_away }}</strong> days away
+    </span>
+    <span class="vp-lifetime-stat">
+      ✈️ <strong>{{ lifetime_stats.flight_count }}</strong> flights
+    </span>
+    <span class="vp-lifetime-stat">
+      🧳 <strong>{{ lifetime_stats.trip_count }}</strong> trips
+    </span>
+    <span class="vp-lifetime-stat">
+      🗺️ Longest: <strong>{{ lifetime_stats.longest_trip_days }}</strong> days
+    </span>
+  </div>
+{% else %}
+  <p class="vp-lifetime-stats--empty text-muted small mb-3">
+    Your stats will fill in after your first completed trip.
+  </p>
+{% endif %}
+
 {% if not mapbox_token %}
 <div class="alert alert-warning">
   Map provider not configured. Set <code>MAPBOX_TOKEN</code> in your environment.

@@ -1897,3 +1897,25 @@ body.vp-public main { padding-top: 2rem; }
   color: var(--vp-text);
   text-decoration: underline;
 }
+
+/* Lifetime stats chip strip (above the lifetime map). */
+.vp-lifetime-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.vp-lifetime-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  background: var(--vp-accent-soft);
+  color: var(--vp-text);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.vp-lifetime-stat strong {
+  font-weight: 600;
+  color: var(--vp-accent);
+}
