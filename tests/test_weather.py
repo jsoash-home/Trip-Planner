@@ -1,22 +1,39 @@
 """Unit tests for src/weather.py."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
+import pytest
 import requests
 
+from app import app as flask_app
+from models import WeatherCache, db
 from src.weather import (
+    CACHE_TTL_SECONDS,
     DEFAULT_EMOJI,
     DayForecast,
     cache_key_for,
     fetch_forecast,
     format_temperature,
+    get_forecast_for_day,
     is_in_forecast_window,
     pick_day_coords,
     wmo_code_to_emoji,
 )
+
+
+@pytest.fixture
+def app():
+    """Fresh in-memory DB schema for cache-layer tests."""
+    flask_app.config["TESTING"] = True
+    with flask_app.app_context():
+        db.drop_all()
+        db.create_all()
+        yield flask_app
+        db.session.remove()
+        db.drop_all()
 
 
 # ─────────────────────────────  fakes  ────────────────────────────────
@@ -210,3 +227,129 @@ def test_fetch_forecast_network_error_returns_none(mock_get):
         start_date=date(2026, 6, 7), end_date=date(2026, 6, 7),
     )
     assert result is None
+
+
+# ─────────────────────────  get_forecast_for_day  ─────────────────────
+
+
+def _ok_payload(d: date) -> dict:
+    """Build a minimal Open-Meteo response covering one day."""
+    iso = d.isoformat()
+    hours = [
+        f"{iso}T{h:02d}:00" for h in range(24)
+    ]
+    return {
+        "daily": {
+            "time": [iso],
+            "weather_code": [2],
+            "temperature_2m_max": [22.0],
+            "temperature_2m_min": [14.0],
+            "precipitation_probability_max": [20],
+            "relative_humidity_2m_mean": [64],
+        },
+        "hourly": {
+            "time": hours,
+            "temperature_2m": [h + 10.0 for h in range(24)],
+            "weather_code": [0] * 24,
+        },
+    }
+
+
+@patch("src.weather.fetch_forecast")
+def test_get_forecast_for_day_cache_hit_no_api_call(mock_fetch, app):
+    # Pre-seed a fresh cache row.
+    db.session.add(WeatherCache(
+        lat_rounded=48.85, lng_rounded=2.35,
+        forecast_date=date(2026, 6, 7),
+        temp_unit="celsius",
+        high_temp=22.0, low_temp=14.0,
+        precipitation_probability=20, humidity=64,
+        wmo_code=2, hourly_json="[]",
+        fetched_at=datetime.utcnow(),
+    ))
+    db.session.commit()
+
+    fc = get_forecast_for_day(
+        48.85, 2.35, date(2026, 6, 7),
+        unit="metric", db_session=db.session,
+    )
+    assert fc is not None
+    assert fc.high == 22.0
+    assert fc.emoji == "⛅"  # WMO 2 = partly cloudy
+    assert mock_fetch.called is False
+
+
+@patch("src.weather.fetch_forecast")
+def test_get_forecast_for_day_cache_miss_fetches_and_writes(mock_fetch, app):
+    mock_fetch.return_value = _ok_payload(date(2026, 6, 7))
+    fc = get_forecast_for_day(
+        48.85, 2.35, date(2026, 6, 7),
+        unit="metric", db_session=db.session,
+    )
+    assert fc is not None
+    assert fc.high == 22.0
+    assert mock_fetch.called
+
+    rows = WeatherCache.query.all()
+    assert len(rows) == 1
+    assert rows[0].temp_unit == "celsius"
+
+
+@patch("src.weather.fetch_forecast")
+def test_get_forecast_for_day_stale_cache_refetches(mock_fetch, app):
+    # Insert a stale row (older than TTL).
+    stale_time = datetime.utcnow() - timedelta(seconds=CACHE_TTL_SECONDS + 60)
+    db.session.add(WeatherCache(
+        lat_rounded=48.85, lng_rounded=2.35,
+        forecast_date=date(2026, 6, 7),
+        temp_unit="celsius",
+        high_temp=1.0, low_temp=0.0,  # obviously bogus / old
+        precipitation_probability=0, humidity=0,
+        wmo_code=0, hourly_json="[]",
+        fetched_at=stale_time,
+    ))
+    db.session.commit()
+
+    mock_fetch.return_value = _ok_payload(date(2026, 6, 7))
+    fc = get_forecast_for_day(
+        48.85, 2.35, date(2026, 6, 7),
+        unit="metric", db_session=db.session,
+    )
+    assert fc is not None
+    assert fc.high == 22.0  # refreshed, not the stale 1.0
+    assert mock_fetch.called
+
+    rows = WeatherCache.query.all()
+    assert len(rows) == 1
+    assert rows[0].high_temp == 22.0
+
+
+@patch("src.weather.fetch_forecast")
+def test_get_forecast_for_day_api_failure_returns_none(mock_fetch, app):
+    mock_fetch.return_value = None  # simulate failure
+    fc = get_forecast_for_day(
+        48.85, 2.35, date(2026, 6, 7),
+        unit="metric", db_session=db.session,
+    )
+    assert fc is None
+    assert WeatherCache.query.count() == 0
+
+
+@patch("src.weather.fetch_forecast")
+def test_get_forecast_for_day_different_unit_separate_cache(mock_fetch, app):
+    payload = _ok_payload(date(2026, 6, 7))
+    mock_fetch.return_value = payload
+
+    fc_m = get_forecast_for_day(
+        48.85, 2.35, date(2026, 6, 7),
+        unit="metric", db_session=db.session,
+    )
+    fc_i = get_forecast_for_day(
+        48.85, 2.35, date(2026, 6, 7),
+        unit="imperial", db_session=db.session,
+    )
+    assert fc_m is not None and fc_i is not None
+    assert mock_fetch.call_count == 2  # one per unit
+
+    units = {r.temp_unit for r in WeatherCache.query.all()}
+    assert units == {"celsius", "fahrenheit"}

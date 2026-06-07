@@ -10,9 +10,10 @@ freshness check. No API key required — Open-Meteo is free and
 non-authenticated.
 """
 
+import json
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
 import requests
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 REQUEST_TIMEOUT_SECONDS = 5.0
+HOURLY_SLOT_HOURS = (6, 12, 18, 22)
 
 
 # Map Open-Meteo WMO weather codes → display emoji. Source:
@@ -180,3 +182,150 @@ def fetch_forecast(
     except ValueError as e:
         logger.warning("Open-Meteo returned non-JSON for (%s, %s): %s", lat, lng, e)
         return None
+
+
+# ──────────────────────────  cache wrapper  ───────────────────────────
+
+
+def _extract_hourly_micro_strip(payload: dict, d: date) -> List[Dict]:
+    """Pick 4 hourly samples (06/12/18/22 local) from an Open-Meteo
+    response. Returns [] when the hourly arrays are missing or
+    incomplete — callers persist this as an empty list."""
+    hourly = payload.get("hourly") or {}
+    times = hourly.get("time") or []
+    temps = hourly.get("temperature_2m") or []
+    codes = hourly.get("weather_code") or []
+    iso_prefix = d.isoformat() + "T"
+    out: List[Dict] = []
+    for i, t in enumerate(times):
+        if not isinstance(t, str) or not t.startswith(iso_prefix):
+            continue
+        try:
+            hour = int(t.split("T", 1)[1].split(":", 1)[0])
+        except (ValueError, IndexError):
+            continue
+        if hour in HOURLY_SLOT_HOURS:
+            if i >= len(temps) or i >= len(codes):
+                continue
+            out.append({"hour": hour, "temp": temps[i], "code": codes[i]})
+    return out
+
+
+def _row_to_forecast(row) -> DayForecast:
+    """Build a DayForecast from a WeatherCache row."""
+    try:
+        hourly = json.loads(row.hourly_json) if row.hourly_json else []
+    except ValueError:
+        hourly = []
+    return DayForecast(
+        date=row.forecast_date,
+        high=row.high_temp,
+        low=row.low_temp,
+        temp_unit=row.temp_unit,
+        wmo_code=row.wmo_code,
+        emoji=wmo_code_to_emoji(row.wmo_code),
+        precipitation_probability=row.precipitation_probability,
+        humidity=row.humidity,
+        hourly=hourly,
+    )
+
+
+def get_forecast_for_day(
+    lat: float,
+    lng: float,
+    d: date,
+    *,
+    unit: str,
+    db_session,
+) -> Optional[DayForecast]:
+    """Cache-first day forecast. Returns `None` on cache miss whose
+    upstream API call also fails. Imported lazily inside the function
+    so this module doesn't require Flask at import time.
+
+    Side effect: writes a fresh `WeatherCache` row on successful fetch.
+    Stale rows are overwritten, not deleted.
+    """
+    from models import WeatherCache  # avoid circular import at module load
+    from sqlalchemy.exc import IntegrityError
+
+    temp_unit = _unit_to_temperature_param(unit)
+    lat_r, lng_r, _, _ = cache_key_for(lat, lng, d, temp_unit)
+    cutoff = datetime.utcnow() - timedelta(seconds=CACHE_TTL_SECONDS)
+
+    existing = WeatherCache.query.filter_by(
+        lat_rounded=lat_r,
+        lng_rounded=lng_r,
+        forecast_date=d,
+        temp_unit=temp_unit,
+    ).one_or_none()
+
+    if existing and existing.fetched_at >= cutoff:
+        return _row_to_forecast(existing)
+
+    payload = fetch_forecast(
+        lat_r, lng_r, unit=unit, start_date=d, end_date=d,
+    )
+    if not payload:
+        return None
+
+    daily = payload.get("daily") or {}
+    try:
+        high = float(daily["temperature_2m_max"][0])
+        low = float(daily["temperature_2m_min"][0])
+        wmo = int(daily["weather_code"][0])
+    except (KeyError, IndexError, ValueError, TypeError) as e:
+        logger.warning("Open-Meteo daily missing core fields for (%s, %s): %s", lat, lng, e)
+        return None
+
+    precip = daily.get("precipitation_probability_max") or [None]
+    humid = daily.get("relative_humidity_2m_mean") or [None]
+    precip_val = precip[0] if precip else None
+    humid_val = humid[0] if humid else None
+    hourly = _extract_hourly_micro_strip(payload, d)
+    hourly_json = json.dumps(hourly)
+
+    now = datetime.utcnow()
+    if existing:
+        existing.high_temp = high
+        existing.low_temp = low
+        existing.precipitation_probability = (
+            int(precip_val) if precip_val is not None else None
+        )
+        existing.humidity = (
+            int(humid_val) if humid_val is not None else None
+        )
+        existing.wmo_code = wmo
+        existing.hourly_json = hourly_json
+        existing.fetched_at = now
+        row = existing
+    else:
+        row = WeatherCache(
+            lat_rounded=lat_r, lng_rounded=lng_r,
+            forecast_date=d, temp_unit=temp_unit,
+            high_temp=high, low_temp=low,
+            precipitation_probability=(
+                int(precip_val) if precip_val is not None else None
+            ),
+            humidity=(
+                int(humid_val) if humid_val is not None else None
+            ),
+            wmo_code=wmo,
+            hourly_json=hourly_json,
+            fetched_at=now,
+        )
+        db_session.add(row)
+    try:
+        db_session.commit()
+    except IntegrityError:
+        # Race condition: another request inserted the same key first.
+        # Rollback and re-query — return whatever's there.
+        db_session.rollback()
+        winner = WeatherCache.query.filter_by(
+            lat_rounded=lat_r, lng_rounded=lng_r,
+            forecast_date=d, temp_unit=temp_unit,
+        ).one_or_none()
+        if winner is None:
+            return None
+        return _row_to_forecast(winner)
+
+    return _row_to_forecast(row)
