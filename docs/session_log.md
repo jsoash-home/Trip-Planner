@@ -1,5 +1,31 @@
 # Session Log
 
+## 2026-06-07 — Two more phase-3 features shipped: Lifetime Stats (A2) + Weather Forecast (B1)
+
+**Shipped:**
+- **A2 Lifetime stats dashboard** (4 tasks, plan `docs/superpowers/plans/2026-06-07-lifetime-stats.md`, last commit `ac5adda`) — `compute_lifetime_stats` + `compute_trips_per_year` helpers in `src/yearbook.py`, route wiring on `/map` to filter completed-only, ✨ chip strip above the map (countries / cities / days / flights / trips / longest), pure-CSS trips-per-year bar chart below with zero-bars for gap years. Empty-state nudge when no completed trips.
+- **B1 Weather forecast on itinerary** (7 tasks, plan `docs/superpowers/plans/2026-06-07-weather-forecast.md`, last commit `0168048`) — new `WeatherCache` model + `User.weather_units` column, `src/weather.py` with Open-Meteo client + 6h cache (per-unit keyed), `/settings` page with the C°/F° toggle, ⚙️ navbar link, 🌦️ chip per itinerary day header with Bootstrap popover (humidity / precip / 4-slot hourly), 🌤️ hero chip on the trip overview Today section. Silent failure mode — no chip when Open-Meteo is down, no banner.
+- **chore: `scripts/dev.sh`** — port-5002-freeing dev launcher (last commit `6872bcc`).
+- Roadmap updated: A2 + B1 rows both marked ✓ shipped with plan links.
+
+**Test status:** 567 passing / 0 failing — up from 517 at session start (+50: +14 for A2, +35 for B1, plus a yearbook FakeTrip field that made downstream B1 tests easier).
+
+**Stopped at:** Both features pushed to origin/main. No outstanding work. Phase 3 status: A1 ✓, A2 ✓, A3 ✓, B1 ✓, B2 / B3 still queued.
+
+**Pick up next with:** Write the design spec for B2 — Destination clock / time zones. Smallest remaining phase-3 feature; mostly a frontend ticker on the trip overview + a `Trip.timezone_iana` column auto-derived via `timezonefinder` from the first geocoded booking.
+
+**Kickoff prompt for next session:**
+
+> Start B2 (Destination clock / time zones) from `docs/PHASE_3_ROADMAP.md` line 247. Begin with the design spec — same convention as A1 / A2 / A3 / B1 (all shipped). Tests green at 567. `static/js/countdown.js` has the setInterval-ticker pattern to mirror; `timezonefinder` is the proposed lib (pure-Python, no key). Spec → `docs/superpowers/specs/`, plan → `docs/superpowers/plans/`.
+
+**Loose ends:**
+- Dev server on `:5002` needs a restart to pick up the B1 schema migrations (`_ensure_weather_columns` + `db.create_all()` for `weather_cache`). The migrations are no-op on re-run, but the column / table need to land for `/settings` and the chips to work in your live browser.
+- A2's empty-state nudge wasn't visually smoked — it shows when a user has zero completed trips. Existing `vacation.db` has trips so we can't see it without spinning up a fresh DB.
+- First weather page load per location will hit the Open-Meteo API (200–800 ms). Background prefetch is parked as a polish pass.
+- `vacation.db.bak` (May 25, 122 KB) still kept at project root by request.
+
+---
+
 ## 2026-06-07 — Two phase-3 features shipped: Trip Yearbook (A1) + "On this day" tickler (A3)
 
 **Shipped:**
