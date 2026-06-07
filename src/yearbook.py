@@ -15,6 +15,8 @@ Six helpers + two dataclasses:
   - generate_share_token     — opaque URL-safe token for share links
   - days_overview            — one DayOverview per day in [start, end]
   - on_this_day              — past-trip matches for today's (month, day)
+  - compute_lifetime_stats   — aggregate totals for the /map stats strip
+  - compute_trips_per_year   — per-year bar data for the /map chart
 """
 
 import calendar
@@ -339,3 +341,114 @@ def on_this_day(trips, today: date) -> List[OnThisDayEntry]:
 
     entries.sort(key=lambda e: e.years_ago)
     return entries
+
+
+@dataclass
+class LifetimeStats:
+    """Aggregate totals rendered above the lifetime map."""
+
+    trip_count: int = 0
+    country_count: int = 0
+    city_count: int = 0
+    days_away: int = 0
+    flight_count: int = 0
+    longest_trip_days: int = 0
+
+
+@dataclass
+class YearBar:
+    """One bar in the trips-per-year chart on /map."""
+
+    year: int
+    trip_count: int
+
+
+def compute_lifetime_stats(trips) -> LifetimeStats:
+    """
+    Aggregate stats over the user's already-filtered completed trips.
+
+    Each `trip` is expected to expose `.start_date`, `.end_date`,
+    `.bookings` (iterable of Booking-like rows), and `.itinerary_items`
+    (iterable of ItineraryItem-like rows). Both lists can be empty.
+
+    Country / city dedup is across ALL trips, not per-trip — a country
+    visited in 5 trips counts once. City dedup key is
+    `(geocoded_city, geocoded_country_code)` so two "Paris" entries
+    in different countries count as two.
+
+    Returns LifetimeStats() (all zeros) when `trips` is empty or None.
+    """
+    trip_list = list(trips or [])
+    if not trip_list:
+        return LifetimeStats()
+
+    country_codes: set = set()
+    cities: set = set()
+    flight_count = 0
+    days_away = 0
+    longest = 0
+
+    for trip in trip_list:
+        span = (trip.end_date - trip.start_date).days + 1
+        if span < 1:
+            logger.warning(
+                "compute_lifetime_stats trip id=%s has start > end (%s > %s)",
+                getattr(trip, "id", "?"), trip.start_date, trip.end_date,
+            )
+        days_away += span
+        if span > longest:
+            longest = span
+
+        bookings = list(getattr(trip, "bookings", []) or [])
+        itinerary = list(getattr(trip, "itinerary_items", []) or [])
+
+        for row in bookings + itinerary:
+            cc = getattr(row, "geocoded_country_code", None)
+            if not cc:
+                continue
+            country_codes.add(cc)
+            city = getattr(row, "geocoded_city", None)
+            if city:
+                cities.add((city, cc))
+
+        for b in bookings:
+            if getattr(b, "type", None) == "flight":
+                flight_count += 1
+
+    return LifetimeStats(
+        trip_count=len(trip_list),
+        country_count=len(country_codes),
+        city_count=len(cities),
+        days_away=days_away,
+        flight_count=flight_count,
+        longest_trip_days=longest,
+    )
+
+
+def compute_trips_per_year(trips) -> List[YearBar]:
+    """
+    Build per-year bar data for the trips-per-year chart on /map.
+
+    One YearBar per calendar year between the earliest and latest
+    `start_date.year`, inclusive. Years with zero trips still appear
+    with `trip_count=0` so the timeline reads continuously.
+
+    Trips are bucketed by `start_date.year` — a trip that straddles a
+    year boundary (e.g. Dec 28 2024 → Jan 5 2025) counts once for its
+    start year only. Returns [] when `trips` is empty or None.
+    """
+    trip_list = list(trips or [])
+    if not trip_list:
+        return []
+
+    counts: Dict[int, int] = {}
+    for trip in trip_list:
+        y = trip.start_date.year
+        counts[y] = counts.get(y, 0) + 1
+
+    min_year = min(counts)
+    max_year = max(counts)
+    return [
+        YearBar(year=y, trip_count=counts.get(y, 0))
+        for y in range(min_year, max_year + 1)
+    ]

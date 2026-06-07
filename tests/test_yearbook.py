@@ -6,11 +6,15 @@ from typing import Any, List, Optional
 
 from src.yearbook import (
     DayOverview,
+    LifetimeStats,
     OnThisDayEntry,
     TripStats,
+    YearBar,
     compute_country_list,
     compute_highlight_items,
+    compute_lifetime_stats,
     compute_trip_stats,
+    compute_trips_per_year,
     days_overview,
     derive_yearbook_view,
     generate_share_token,
@@ -30,6 +34,8 @@ class FakeTrip:
     notes: Optional[str] = None
     status: str = "planning"
     id: int = 1
+    bookings: list = field(default_factory=list)
+    itinerary_items: list = field(default_factory=list)
 
 
 @dataclass
@@ -441,3 +447,162 @@ def test_on_this_day_year_boundary_trip_matches_both_calendar_years():
     assert out[0].years_ago == 1
     # Day number: Jan 2, 2025 is the 6th day of a trip starting Dec 28, 2024.
     assert out[0].day_number == 6
+
+
+# ───────────────────────  compute_lifetime_stats  ─────────────────────
+
+
+def test_lifetime_stats_empty_trips_returns_zeros():
+    stats = compute_lifetime_stats([])
+    assert isinstance(stats, LifetimeStats)
+    assert stats.trip_count == 0
+    assert stats.country_count == 0
+    assert stats.city_count == 0
+    assert stats.days_away == 0
+    assert stats.flight_count == 0
+    assert stats.longest_trip_days == 0
+
+
+def test_lifetime_stats_single_trip_counts():
+    trip = FakeTrip(
+        date(2024, 8, 1), date(2024, 8, 8),
+        bookings=[
+            FakeBooking(type="flight", geocoded_country_code="FR",
+                        geocoded_city="Paris"),
+            FakeBooking(type="hotel", geocoded_country_code="FR",
+                        geocoded_city="Paris"),
+        ],
+    )
+    stats = compute_lifetime_stats([trip])
+    assert stats.trip_count == 1
+    assert stats.country_count == 1
+    assert stats.city_count == 1
+    assert stats.days_away == 8
+    assert stats.flight_count == 1
+    assert stats.longest_trip_days == 8
+
+
+def test_lifetime_stats_days_away_sums_across_trips():
+    t1 = FakeTrip(date(2024, 8, 1), date(2024, 8, 8))   # 8 days
+    t2 = FakeTrip(date(2025, 3, 1), date(2025, 3, 10))  # 10 days
+    stats = compute_lifetime_stats([t1, t2])
+    assert stats.days_away == 18
+    assert stats.trip_count == 2
+
+
+def test_lifetime_stats_country_dedup_across_trips():
+    t1 = FakeTrip(
+        date(2024, 8, 1), date(2024, 8, 8),
+        bookings=[FakeBooking(geocoded_country_code="FR")],
+    )
+    t2 = FakeTrip(
+        date(2025, 3, 1), date(2025, 3, 10),
+        bookings=[
+            FakeBooking(geocoded_country_code="FR"),
+            FakeBooking(geocoded_country_code="JP"),
+        ],
+    )
+    stats = compute_lifetime_stats([t1, t2])
+    assert stats.country_count == 2
+
+
+def test_lifetime_stats_city_dedup_across_trips():
+    t1 = FakeTrip(
+        date(2024, 8, 1), date(2024, 8, 8),
+        bookings=[FakeBooking(geocoded_country_code="FR",
+                              geocoded_city="Paris")],
+    )
+    t2 = FakeTrip(
+        date(2025, 3, 1), date(2025, 3, 10),
+        bookings=[FakeBooking(geocoded_country_code="FR",
+                              geocoded_city="Paris")],
+    )
+    stats = compute_lifetime_stats([t1, t2])
+    assert stats.city_count == 1
+
+
+def test_lifetime_stats_same_city_different_country_counts_twice():
+    t1 = FakeTrip(
+        date(2024, 8, 1), date(2024, 8, 8),
+        bookings=[FakeBooking(geocoded_country_code="FR",
+                              geocoded_city="Paris")],
+    )
+    t2 = FakeTrip(
+        date(2025, 3, 1), date(2025, 3, 10),
+        bookings=[FakeBooking(geocoded_country_code="US",
+                              geocoded_city="Paris")],
+    )
+    stats = compute_lifetime_stats([t1, t2])
+    assert stats.country_count == 2
+    assert stats.city_count == 2
+
+
+def test_lifetime_stats_flight_count_only_counts_flights():
+    trip = FakeTrip(
+        date(2024, 8, 1), date(2024, 8, 8),
+        bookings=[
+            FakeBooking(type="flight"),
+            FakeBooking(type="flight"),
+            FakeBooking(type="hotel"),
+            FakeBooking(type="activity"),
+            FakeBooking(type="other"),
+        ],
+    )
+    stats = compute_lifetime_stats([trip])
+    assert stats.flight_count == 2
+
+
+def test_lifetime_stats_longest_trip_days_picks_max():
+    t1 = FakeTrip(date(2024, 8, 1), date(2024, 8, 8))    # 8 days
+    t2 = FakeTrip(date(2025, 3, 1), date(2025, 3, 21))   # 21 days
+    t3 = FakeTrip(date(2026, 1, 1), date(2026, 1, 5))    # 5 days
+    stats = compute_lifetime_stats([t1, t2, t3])
+    assert stats.longest_trip_days == 21
+
+
+def test_lifetime_stats_trip_with_no_rows_counts_for_days_and_trip_count():
+    trip = FakeTrip(date(2024, 8, 1), date(2024, 8, 8))  # no bookings/items
+    stats = compute_lifetime_stats([trip])
+    assert stats.trip_count == 1
+    assert stats.days_away == 8
+    assert stats.longest_trip_days == 8
+    assert stats.country_count == 0
+    assert stats.city_count == 0
+    assert stats.flight_count == 0
+
+
+# ──────────────────────  compute_trips_per_year  ──────────────────────
+
+
+def test_trips_per_year_empty_trips_returns_empty_list():
+    assert compute_trips_per_year([]) == []
+
+
+def test_trips_per_year_single_year():
+    t1 = FakeTrip(date(2024, 8, 1), date(2024, 8, 8))
+    t2 = FakeTrip(date(2024, 3, 1), date(2024, 3, 5))
+    bars = compute_trips_per_year([t1, t2])
+    assert len(bars) == 1
+    assert bars[0] == YearBar(year=2024, trip_count=2)
+
+
+def test_trips_per_year_multiple_years_fills_gaps_with_zero():
+    t1 = FakeTrip(date(2018, 8, 1), date(2018, 8, 8))
+    t2 = FakeTrip(date(2020, 3, 1), date(2020, 3, 5))
+    bars = compute_trips_per_year([t1, t2])
+    assert [b.year for b in bars] == [2018, 2019, 2020]
+    assert [b.trip_count for b in bars] == [1, 0, 1]
+
+
+def test_trips_per_year_keyed_by_start_date_year():
+    # Trip straddles Dec 28 2024 → Jan 5 2025: counts for 2024 only.
+    trip = FakeTrip(date(2024, 12, 28), date(2025, 1, 5))
+    bars = compute_trips_per_year([trip])
+    assert bars == [YearBar(year=2024, trip_count=1)]
+
+
+def test_trips_per_year_two_trips_in_same_year():
+    t1 = FakeTrip(date(2024, 3, 1), date(2024, 3, 5))
+    t2 = FakeTrip(date(2024, 9, 1), date(2024, 9, 7))
+    bars = compute_trips_per_year([t1, t2])
+    assert bars == [YearBar(year=2024, trip_count=2)]
