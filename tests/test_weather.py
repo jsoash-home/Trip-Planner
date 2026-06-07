@@ -3,11 +3,15 @@
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
+from unittest.mock import MagicMock, patch
+
+import requests
 
 from src.weather import (
     DEFAULT_EMOJI,
     DayForecast,
     cache_key_for,
+    fetch_forecast,
     format_temperature,
     is_in_forecast_window,
     pick_day_coords,
@@ -161,3 +165,48 @@ def test_day_forecast_dataclass_shape():
     )
     assert fc.high == 22.0
     assert fc.emoji == "⛅"
+
+
+# ──────────────────────────  fetch_forecast  ──────────────────────────
+
+
+@patch("src.weather.requests.get")
+def test_fetch_forecast_success_returns_dict(mock_get):
+    payload = {
+        "daily": {
+            "time": ["2026-06-07"],
+            "temperature_2m_max": [22.0],
+            "temperature_2m_min": [14.0],
+            "weather_code": [2],
+        },
+    }
+    mock_get.return_value = MagicMock(status_code=200, json=lambda: payload)
+    result = fetch_forecast(
+        48.85, 2.35, unit="metric",
+        start_date=date(2026, 6, 7), end_date=date(2026, 6, 7),
+    )
+    assert result == payload
+    assert mock_get.called
+    # Verify the call passed the right unit param.
+    call_kwargs = mock_get.call_args.kwargs
+    assert call_kwargs["params"]["temperature_unit"] == "celsius"
+
+
+@patch("src.weather.requests.get")
+def test_fetch_forecast_5xx_returns_none(mock_get):
+    mock_get.return_value = MagicMock(status_code=503, json=lambda: {})
+    result = fetch_forecast(
+        48.85, 2.35, unit="metric",
+        start_date=date(2026, 6, 7), end_date=date(2026, 6, 7),
+    )
+    assert result is None
+
+
+@patch("src.weather.requests.get")
+def test_fetch_forecast_network_error_returns_none(mock_get):
+    mock_get.side_effect = requests.RequestException("boom")
+    result = fetch_forecast(
+        48.85, 2.35, unit="imperial",
+        start_date=date(2026, 6, 7), end_date=date(2026, 6, 7),
+    )
+    assert result is None

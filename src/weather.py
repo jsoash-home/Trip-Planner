@@ -15,7 +15,13 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Dict, List, Optional, Tuple
 
+import requests
+
 logger = logging.getLogger(__name__)
+
+
+OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+REQUEST_TIMEOUT_SECONDS = 5.0
 
 
 # Map Open-Meteo WMO weather codes → display emoji. Source:
@@ -116,3 +122,61 @@ def pick_day_coords(items_for_day, trip_fallback_coords):
         if lat is not None and lng is not None:
             return (lat, lng)
     return trip_fallback_coords or None
+
+
+# ──────────────────────────  Open-Meteo API  ──────────────────────────
+
+
+def _unit_to_temperature_param(unit: str) -> str:
+    """Map our internal 'metric'/'imperial' label to Open-Meteo's API
+    `temperature_unit` parameter value."""
+    return "fahrenheit" if unit == "imperial" else "celsius"
+
+
+def fetch_forecast(
+    lat: float,
+    lng: float,
+    *,
+    unit: str,
+    start_date: date,
+    end_date: date,
+) -> Optional[dict]:
+    """Single Open-Meteo API call. Returns the raw JSON dict on 200;
+    `None` on network failure, non-200, or malformed JSON. Five-second
+    timeout. Never raises.
+
+    `unit` is "metric" or "imperial"; we translate to Open-Meteo's
+    own `temperature_unit` query param at call time.
+    """
+    params = {
+        "latitude": lat,
+        "longitude": lng,
+        "daily": (
+            "weather_code,temperature_2m_max,temperature_2m_min,"
+            "precipitation_probability_max,relative_humidity_2m_mean"
+        ),
+        "hourly": "temperature_2m,weather_code",
+        "temperature_unit": _unit_to_temperature_param(unit),
+        "timezone": "auto",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+    }
+    try:
+        resp = requests.get(
+            OPEN_METEO_URL,
+            params=params,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as e:
+        logger.warning("Open-Meteo network error for (%s, %s): %s", lat, lng, e)
+        return None
+    if resp.status_code != 200:
+        logger.warning(
+            "Open-Meteo returned %s for (%s, %s)", resp.status_code, lat, lng,
+        )
+        return None
+    try:
+        return resp.json()
+    except ValueError as e:
+        logger.warning("Open-Meteo returned non-JSON for (%s, %s): %s", lat, lng, e)
+        return None
