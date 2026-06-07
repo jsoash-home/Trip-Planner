@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-06-07 — Two phase-3 features shipped: Trip Yearbook (A1) + "On this day" tickler (A3)
+
+**Shipped:**
+- **A1 Trip Yearbook** (10 tasks, plan `docs/superpowers/plans/2026-05-31-trip-yearbook.md`, last commit `d0f7d1b`) — schema migration, `src/yearbook.py` helpers, ★ star toggle on itinerary cards, `/trips/<id>/yearbook` page with hero / chips / map / highlights / all-days strip, public `/yearbook/<token>` share with sanitized view + visibility toggles, print stylesheet. Manual smoke passed in browser.
+- **A3 "On this day" tickler** (4 tasks, plan `docs/superpowers/plans/2026-06-06-on-this-day.md`, last commit `c21ebb6`) — `on_this_day` helper + 9 unit tests, dashboard route wiring, `_trip_card` macro extension (overlay badge + yearbook link target), ✨ section on `/trips` with "+ N more …" expand. Shipped via subagent-driven development; two review-driven fixes caught along the way (`calendar.monthrange` test fix, `is not none` macro consistency).
+- Roadmap updated: A1 + A3 rows both marked ✓ shipped with plan links.
+
+**Test status:** 517 passing / 0 failing — up from 423 at session start (+94 across the two features).
+
+**Stopped at:** Both features pushed to origin/main. No outstanding work. Phase 3 status: A1 ✓, A3 ✓, A2 / B1 / B2 / B3 still queued.
+
+**Pick up next with:** Write the design spec for A2 — Lifetime stats dashboard. It's the natural follow-on; `src/yearbook.py` now has every helper A2 will likely reuse.
+
+**Kickoff prompt for next session:**
+
+> Start A2 (Lifetime stats dashboard) from `docs/PHASE_3_ROADMAP.md` line 42. Begin with the design spec — same convention as A1 (May 31) and A3 (June 6). Tests green at 517. `src/yearbook.py` has `compute_trip_stats`, `compute_country_list`, `on_this_day`-style patterns to reuse. Spec → `docs/superpowers/specs/`, plan → `docs/superpowers/plans/`.
+
+**Loose ends:**
+- A3's visual smoke not yet done — need a prior-year trip in `vacation.db` whose dates overlap today's `(month, day)` to verify the ✨ section appears on `/trips`. Easy reproduction: shift a copy of an existing trip's `start_date`/`end_date` back one year.
+- `vacation.db.bak` (122 KB) still at project root, intentionally kept this session. Decide whether to delete next time.
+
+---
+
 ## 2026-05-31 — Map view: browser verification, plan closed out
 
 **Verified in the user's regular browser:** `/trips/2/map` (Scandinavia '26, 45 geocoded rows) renders Mapbox tiles, pins, day chips, popups, and drag-to-correct — exactly as designed. The in-trip map is fully functional.
