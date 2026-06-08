@@ -2493,3 +2493,115 @@ def test_ensure_trip_timezone_handles_iana_lookup_returning_none(app, trip):
     assert result is None
     db.session.refresh(trip)
     assert trip.timezone_iana is None
+
+
+# ─── Trip form: timezone_iana field (B2 T5) ────────────────────────
+def test_trip_new_saves_timezone_iana(app, owner):
+    """POSTing a valid IANA name on /trips/new persists it on Trip."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            "/trips/new",
+            data={
+                "name": "Tokyo trip",
+                "start_date": "2026-09-01",
+                "end_date": "2026-09-10",
+                "primary_currency": "USD",
+                "timezone_iana": "Asia/Tokyo",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    saved = Trip.query.filter_by(name="Tokyo trip").one()
+    assert saved.timezone_iana == "Asia/Tokyo"
+
+
+def test_trip_new_rejects_invalid_timezone(app, owner):
+    """An unknown IANA name re-renders the form with the error message
+    and creates no trip."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            "/trips/new",
+            data={
+                "name": "Bad tz trip",
+                "start_date": "2026-09-01",
+                "end_date": "2026-09-10",
+                "primary_currency": "USD",
+                "timezone_iana": "Europe/Pariss",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Not a recognized time zone." in body
+    assert Trip.query.filter_by(name="Bad tz trip").count() == 0
+
+
+def test_trip_edit_saves_timezone_iana(app, trip, owner):
+    """POST /trips/<id>/edit with a valid IANA name persists it."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/edit",
+            data={
+                "name": trip.name,
+                "start_date": trip.start_date.isoformat(),
+                "end_date": trip.end_date.isoformat(),
+                "primary_currency": "USD",
+                "timezone_iana": "Asia/Tokyo",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    db.session.refresh(trip)
+    assert trip.timezone_iana == "Asia/Tokyo"
+
+
+def test_trip_edit_clears_timezone_when_empty_string_posted(app, trip, owner):
+    """Submitting an empty timezone_iana clears the column to NULL."""
+    trip.timezone_iana = "Asia/Tokyo"
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/edit",
+            data={
+                "name": trip.name,
+                "start_date": trip.start_date.isoformat(),
+                "end_date": trip.end_date.isoformat(),
+                "primary_currency": "USD",
+                "timezone_iana": "",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    db.session.refresh(trip)
+    assert trip.timezone_iana is None
+
+
+def test_trip_edit_get_renders_autodetect_preview_when_tz_null(app, trip, owner):
+    """GET /trips/<id>/edit with a geocoded booking and NULL timezone_iana
+    shows the auto-detected preview hint. We patch _ensure_trip_timezone
+    so the column stays NULL (otherwise the form value gates the preview
+    off), and patch iana_from_coords so the route's own preview computation
+    returns a deterministic name."""
+    db.session.add(Booking(
+        trip_id=trip.id, type="flight", title="UA101",
+        start_datetime=datetime(2026, 6, 1, 10, 0),
+        geocoded_lat=48.85, geocoded_lng=2.35,  # Paris-ish
+    ))
+    db.session.commit()
+    assert trip.timezone_iana is None
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app._ensure_trip_timezone", return_value=None), \
+             patch("app.iana_from_coords", return_value="Europe/Paris"):
+            resp = client.get(f"/trips/{trip.id}/edit")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Auto-detected from your first booking" in body
+    assert "Europe/Paris" in body

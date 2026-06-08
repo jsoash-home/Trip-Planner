@@ -75,7 +75,7 @@ from src.booking_helpers import (
 )
 from src.budget import format_money_totals, rollup_bookings_by_category
 from src.currency import SUPPORTED_CURRENCIES, format_money, is_valid_currency
-from src.destination_clock import iana_from_coords
+from src.destination_clock import COMMON_TIMEZONES, iana_from_coords
 from src.drift_review import chronological_order
 from src.geocoding import ensure_geocoded
 from src.itinerary import (
@@ -912,6 +912,7 @@ def trip_new():
                 field_errors=field_errors,
                 supported_currencies=SUPPORTED_CURRENCIES,
                 suggested_emojis=SUGGESTED_TRIP_EMOJIS,
+                common_timezones=COMMON_TIMEZONES,
             )
 
         trip = Trip(owner_id=current_user.id, **data)
@@ -934,6 +935,7 @@ def trip_new():
         field_errors={},
         supported_currencies=SUPPORTED_CURRENCIES,
         suggested_emojis=SUGGESTED_TRIP_EMOJIS,
+        common_timezones=COMMON_TIMEZONES,
     )
 
 
@@ -1035,6 +1037,28 @@ def trip_edit(trip_id):
     """Edit an existing trip."""
     trip = _owned_trip_or_404(trip_id)
 
+    # Compute the auto-detect preview from the first geocoded booking. We
+    # compute this BEFORE _ensure_trip_timezone runs so the preview value
+    # is independent of whether the column has just been auto-filled —
+    # i.e. it always reflects what auto-detect would pick from the data
+    # we have right now. The template gates rendering on the form value
+    # being empty, so a user who has filled the field won't see it.
+    preview_candidates = sorted(
+        [b for b in trip.bookings
+         if b.geocoded_lat is not None and b.geocoded_lng is not None],
+        key=lambda b: (b.start_datetime or datetime.max),
+    )
+    tz_autodetect_preview = (
+        iana_from_coords(preview_candidates[0].geocoded_lat,
+                         preview_candidates[0].geocoded_lng)
+        if preview_candidates else None
+    )
+
+    # Lazy auto-derive: the first time someone opens the edit page on a
+    # trip whose timezone is still NULL, fill it in from the first
+    # geocoded booking. Idempotent — no-op when already set.
+    _ensure_trip_timezone(trip)
+
     if request.method == "POST":
         data, field_errors = parse_trip_form(request.form)
         if not is_valid_currency(data["primary_currency"]):
@@ -1047,6 +1071,8 @@ def trip_edit(trip_id):
                 field_errors=field_errors,
                 supported_currencies=SUPPORTED_CURRENCIES,
                 suggested_emojis=SUGGESTED_TRIP_EMOJIS,
+                common_timezones=COMMON_TIMEZONES,
+                tz_autodetect_preview=tz_autodetect_preview,
             )
 
         for field, value in data.items():
@@ -1063,6 +1089,8 @@ def trip_edit(trip_id):
         field_errors={},
         supported_currencies=SUPPORTED_CURRENCIES,
         suggested_emojis=SUGGESTED_TRIP_EMOJIS,
+        common_timezones=COMMON_TIMEZONES,
+        tz_autodetect_preview=tz_autodetect_preview,
     )
 
 

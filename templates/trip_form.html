@@ -96,6 +96,30 @@
     </div>
 
     <div class="col-12">
+      <label for="trip-timezone" class="form-label">
+        Destination time zone <span class="text-muted small">— optional</span>
+      </label>
+      <input id="trip-timezone" name="timezone_iana" type="text"
+             list="vp-tz-list"
+             class="form-control{{ invalid_class(field_errors, 'timezone_iana') }}"
+             value="{{ form.get('timezone_iana', '') }}"
+             {% if field_errors and field_errors.get('timezone_iana') %}aria-invalid="true"{% endif %}
+             placeholder="e.g. Europe/Paris" maxlength="64">
+      {% if tz_autodetect_preview and not form.get('timezone_iana') %}
+        <div class="form-text small">
+          Auto-detected from your first booking:
+          <code>{{ tz_autodetect_preview }}</code>.
+        </div>
+      {% endif %}
+      {{ field_error(field_errors, 'timezone_iana') }}
+      <datalist id="vp-tz-list">
+        {% for tz in common_timezones or [] %}
+          <option value="{{ tz }}">
+        {% endfor %}
+      </datalist>
+    </div>
+
+    <div class="col-12">
       <label for="trip-cover-url" class="form-label">
         Cover photo URL <span class="text-muted small">— optional</span>
       </label>
