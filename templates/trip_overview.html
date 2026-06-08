@@ -58,6 +58,17 @@
         &middot; {{ today_date.strftime('%a, %b %d') }}
       </h2>
     </div>
+    {% if trip.timezone_iana %}
+      {% set _tz_city = trip.destination or trip.timezone_iana.split('/')[-1].replace('_', ' ') %}
+      <div class="vp-destclock vp-destclock--chip"
+           data-vp-clock
+           data-clock-iana="{{ trip.timezone_iana }}"
+           data-clock-city="{{ _tz_city }}">
+        🕒 {{ _tz_city }}
+        · <span data-clock-time>{{ initial_dest_time or '—' }}</span>
+        <span class="text-muted small" data-clock-offset></span>
+      </div>
+    {% endif %}
     {% if today_forecast %}
       <div class="vp-weather-hero mb-2">
         <span class="vp-weather-hero__emoji" aria-hidden="true">{{ today_forecast.emoji }}</span>

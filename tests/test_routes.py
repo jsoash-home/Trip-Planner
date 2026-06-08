@@ -2684,3 +2684,48 @@ def test_trip_overview_auto_derives_timezone_on_first_visit(app, owner):
     assert refreshed.timezone_iana == "Asia/Tokyo"
     body = resp.get_data(as_text=True)
     assert 'data-clock-iana="Asia/Tokyo"' in body
+
+
+# ─── Today-section destination clock chip (B2 T7) ──────────────────
+def test_today_section_renders_clock_chip_when_tz_set(app, owner):
+    """An in-progress trip with timezone_iana set shows the destination
+    clock chip inside the Today section."""
+    today = date.today()
+    t = Trip(
+        owner_id=owner.id, name="Tokyo trip",
+        start_date=today - _td(days=1), end_date=today + _td(days=2),
+        timezone_iana="Asia/Tokyo",
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{t.id}")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "vp-destclock--chip" in body
+    assert 'data-clock-iana="Asia/Tokyo"' in body
+
+
+def test_today_section_skips_clock_chip_when_tz_null(app, owner):
+    """An in-progress trip with no timezone and no geocoded bookings
+    shows no destination clock chip in the Today section."""
+    today = date.today()
+    t = Trip(
+        owner_id=owner.id, name="Mystery trip",
+        start_date=today - _td(days=1), end_date=today + _td(days=2),
+        timezone_iana=None,
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app._ensure_trip_timezone", return_value=None):
+            resp = client.get(f"/trips/{t.id}")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "vp-destclock--chip" not in body
