@@ -1999,3 +1999,26 @@ body.vp-public main { padding-top: 2rem; }
   font-weight: 600;
   color: var(--vp-accent);
 }
+
+/* Destination clock (B2): planning hero panel + Today-section chip. */
+.vp-destclock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.vp-destclock--hero {
+  font-size: 1rem;
+  margin-top: 0.5rem;
+  justify-content: center;
+}
+.vp-destclock--chip {
+  font-size: 0.9rem;
+  padding: 0.25rem 0.7rem;
+  background: var(--vp-surface-2, #f3f4f6);
+  border-radius: 999px;
+  margin-bottom: 0.4rem;
+}
+.vp-destclock__offset {
+  font-size: 0.85em;
+}

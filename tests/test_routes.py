@@ -2605,3 +2605,82 @@ def test_trip_edit_get_renders_autodetect_preview_when_tz_null(app, trip, owner)
     body = resp.get_data(as_text=True)
     assert "Auto-detected from your first booking" in body
     assert "Europe/Paris" in body
+
+
+# ─── Trip overview: destination clock hero panel (B2 T6) ───────────
+def test_trip_overview_renders_clock_panel_when_tz_set(app, owner):
+    """A planning trip with timezone_iana set shows the clock panel in
+    the hero, with a server-rendered initial time (not the '—' fallback)."""
+    t = Trip(
+        owner_id=owner.id, name="Paris trip",
+        start_date=date(2026, 8, 1), end_date=date(2026, 8, 10),
+        timezone_iana="Europe/Paris",
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{t.id}")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "data-vp-clock" in body
+    assert 'data-clock-iana="Europe/Paris"' in body
+
+    marker = '<span class="vp-destclock__time" data-clock-time>'
+    assert marker in body
+    after = body.split(marker, 1)[1]
+    rendered_time = after.split("</span>", 1)[0]
+    assert rendered_time.strip() != "—"
+
+
+def test_trip_overview_skips_clock_panel_when_tz_null(app, owner):
+    """A planning trip with no timezone and no geocoded bookings shows
+    no clock panel in the hero."""
+    t = Trip(
+        owner_id=owner.id, name="Mystery trip",
+        start_date=date(2026, 8, 1), end_date=date(2026, 8, 10),
+        timezone_iana=None,
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app._ensure_trip_timezone", return_value=None):
+            resp = client.get(f"/trips/{t.id}")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "data-vp-clock" not in body
+
+
+def test_trip_overview_auto_derives_timezone_on_first_visit(app, owner):
+    """First GET of a planning trip with NULL timezone and a geocoded
+    booking auto-derives + persists the IANA name, then renders the
+    clock panel with that name."""
+    t = Trip(
+        owner_id=owner.id, name="Tokyo trip",
+        start_date=date(2026, 8, 1), end_date=date(2026, 8, 10),
+        timezone_iana=None,
+    )
+    db.session.add(t)
+    db.session.commit()
+    db.session.add(Booking(
+        trip_id=t.id, type="flight", title="JL5",
+        start_datetime=datetime(2026, 8, 1, 10, 0),
+        geocoded_lat=35.68, geocoded_lng=139.76,
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app.iana_from_coords", return_value="Asia/Tokyo"):
+            resp = client.get(f"/trips/{t.id}")
+
+    assert resp.status_code == 200
+    refreshed = db.session.get(Trip, t.id)
+    assert refreshed.timezone_iana == "Asia/Tokyo"
+    body = resp.get_data(as_text=True)
+    assert 'data-clock-iana="Asia/Tokyo"' in body

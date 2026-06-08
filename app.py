@@ -18,6 +18,7 @@ import subprocess
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import markdown as md_lib
 from dotenv import load_dotenv
@@ -945,6 +946,20 @@ def trip_overview(trip_id):
     """Single-trip overview page. Viewer / editor / owner all see this."""
     trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
     today = date.today()
+
+    # Lazy auto-derive the trip's IANA timezone the first time someone
+    # opens the overview. Idempotent — does nothing if already set.
+    _ensure_trip_timezone(trip)
+
+    initial_dest_time: Optional[str] = None
+    if trip.timezone_iana:
+        try:
+            zi = ZoneInfo(trip.timezone_iana)
+            initial_dest_time = datetime.now(zi).strftime("%-I:%M %p")
+        except Exception as e:
+            logger.warning("ZoneInfo failed for %r: %s", trip.timezone_iana, e)
+            initial_dest_time = None
+
     status = derive_status(trip.start_date, trip.end_date, today)
     duration = (trip.end_date - trip.start_date).days + 1
 
@@ -996,6 +1011,7 @@ def trip_overview(trip_id):
         today_forecast=today_forecast,
         changes_banner=changes_banner,
         has_pins=has_pins,
+        initial_dest_time=initial_dest_time,
     )
 
 

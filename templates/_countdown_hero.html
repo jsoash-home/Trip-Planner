@@ -29,6 +29,17 @@
       <span data-countdown-form="days">{{ themed_countdown_label(trip.start_date, trip.end_date, today, emoji=trip.cover_emoji, unit='days') }}</span>
       <span data-countdown-form="sleeps" hidden>{{ themed_countdown_label(trip.start_date, trip.end_date, today, emoji=trip.cover_emoji, unit='sleeps') }}</span>
     </div>
+    {% if trip.timezone_iana %}
+      {% set _tz_city = trip.destination or trip.timezone_iana.split('/')[-1].replace('_', ' ') %}
+      <div class="vp-destclock vp-destclock--hero"
+           data-vp-clock
+           data-clock-iana="{{ trip.timezone_iana }}"
+           data-clock-city="{{ _tz_city }}">
+        🕒 <span class="vp-destclock__city">{{ _tz_city }}</span>,
+        <span class="vp-destclock__time" data-clock-time>{{ initial_dest_time or '—' }}</span>
+        <span class="vp-destclock__offset text-muted" data-clock-offset></span>
+      </div>
+    {% endif %}
   </section>
 {% elif _status == 'completed' %}
   {% set _ago = (today - trip.end_date).days %}
