@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-06-08 — B2 Destination Clock / Time Zones shipped
+
+**Shipped:**
+- **B2 Destination clock / time zones** (9 tasks, plan `docs/superpowers/plans/2026-06-07-destination-clock.md`, last commit `27ede2b`) — new `Trip.timezone_iana String(64)` column, `src/destination_clock.py` with `iana_from_coords` / `is_valid_iana` / `hours_offset_label` / `format_clock_label` + `COMMON_TIMEZONES`, `timezonefinder>=6.5` added to requirements. `_ensure_trip_timezone(trip)` helper in `app.py` lazily auto-derives on `trip_overview` and `trip_edit` GETs. Trip form gains an optional text input with `<datalist>` autocomplete + auto-detect preview line. Planning hero gets a 🕒 clock panel under the countdown; Today section gets a 🕒 chip above the weather hero (B1). `static/js/destination_clock.js` ticks the dest time once per second and renders "(N h ahead/behind)" relative to viewer's browser zone. Silent failure mode — no chip on broken IANA or missing `timezonefinder` install. Manual browser smoke passed.
+- Roadmap updated: B2 row marked ✓ shipped with plan link.
+
+**Test status:** 603 passing / 0 failing — up from 567 at session start (+36: 17 pure-helper, ~14 route integration, 4 form parsing, plus the small T4 cleanup re-run).
+
+**Stopped at:** B2 pushed to origin/main. No outstanding work. Phase 3 status: A1 ✓, A2 ✓, A3 ✓, B1 ✓, B2 ✓, B3 still queued.
+
+**Pick up next with:** Write the design spec for B3 — Home-currency budget totals. Last remaining phase-3 feature; reuses `src/budget.py` rollup helpers and adds an `ExchangeRateCache` table fed by exchangerate.host. Also adds a `User.home_currency` column to the same `/settings` page B1 created.
+
+**Kickoff prompt for next session:**
+
+> Start B3 (Home-currency budget totals) from `docs/PHASE_3_ROADMAP.md` line 279. Begin with the design spec — same convention as A1 / A2 / A3 / B1 / B2 (all shipped). Tests green at 603. `src/budget.py` already has `rollup_bookings_by_category`; B3 extends it with a `convert_totals(totals_by_currency, target_currency, rates) -> dict` helper. `/settings` page (built in B1) is the natural home for the `home_currency` dropdown. Spec → `docs/superpowers/specs/`, plan → `docs/superpowers/plans/`.
+
+**Loose ends:**
+- Three quality nits the final code reviewer flagged (none blocking): (1) DRY the `_tz_city` Jinja derivation between `_countdown_hero.html` and `trip_overview.html` — extract a macro if a 3rd clock surface appears; (2) Extract `_first_geocoded_booking(trip)` to share between `_ensure_trip_timezone` and the `trip_edit` preview computation; (3) `destination_clock.js` `formatTimeForZone` logs `console.warn` every second on a malformed IANA — short-circuit after first failure via an element flag.
+- `vacation.db.bak` (May 25, 120 KB) still at project root, intentionally kept per prior session decisions.
+- T4 had a real Python gotcha worth remembering: `from src.destination_clock import iana_from_coords` at the top of `app.py` binds the name into `app`'s namespace, so tests must `@patch("app.iana_from_coords")`, not `@patch("src.destination_clock.iana_from_coords")`. A comment in `tests/test_routes.py` above the first ensure-trip-timezone test documents this.
+
+---
+
 ## 2026-06-07 — Two more phase-3 features shipped: Lifetime Stats (A2) + Weather Forecast (B1)
 
 **Shipped:**
