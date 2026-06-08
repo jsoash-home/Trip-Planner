@@ -75,6 +75,7 @@ from src.booking_helpers import (
 )
 from src.budget import format_money_totals, rollup_bookings_by_category
 from src.currency import SUPPORTED_CURRENCIES, format_money, is_valid_currency
+from src.destination_clock import iana_from_coords
 from src.drift_review import chronological_order
 from src.geocoding import ensure_geocoded
 from src.itinerary import (
@@ -1694,6 +1695,29 @@ def _trip_primary_coords(trip):
     if not pairs:
         return None
     return Counter(pairs).most_common(1)[0][0]
+
+
+def _ensure_trip_timezone(trip) -> Optional[str]:
+    """Lazy derive Trip.timezone_iana from the first geocoded booking
+    (sorted by start_datetime). Idempotent — returns the existing
+    value if already set. Returns the (now-set) IANA name or None."""
+    if trip.timezone_iana:
+        return trip.timezone_iana
+    geocoded = [
+        b for b in (trip.bookings or [])
+        if b.geocoded_lat is not None and b.geocoded_lng is not None
+    ]
+    if not geocoded:
+        return None
+    geocoded.sort(key=lambda b: b.start_datetime or datetime.max)
+    first = geocoded[0]
+    iana = iana_from_coords(first.geocoded_lat, first.geocoded_lng)
+    if iana is None:
+        return None
+    trip.timezone_iana = iana
+    db.session.commit()
+    logger.info("Derived timezone %s for trip id=%s", iana, trip.id)
+    return iana
 
 
 @app.route("/trips/<int:trip_id>/itinerary")

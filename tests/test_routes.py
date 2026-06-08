@@ -2396,3 +2396,101 @@ def test_trip_overview_today_section_renders_hero_chip(app, owner):
     assert "vp-weather-hero" in body
     assert "⛅" in body
     assert "22°" in body
+
+
+# ─── _ensure_trip_timezone helper (B2 T4) ───────────────────────────
+from app import _ensure_trip_timezone
+
+
+def test_ensure_trip_timezone_returns_existing_when_set(app, trip):
+    """Already-set timezone is returned untouched and iana_from_coords
+    is never called."""
+    trip.timezone_iana = "Europe/Paris"
+    db.session.commit()
+
+    with patch("app.iana_from_coords") as mock_iana:
+        result = _ensure_trip_timezone(trip)
+
+    assert result == "Europe/Paris"
+    assert mock_iana.call_count == 0
+
+
+def test_ensure_trip_timezone_returns_none_when_no_bookings(app, trip):
+    """No bookings at all → returns None and column stays NULL."""
+    assert trip.timezone_iana is None
+
+    with patch("app.iana_from_coords") as mock_iana:
+        result = _ensure_trip_timezone(trip)
+
+    assert result is None
+    assert mock_iana.call_count == 0
+    db.session.refresh(trip)
+    assert trip.timezone_iana is None
+
+
+def test_ensure_trip_timezone_returns_none_when_no_geocoded_bookings(app, trip):
+    """Bookings exist but none have coords → returns None, no DB write."""
+    db.session.add(Booking(
+        trip_id=trip.id, type="flight", title="UA101",
+        start_datetime=datetime(2026, 6, 1, 10, 0),
+        geocoded_lat=None, geocoded_lng=None,
+    ))
+    db.session.add(Booking(
+        trip_id=trip.id, type="hotel", title="Hilton",
+        start_datetime=datetime(2026, 6, 2, 15, 0),
+        geocoded_lat=None, geocoded_lng=None,
+    ))
+    db.session.commit()
+
+    with patch("app.iana_from_coords") as mock_iana:
+        result = _ensure_trip_timezone(trip)
+
+    assert result is None
+    assert mock_iana.call_count == 0
+    db.session.refresh(trip)
+    assert trip.timezone_iana is None
+
+
+def test_ensure_trip_timezone_derives_and_persists_from_first_booking(app, trip):
+    """Earlier-start_datetime geocoded booking wins; derived value is
+    written to the DB."""
+    early = Booking(
+        trip_id=trip.id, type="flight", title="UA101",
+        start_datetime=datetime(2026, 6, 1, 10, 0),
+        geocoded_lat=48.85, geocoded_lng=2.35,  # Paris-ish
+    )
+    later = Booking(
+        trip_id=trip.id, type="hotel", title="Hilton",
+        start_datetime=datetime(2026, 6, 3, 15, 0),
+        geocoded_lat=51.5, geocoded_lng=-0.12,  # London-ish
+    )
+    db.session.add_all([early, later])
+    db.session.commit()
+
+    with patch("app.iana_from_coords") as mock_iana:
+        mock_iana.return_value = "Europe/Paris"
+        result = _ensure_trip_timezone(trip)
+
+    assert result == "Europe/Paris"
+    mock_iana.assert_called_once_with(48.85, 2.35)
+    refreshed = db.session.get(Trip, trip.id)
+    assert refreshed.timezone_iana == "Europe/Paris"
+
+
+def test_ensure_trip_timezone_handles_iana_lookup_returning_none(app, trip):
+    """If iana_from_coords returns None (ocean / library missing), the
+    helper returns None and leaves the column NULL — no exception."""
+    db.session.add(Booking(
+        trip_id=trip.id, type="flight", title="UA101",
+        start_datetime=datetime(2026, 6, 1, 10, 0),
+        geocoded_lat=0.0, geocoded_lng=0.0,
+    ))
+    db.session.commit()
+
+    with patch("app.iana_from_coords") as mock_iana:
+        mock_iana.return_value = None
+        result = _ensure_trip_timezone(trip)
+
+    assert result is None
+    db.session.refresh(trip)
+    assert trip.timezone_iana is None
