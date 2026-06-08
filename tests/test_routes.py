@@ -7,7 +7,7 @@ from datetime import date, datetime
 
 import pytest
 
-from app import app as flask_app
+from app import _ensure_trip_timezone, app as flask_app
 from models import Booking, ItineraryItem, Trip, TripView, User, db
 
 
@@ -2399,9 +2399,8 @@ def test_trip_overview_today_section_renders_hero_chip(app, owner):
 
 
 # ─── _ensure_trip_timezone helper (B2 T4) ───────────────────────────
-from app import _ensure_trip_timezone
-
-
+# Patch at app.iana_from_coords (not src.destination_clock.iana_from_coords) because
+# app.py binds the name into its own namespace at import time.
 def test_ensure_trip_timezone_returns_existing_when_set(app, trip):
     """Already-set timezone is returned untouched and iana_from_coords
     is never called."""
