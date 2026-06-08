@@ -442,6 +442,30 @@ def test_parse_trip_form_cover_image_url_strips_whitespace():
     assert data["cover_image_url"] == "https://example.com/x.jpg"
 
 
+def test_parse_trip_form_accepts_valid_timezone():
+    data, field_errors = parse_trip_form(_valid_form_dict(timezone_iana="Asia/Tokyo"))
+    assert field_errors == {}
+    assert data["timezone_iana"] == "Asia/Tokyo"
+
+
+def test_parse_trip_form_rejects_invalid_timezone():
+    data, field_errors = parse_trip_form(_valid_form_dict(timezone_iana="Europe/Pariss"))
+    assert "timezone_iana" in field_errors
+    assert data["timezone_iana"] is None
+
+
+def test_parse_trip_form_empty_timezone_becomes_none():
+    data, field_errors = parse_trip_form(_valid_form_dict(timezone_iana=""))
+    assert "timezone_iana" not in field_errors
+    assert data["timezone_iana"] is None
+
+
+def test_parse_trip_form_whitespace_only_timezone_becomes_none():
+    data, field_errors = parse_trip_form(_valid_form_dict(timezone_iana="   "))
+    assert "timezone_iana" not in field_errors
+    assert data["timezone_iana"] is None
+
+
 # ─────────────────────────────  trip_form_values  ──────────────────────────
 
 

@@ -10,6 +10,8 @@ import logging
 from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from src.destination_clock import is_valid_iana
+
 logger = logging.getLogger(__name__)
 
 
@@ -307,6 +309,15 @@ def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], Dict[str, 
     if start_date and end_date and start_date > end_date:
         field_errors["end_date"] = "End date must be on or after the start date."
 
+    raw_tz = (form.get("timezone_iana") or "").strip()
+    if not raw_tz:
+        timezone_iana: Optional[str] = None
+    elif is_valid_iana(raw_tz):
+        timezone_iana = raw_tz
+    else:
+        field_errors["timezone_iana"] = "Not a recognized time zone."
+        timezone_iana = None
+
     data: Dict[str, Any] = {
         "name": name,
         "destination": destination,
@@ -316,6 +327,7 @@ def parse_trip_form(form: Mapping[str, str]) -> Tuple[Dict[str, Any], Dict[str, 
         "notes": notes,
         "start_date": start_date,
         "end_date": end_date,
+        "timezone_iana": timezone_iana,
     }
     return data, field_errors
 
@@ -339,6 +351,7 @@ def trip_form_values(trip) -> Dict[str, str]:
         "end_date": trip.end_date.isoformat() if trip.end_date else "",
         "primary_currency": trip.primary_currency or "USD",
         "notes": trip.notes or "",
+        "timezone_iana": getattr(trip, "timezone_iana", None) or "",
     }
 
 
