@@ -2022,3 +2022,6 @@ body.vp-public main { padding-top: 2rem; }
 .vp-destclock__offset {
   font-size: 0.85em;
 }
+.vp-destclock [data-clock-offset]:empty {
+  display: none;
+}
