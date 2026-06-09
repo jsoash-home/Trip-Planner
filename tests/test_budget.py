@@ -3,9 +3,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
+import pytest
+
 from src.budget import (
     category_emoji,
     category_label,
+    convert_totals,
     format_money_totals,
     rollup_bookings_by_category,
 )
@@ -243,3 +246,57 @@ def test_category_emoji_known():
 
 def test_category_emoji_unknown_returns_pin():
     assert category_emoji("zzz") == "📌"
+
+
+# ─────────────────────────────  convert_totals  ────────────────────────────
+
+
+def test_convert_totals_empty_input_returns_empty():
+    assert convert_totals({}, "USD", {}) == {}
+
+
+def test_convert_totals_same_currency_passthrough():
+    # No rates needed when source == target.
+    out = convert_totals({"USD": 100.0}, "USD", {})
+    assert out == {"USD": 100.0}
+
+
+def test_convert_totals_single_foreign_converts():
+    # EUR at rate 0.909 (USD per EUR) → 100 EUR ≈ 90.91 USD
+    out = convert_totals({"EUR": 100.0}, "USD", {"EUR": 0.909})
+    assert out["USD"] == pytest.approx(90.9)
+
+
+def test_convert_totals_multiple_foreign_sum_to_target():
+    # 100 EUR @ 0.909 + 50 GBP @ 1.27 = 90.9 + 63.5 = 154.4 USD
+    out = convert_totals(
+        {"EUR": 100.0, "GBP": 50.0}, "USD",
+        {"EUR": 0.909, "GBP": 1.27},
+    )
+    assert out == {"USD": pytest.approx(154.4)}
+
+
+def test_convert_totals_mixed_target_and_foreign():
+    # Target USD + foreign EUR fold into one USD entry.
+    out = convert_totals(
+        {"USD": 50.0, "EUR": 100.0}, "USD",
+        {"EUR": 0.909},
+    )
+    assert out["USD"] == pytest.approx(140.9)
+    assert len(out) == 1
+
+
+def test_convert_totals_missing_rate_passes_through():
+    # BRL has no rate — it passes through unconverted alongside USD total.
+    out = convert_totals(
+        {"EUR": 100.0, "BRL": 200.0}, "USD",
+        {"EUR": 0.909},
+    )
+    assert out["USD"] == pytest.approx(90.9)
+    assert out["BRL"] == 200.0
+
+
+def test_convert_totals_negative_amounts_handled():
+    # Refund-style negative entry: -100 EUR @ 0.909 → -90.9 USD
+    out = convert_totals({"EUR": -100.0}, "USD", {"EUR": 0.909})
+    assert out["USD"] == pytest.approx(-90.9)

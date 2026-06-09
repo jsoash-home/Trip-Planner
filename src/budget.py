@@ -89,6 +89,50 @@ def rollup_bookings_by_category(
     return out
 
 
+def convert_totals(
+    totals_by_currency: Mapping[str, float],
+    target_currency: str,
+    rates: Mapping[str, float],
+) -> Dict[str, float]:
+    """
+    Collapse per-currency totals into the target currency using rates.
+
+    ``rates`` is keyed by source currency; value is "how many
+    target_currency per one source_currency" — the shape produced by
+    src.exchange_rates.cross_rates_via_usd. The target itself is
+    treated as having implicit rate 1.0 even if absent.
+
+    Source currencies whose rate is missing pass through unchanged —
+    they appear in the result keyed by their original (upper-cased)
+    code, alongside the (single) target_currency entry. Callers can
+    detect these as "non-target keys in the result" and surface a
+    "not converted" footnote.
+
+    Examples:
+      convert_totals({"USD": 100, "EUR": 50}, "USD", {"EUR": 0.909})
+        -> {"USD": ~145.45}
+
+      convert_totals({"EUR": 100, "BRL": 200}, "USD",
+                     {"EUR": 0.909}) -> {"USD": ~90.91, "BRL": 200}
+
+      convert_totals({}, "USD", {})  -> {}
+    """
+    target = target_currency.upper()
+    effective_rates = {k.upper(): v for k, v in rates.items()}
+    effective_rates.setdefault(target, 1.0)
+
+    out: Dict[str, float] = {}
+    for code, amount in totals_by_currency.items():
+        code_upper = code.upper()
+        rate = effective_rates.get(code_upper)
+        if rate is None:
+            out[code_upper] = out.get(code_upper, 0.0) + float(amount)
+        else:
+            converted = float(amount) * rate
+            out[target] = out.get(target, 0.0) + converted
+    return out
+
+
 def format_money_totals(
     totals_by_currency: Mapping[str, float],
     *,
