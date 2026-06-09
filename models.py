@@ -35,6 +35,11 @@ class User(UserMixin, db.Model):
         db.String(10), nullable=False, default="metric",
     )
 
+    # ISO 4217 code (e.g. "USD"). Default target for budget-page conversion.
+    home_currency = db.Column(
+        db.String(3), nullable=False, default="USD",
+    )
+
     trips = db.relationship("Trip", backref="owner", lazy=True)
 
 
@@ -343,4 +348,29 @@ class WeatherCache(db.Model):
     humidity = db.Column(db.Integer, nullable=True)
     wmo_code = db.Column(db.Integer, nullable=False)
     hourly_json = db.Column(db.Text, nullable=True)
+    fetched_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ExchangeRateCache(db.Model):
+    """De-duplicates exchangerate.host calls.
+
+    Keyed by (base_currency, target_currency, rate_date). In v1 the
+    base is always "USD" — cross-rates are computed via USD in
+    src/exchange_rates.cross_rates_via_usd. Rows are TTL-based —
+    see CACHE_TTL_SECONDS in src/exchange_rates.py.
+    """
+
+    __tablename__ = "exchange_rate_cache"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "base_currency", "target_currency", "rate_date",
+            name="uq_exchange_rate_cache_pair_date",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    base_currency = db.Column(db.String(3), nullable=False)
+    target_currency = db.Column(db.String(3), nullable=False)
+    rate = db.Column(db.Float, nullable=False)
+    rate_date = db.Column(db.Date, nullable=False)
     fetched_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

@@ -336,6 +336,26 @@ def _ensure_timezone_column() -> None:
                 logger.warning("Migration skipped (%s): %s", stmt, e)
 
 
+def _ensure_currency_columns() -> None:
+    """
+    Add the User.home_currency column introduced by B3 (home-currency
+    budget totals). Same swallow-on-duplicate pattern as the other
+    _ensure_* helpers — re-runs are no-ops. The new ExchangeRateCache
+    table itself is created by db.create_all().
+    """
+    from sqlalchemy import text
+    statements = [
+        "ALTER TABLE user ADD COLUMN home_currency VARCHAR(3) NOT NULL DEFAULT 'USD'",
+    ]
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+                logger.info("Migration: applied %s", stmt)
+            except Exception as e:
+                logger.warning("Migration skipped (%s): %s", stmt, e)
+
+
 def _ensure_geocoding_columns() -> None:
     """
     Add geocoding columns to booking + itinerary_item (added by the
@@ -375,6 +395,7 @@ with app.app_context():
     _ensure_yearbook_columns()
     _ensure_weather_columns()
     _ensure_timezone_column()
+    _ensure_currency_columns()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)
