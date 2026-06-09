@@ -1,5 +1,29 @@
 # Session Log
 
+## 2026-06-09 — B3 Home-Currency Budget Totals shipped; Phase 3 complete
+
+**Shipped:**
+- **B3 Home-currency budget totals** (6 tasks, plan `docs/superpowers/plans/2026-06-09-home-currency-budget.md`, last commit `d0901d5`) — new `User.home_currency String(3) NOT NULL DEFAULT 'USD'` column + new `ExchangeRateCache` table (keyed by `(base_currency, target_currency, rate_date)` with 24-hour TTL), `src/exchange_rates.py` with `RateBundle` + pure helpers (`is_rate_fresh`, `cache_key_for`, `cross_rates_via_usd`) + impure `fetch_latest_rates` / `get_rates_for` (cache-first). `src/budget.py` extended with `convert_totals` — passes through missing-rate sources unconverted. `/settings` page (B1) gains a home-currency `<select>` with atomic save (bad code → neither field changes). `/trips/<id>/budget` gains a `Show in: [USD ▼]` toggle: defaults to `current_user.home_currency`, accepts any supported code or `MIXED`, renders the disclaimer "≈ rates as of YYYY-MM-DD via exchangerate.host" + per-currency unconverted footnote, and falls back with a small "Couldn't fetch rates" note when no useful rate is reachable. No new Python deps (exchangerate.host via existing `requests`).
+- Roadmap updated: B3 row marked ✓ shipped — **Phase 3 is complete** (A1 / A2 / A3 / B1 / B2 / B3 all ✓).
+
+**Test status:** 640 passing / 0 failing — up from 603 at session start (+37: 19 exchange_rates unit, 7 convert_totals unit, 4 settings integration, 7 budget integration).
+
+**Stopped at:** B3 work committed locally; 7 commits queued for `git push`. No outstanding code work — Phase 3 is fully closed out.
+
+**Pick up next with:** Manual browser smoke of B3 in a logged-in tab — visit `/settings`, change home currency, then load a trip's `/budget` page and toggle between USD / EUR / Mixed; disable network and reload to verify the "Couldn't fetch rates" fallback. Beyond that, Phase 4 is open territory — the C / D / extras sections of `docs/PHASE_3_ROADMAP.md` line 319+ name 12+ parked candidates (PWA / offline shell, daily journal, quick spend log, email-in booking parser, iCal feed, photo attachments, achievement system, trip themes).
+
+**Kickoff prompt for next session:**
+
+> B3 (home-currency budget) is shipped — Phase 3 done. Tests green at 640. Before starting anything new, do the manual browser smoke for B3: visit `/settings` and change home currency to EUR; load a trip with mixed-currency bookings → verify totals show in EUR with the "≈ rates as of … via exchangerate.host" disclaimer; toggle "Show in:" to JPY (whole-yen, no decimals) and to "Mixed (no conversion)"; force `?show_as=ZZZ` in the URL → page should render in home currency. Then pick the next feature from `docs/PHASE_3_ROADMAP.md` line 319+ (C — Live the trip / D — Capture without typing / Extras: iCal feed, photo attachments, achievements, themes).
+
+**Loose ends:**
+- Manual browser smoke of B3 not done in-session (agent can't drive OAuth). Quick to do in a logged-in browser; tests cover the same paths.
+- A running dev server on port 5002 (PID 10192 at session-close time) — Flask reloader picked up the schema migration once on T1, so it's on the new code. Restart isn't required, but a fresh boot would zero out any in-memory state from before T1.
+- `vacation.db.bak` and ~6 dated `vacation.db.bak.*` snapshots at project root, intentionally kept per prior session decisions.
+- exchangerate.host has been reliable; first budget page load with conversion on hits it once per day per (base, target). If the service ever goes away, swap providers in `src.exchange_rates.fetch_latest_rates` — everything downstream is provider-agnostic.
+
+---
+
 ## 2026-06-08 — B2 Destination Clock / Time Zones shipped
 
 **Shipped:**
