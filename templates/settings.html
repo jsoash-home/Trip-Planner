@@ -36,6 +36,23 @@
     </div>
   </fieldset>
 
+  <fieldset class="mb-4">
+    <legend class="h6 text-muted">Home currency</legend>
+    <p class="small text-muted mb-2">
+      Used as the default for budget conversions. You can switch
+      targets per-page from the budget toggle.
+    </p>
+    <select name="home_currency" id="home_currency"
+            class="form-select" style="max-width: 24rem;">
+      {% for code, name in supported_currencies %}
+        <option value="{{ code }}"
+                {% if current_user.home_currency == code %}selected{% endif %}>
+          {{ code }} — {{ name }}
+        </option>
+      {% endfor %}
+    </select>
+  </fieldset>
+
   <button type="submit" class="btn btn-primary">Save</button>
 </form>
 {% endblock %}

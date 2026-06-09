@@ -867,18 +867,33 @@ def logout():
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
-    """User preferences page. Currently surfaces weather_units; B3 will
-    extend with home currency."""
+    """User preferences page. Atomic save of weather_units +
+    home_currency — either both fields save or neither does, so a
+    bad currency code can't half-update the user."""
     if request.method == "POST":
-        chosen = (request.form.get("weather_units") or "").strip()
-        if chosen not in ("metric", "imperial"):
-            flash("Invalid units selection.", "danger")
-            return render_template("settings.html")
-        current_user.weather_units = chosen
+        units = (request.form.get("weather_units") or "").strip()
+        home = (request.form.get("home_currency") or "").strip().upper()
+        errors = []
+        if units not in ("metric", "imperial"):
+            errors.append("Invalid units selection.")
+        if not is_valid_currency(home):
+            errors.append("Pick a supported home currency.")
+        if errors:
+            for msg in errors:
+                flash(msg, "danger")
+            return render_template(
+                "settings.html",
+                supported_currencies=SUPPORTED_CURRENCIES,
+            )
+        current_user.weather_units = units
+        current_user.home_currency = home
         db.session.commit()
         flash("Settings updated.", "info")
         return redirect(url_for("settings"))
-    return render_template("settings.html")
+    return render_template(
+        "settings.html",
+        supported_currencies=SUPPORTED_CURRENCIES,
+    )
 
 
 # ─── Trips ──────────────────────────────────────────────────────────

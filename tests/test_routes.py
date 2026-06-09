@@ -2198,14 +2198,16 @@ def test_settings_get_renders_form_with_current_unit(app, owner):
 
 
 def test_settings_post_updates_user_weather_units(app, owner):
-    """POST with a valid unit saves to the User row and redirects."""
+    """POST with a valid unit (and a valid home currency) saves to the
+    User row and redirects."""
     assert owner.weather_units == "metric"
 
     client = app.test_client()
     with client.session_transaction() as sess:
         sess["_user_id"] = str(owner.id)
     resp = client.post(
-        "/settings", data={"weather_units": "imperial"},
+        "/settings",
+        data={"weather_units": "imperial", "home_currency": "USD"},
         follow_redirects=False,
     )
     assert resp.status_code == 302
@@ -2220,11 +2222,89 @@ def test_settings_post_rejects_invalid_unit(app, owner):
     with client.session_transaction() as sess:
         sess["_user_id"] = str(owner.id)
     resp = client.post(
-        "/settings", data={"weather_units": "kelvin"},
+        "/settings",
+        data={"weather_units": "kelvin", "home_currency": "USD"},
     )
     assert resp.status_code == 200
     db.session.refresh(owner)
     assert owner.weather_units == "metric"
+
+
+# ─── B3: home_currency on /settings ─────────────────────────────
+
+
+def test_settings_get_renders_home_currency_field(app, owner):
+    """GET shows the home_currency select with the user's current
+    code pre-selected."""
+    owner.home_currency = "EUR"
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'name="home_currency"' in body
+    # The EUR option should be the one with `selected`.
+    assert 'value="EUR"\n                selected' in body or \
+           'value="EUR" selected' in body or \
+           'value="EUR"\nselected' in body
+
+
+def test_settings_post_saves_both_units_and_home_currency(app, owner):
+    """A valid POST saves both fields atomically and redirects."""
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(
+        "/settings",
+        data={"weather_units": "imperial", "home_currency": "GBP"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    db.session.refresh(owner)
+    assert owner.weather_units == "imperial"
+    assert owner.home_currency == "GBP"
+
+
+def test_settings_post_rejects_invalid_home_currency(app, owner):
+    """An unknown currency doesn't change EITHER field — atomic save."""
+    owner.weather_units = "metric"
+    owner.home_currency = "USD"
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(
+        "/settings",
+        data={"weather_units": "imperial", "home_currency": "XYZ"},
+    )
+    assert resp.status_code == 200
+    db.session.refresh(owner)
+    # Neither field changed because the currency was invalid.
+    assert owner.weather_units == "metric"
+    assert owner.home_currency == "USD"
+
+
+def test_settings_post_rejects_invalid_units_even_when_currency_valid(app, owner):
+    """Atomic — bad units + good currency → neither field saves."""
+    owner.weather_units = "metric"
+    owner.home_currency = "USD"
+    db.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post(
+        "/settings",
+        data={"weather_units": "kelvin", "home_currency": "EUR"},
+    )
+    assert resp.status_code == 200
+    db.session.refresh(owner)
+    assert owner.weather_units == "metric"
+    assert owner.home_currency == "USD"
 
 
 def test_lifetime_map_renders_stats_strip_for_user_with_completed_trip(
