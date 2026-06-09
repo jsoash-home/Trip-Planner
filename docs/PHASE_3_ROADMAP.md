@@ -42,7 +42,7 @@ Two threads:
 | A2 | Lifetime stats dashboard             | small         | ✓ shipped   | [2026-06-07-lifetime-stats.md](superpowers/plans/2026-06-07-lifetime-stats.md) |
 | B1 | Weather forecast on itinerary        | small-medium  | ✓ shipped   | [2026-06-07-weather-forecast.md](superpowers/plans/2026-06-07-weather-forecast.md) |
 | B2 | Destination clock / time zones       | small         | ✓ shipped   | [2026-06-07-destination-clock.md](superpowers/plans/2026-06-07-destination-clock.md) |
-| B3 | Home-currency budget totals          | small-medium  | not started | _to be written_ |
+| B3 | Home-currency budget totals          | small-medium  | ✓ shipped   | [2026-06-09-home-currency-budget.md](superpowers/plans/2026-06-09-home-currency-budget.md) |
 
 Row order is the **recommended build order**. See "Ordering rationale"
 below.
