@@ -74,8 +74,18 @@ from src.booking_helpers import (
     serialize_touched,
     total_cost_by_currency,
 )
-from src.budget import format_money_totals, rollup_bookings_by_category
-from src.currency import SUPPORTED_CURRENCIES, format_money, is_valid_currency
+from src.budget import (
+    convert_totals,
+    format_money_totals,
+    rollup_bookings_by_category,
+)
+from src.currency import (
+    SUPPORTED_CURRENCIES,
+    SUPPORTED_CURRENCY_CODES,
+    format_money,
+    is_valid_currency,
+)
+from src.exchange_rates import cross_rates_via_usd, get_rates_for
 from src.destination_clock import COMMON_TIMEZONES, iana_from_coords
 from src.drift_review import chronological_order
 from src.geocoding import ensure_geocoded
@@ -2629,12 +2639,84 @@ def itinerary_add_all_suggested(trip_id):
 @app.route("/trips/<int:trip_id>/budget")
 @login_required
 def trip_budget(trip_id):
-    """Auto-rollup of booking costs by category. No data of its own. Viewer+."""
+    """Auto-rollup of booking costs by category. No data of its own. Viewer+.
+
+    Supports a ``?show_as=`` querystring to convert all totals into a
+    single target currency. Defaults to ``current_user.home_currency``.
+    ``?show_as=MIXED`` disables conversion and falls back to the
+    multi-currency display. Invalid codes silently fall back to the
+    user's home currency.
+    """
     trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
     bookings = Booking.query.filter_by(trip_id=trip.id).all()
     categories = rollup_bookings_by_category(
         bookings, primary_currency=trip.primary_currency
     )
+
+    raw_show_as = (request.args.get("show_as") or "").upper()
+    if raw_show_as == "MIXED":
+        convert_mode = False
+        target = None
+        show_as_resolved = "MIXED"
+    elif raw_show_as in SUPPORTED_CURRENCY_CODES:
+        convert_mode = True
+        target = raw_show_as
+        show_as_resolved = raw_show_as
+    else:
+        convert_mode = True
+        target = current_user.home_currency
+        show_as_resolved = target
+
+    rate_disclaimer: Optional[str] = None
+    convert_warning: Optional[str] = None
+    unconverted_codes: List[str] = []
+
+    if convert_mode and categories and target:
+        sources = {c.upper() for cat in categories
+                   for c in cat["totals_by_currency"]}
+        non_target_sources = {s for s in sources if s != target}
+        if not non_target_sources:
+            # Trivial: every booking is already in the target currency.
+            # Nothing to convert, no API call needed, no disclaimer.
+            pass
+        else:
+            wanted = sources | {target}
+            usd_rates = get_rates_for(
+                "USD", wanted, db_session=db.session,
+            )
+            cross = cross_rates_via_usd(usd_rates, target)
+            # "Did we get any useful cross-rate?" — at least one non-target
+            # source must have a rate, otherwise nothing meaningful would
+            # happen and we should surface the API-down warning.
+            have_rates = non_target_sources & set(cross.keys())
+            if not have_rates:
+                convert_warning = (
+                    "Couldn't fetch rates — showing per-currency totals."
+                )
+            else:
+                unconverted_set = set()
+                for cat in categories:
+                    converted = convert_totals(
+                        cat["totals_by_currency"], target, cross,
+                    )
+                    for code in converted:
+                        if code != target:
+                            unconverted_set.add(code)
+                    cat["totals_by_currency"] = converted
+                    cat["primary_total"] = converted.get(target, 0.0)
+                grand_primary = sum(cat["primary_total"] for cat in categories)
+                for cat in categories:
+                    if grand_primary > 0:
+                        cat["share_fraction"] = (
+                            cat["primary_total"] / grand_primary
+                        )
+                    else:
+                        cat["share_fraction"] = 0.0
+                unconverted_codes = sorted(unconverted_set)
+                rate_disclaimer = (
+                    f"≈ rates as of {date.today().isoformat()} "
+                    "via exchangerate.host"
+                )
 
     # Grand total = sum across every category's per-currency totals.
     grand_totals: dict = {}
@@ -2653,6 +2735,12 @@ def trip_budget(trip_id):
         grand_total_label=grand_total_label,
         total_bookings=len(bookings),
         total_uncosted=total_uncosted,
+        show_as_resolved=show_as_resolved,
+        convert_mode=convert_mode,
+        supported_currencies=SUPPORTED_CURRENCIES,
+        rate_disclaimer=rate_disclaimer,
+        convert_warning=convert_warning,
+        unconverted_codes=unconverted_codes,
     )
 
 

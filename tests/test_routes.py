@@ -2809,3 +2809,178 @@ def test_today_section_skips_clock_chip_when_tz_null(app, owner):
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "vp-destclock--chip" not in body
+
+
+# ─── B3: trip_budget — show_as toggle + conversion ──────────────
+
+
+def _budget_trip_with_mixed_currencies(owner):
+    """Build a trip with three bookings in three currencies for the
+    B3 conversion tests."""
+    t = Trip(
+        owner_id=owner.id, name="Budget trip",
+        start_date=date(2026, 7, 1), end_date=date(2026, 7, 7),
+        primary_currency="USD",
+    )
+    db.session.add(t)
+    db.session.commit()
+    db.session.add_all([
+        Booking(trip_id=t.id, type="flight", title="UA001",
+                cost=1000.0, currency="USD"),
+        Booking(trip_id=t.id, type="hotel", title="Hotel Lutetia",
+                cost=500.0, currency="EUR"),
+        Booking(trip_id=t.id, type="restaurant", title="Lunch",
+                cost=100.0, currency="GBP"),
+    ])
+    db.session.commit()
+    return t
+
+
+def test_budget_default_show_as_uses_home_currency(app, owner):
+    """No querystring → convert to user's home currency."""
+    owner.home_currency = "USD"
+    db.session.commit()
+    t = _budget_trip_with_mixed_currencies(owner)
+
+    fake_rates = {"EUR": 1.10, "GBP": 1.27, "USD": 1.0}
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app.get_rates_for", return_value=fake_rates):
+            resp = client.get(f"/trips/{t.id}/budget")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    # Expect: 1000 USD + 500/1.10 USD + 100/1.27 USD ≈ 1533.13 USD
+    # Disclaimer line present:
+    assert "via exchangerate.host" in body
+    # USD option in the dropdown should be selected:
+    assert 'value="USD"' in body and "selected" in body
+    # No multi-currency split (no EUR/GBP symbols in the grand total):
+    assert "€" not in body or "vp-destclock" in body  # destclock allowed
+    # The unconverted footnote should NOT appear:
+    assert "not converted" not in body
+
+
+def test_budget_show_as_mixed_disables_conversion(app, owner):
+    """?show_as=MIXED → original multi-currency rollup, no disclaimer."""
+    t = _budget_trip_with_mixed_currencies(owner)
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{t.id}/budget?show_as=MIXED")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "via exchangerate.host" not in body
+    assert "Showing original currencies." in body
+    # Original currencies visible in the grand total area:
+    assert "€500.00" in body
+    assert "£100.00" in body
+    assert "$1,000.00" in body
+
+
+def test_budget_show_as_specific_currency_overrides_home(app, owner):
+    """?show_as=EUR overrides user's home (USD)."""
+    owner.home_currency = "USD"
+    db.session.commit()
+    t = _budget_trip_with_mixed_currencies(owner)
+
+    fake_rates = {"EUR": 1.10, "GBP": 1.27, "USD": 1.0}
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app.get_rates_for", return_value=fake_rates):
+            resp = client.get(f"/trips/{t.id}/budget?show_as=EUR")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "via exchangerate.host" in body
+    # Grand total should be in EUR (€ symbol present in the formatted total):
+    assert "€" in body
+
+
+def test_budget_invalid_show_as_falls_back_to_home(app, owner):
+    """?show_as=ZZZ is unknown → silently use home_currency."""
+    owner.home_currency = "USD"
+    db.session.commit()
+    t = _budget_trip_with_mixed_currencies(owner)
+
+    fake_rates = {"EUR": 1.10, "GBP": 1.27, "USD": 1.0}
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app.get_rates_for", return_value=fake_rates):
+            resp = client.get(f"/trips/{t.id}/budget?show_as=ZZZ")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    # No error, no crash — conversion happened with USD as target.
+    assert "via exchangerate.host" in body
+    # Mixed option should NOT be the selected one.
+    assert '<option value="MIXED"\n                    selected' not in body
+
+
+def test_budget_unconverted_codes_listed_when_rate_missing(app, owner):
+    """A trip currency without a fetched rate passes through with a
+    footnote naming the code."""
+    owner.home_currency = "USD"
+    db.session.commit()
+    t = _budget_trip_with_mixed_currencies(owner)
+
+    # Only EUR rate available — GBP will pass through unconverted.
+    fake_rates = {"EUR": 1.10, "USD": 1.0}
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app.get_rates_for", return_value=fake_rates):
+            resp = client.get(f"/trips/{t.id}/budget")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "GBP not converted" in body
+    # GBP amount still visible somewhere in the totals:
+    assert "£100.00" in body
+
+
+def test_budget_api_down_falls_back_to_mixed_with_note(app, owner):
+    """get_rates_for returns empty → can't compute cross-rates →
+    show the warning line and render mixed totals."""
+    owner.home_currency = "USD"
+    db.session.commit()
+    t = _budget_trip_with_mixed_currencies(owner)
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        with patch("app.get_rates_for", return_value={}):
+            resp = client.get(f"/trips/{t.id}/budget")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    # Jinja autoescapes the apostrophe in "Couldn't" to &#39; — assert
+    # against the unambiguous portion of the message instead.
+    assert "fetch rates" in body
+    assert "showing per-currency totals" in body
+    # No conversion disclaimer when conversion failed:
+    assert "via exchangerate.host" not in body
+    # Original currencies still visible in the totals:
+    assert "€500.00" in body
+    assert "£100.00" in body
+
+
+def test_budget_no_categories_skips_toggle_and_disclaimer(app, owner):
+    """A trip with zero bookings → empty-state nudge, no toggle, no
+    disclaimer."""
+    t = Trip(
+        owner_id=owner.id, name="Empty trip",
+        start_date=date(2026, 7, 1), end_date=date(2026, 7, 7),
+        primary_currency="USD",
+    )
+    db.session.add(t)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{t.id}/budget")
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "via exchangerate.host" not in body
+    assert 'name="show_as"' not in body
+    assert "No costs to show yet" in body

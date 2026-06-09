@@ -32,14 +32,44 @@
     </a>
   </div>
 {% else %}
-  {# Hero card — grand total + booking summary #}
+  {# Hero card — grand total + booking summary + currency toggle #}
   <div class="budget-hero vp-card mb-3">
     <div class="row align-items-center g-3">
       <div class="col-md-7">
         <div class="text-muted small">Estimated total</div>
         <div class="budget-hero-amount">{{ grand_total_label }}</div>
+        {% if rate_disclaimer %}
+          <div class="text-muted small mt-1">{{ rate_disclaimer }}</div>
+        {% endif %}
+        {% if convert_warning %}
+          <div class="text-muted small mt-1">{{ convert_warning }}</div>
+        {% endif %}
+        {% if unconverted_codes %}
+          <div class="text-muted small">
+            ({{ unconverted_codes | join(', ') }} not converted —
+            rate unavailable)
+          </div>
+        {% endif %}
       </div>
       <div class="col-md-5">
+        <form method="get" class="d-flex align-items-center gap-2 mb-2">
+          <label for="show_as" class="small text-muted mb-0">Show in:</label>
+          <select name="show_as" id="show_as"
+                  class="form-select form-select-sm"
+                  style="max-width: 12rem;"
+                  onchange="this.form.submit()">
+            <option value="MIXED"
+                    {% if not convert_mode %}selected{% endif %}>
+              Mixed (no conversion)
+            </option>
+            {% for code, name in supported_currencies %}
+              <option value="{{ code }}"
+                      {% if convert_mode and show_as_resolved == code %}selected{% endif %}>
+                {{ code }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
         <div class="d-flex flex-column gap-1 small">
           <div>
             <strong>{{ total_bookings }}</strong>
@@ -51,9 +81,11 @@
               <strong>{{ total_uncosted }}</strong> without a cost set
             </div>
           {% endif %}
-          <div class="text-muted">
-            Currencies aren't converted — totals are kept separate per currency.
-          </div>
+          {% if not convert_mode %}
+            <div class="text-muted">
+              Showing original currencies.
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
