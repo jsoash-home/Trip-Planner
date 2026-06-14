@@ -609,6 +609,45 @@ def test_emoji_theme_hotel():
 
 def test_emoji_theme_city():
     assert emoji_theme("🗽") == "the city"
+    assert emoji_theme("🏙️") == "the city"
+    assert emoji_theme("🌉") == "the city"
+
+
+def test_emoji_theme_north_woods():
+    assert emoji_theme("🌲") == "the north woods"
+
+
+def test_emoji_theme_lake():
+    assert emoji_theme("🏞️") == "the lake"
+    assert emoji_theme("🛶") == "the lake"
+
+
+def test_emoji_theme_campsite():
+    assert emoji_theme("🏕️") == "the campsite"
+
+
+def test_emoji_theme_campfire():
+    assert emoji_theme("🔥") == "the campfire"
+
+
+def test_emoji_theme_wild():
+    assert emoji_theme("🐻") == "the wild"
+
+
+def test_emoji_theme_cruise():
+    assert emoji_theme("🛳️") == "setting sail"
+
+
+def test_emoji_theme_train():
+    assert emoji_theme("🚂") == "the rails"
+
+
+def test_emoji_theme_basketball():
+    assert emoji_theme("🏀") == "tip-off"
+
+
+def test_emoji_theme_soccer():
+    assert emoji_theme("⚽") == "kickoff"
 
 
 def test_emoji_theme_default_suitcase_returns_none():

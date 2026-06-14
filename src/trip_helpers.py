@@ -25,6 +25,8 @@ COVER_IMAGE_URL_MAX_LEN = 800
 SUGGESTED_TRIP_EMOJIS = (
     "🏝️", "✈️", "🏔️", "🏛️", "🌊", "🌴",
     "🍝", "🍜", "🗽", "🚗", "🏨", "⛷️",
+    "🌲", "🏞️", "🛶", "🏕️", "🔥", "🐻",
+    "🏙️", "🌉", "🛳️", "🚂", "🏀", "⚽",
 )
 
 
@@ -390,6 +392,18 @@ _EMOJI_THEME_MAP: Dict[str, str] = {
     "🚗": "the open road",
     "🏨": "check-in",
     "🗽": "the city",
+    "🏙️": "the city",
+    "🌉": "the city",
+    "🌲": "the north woods",
+    "🏞️": "the lake",
+    "🛶": "the lake",
+    "🏕️": "the campsite",
+    "🔥": "the campfire",
+    "🐻": "the wild",
+    "🛳️": "setting sail",
+    "🚂": "the rails",
+    "🏀": "tip-off",
+    "⚽": "kickoff",
 }
 
 
