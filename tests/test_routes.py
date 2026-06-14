@@ -11,6 +11,7 @@ from app import _ensure_prep_tables, _ensure_trip_timezone, app as flask_app
 from models import (
     Booking,
     ItineraryItem,
+    PackingItem,
     Trip,
     TripPrepItem,
     TripPrepLink,
@@ -3076,12 +3077,71 @@ def test_trip_prep_item_cascade_deletes_links(app, owner, trip):
 
 
 def test_ensure_prep_tables_is_idempotent(app):
-    """Calling _ensure_prep_tables twice is a no-op the second time."""
+    """_ensure_prep_tables creates missing tables, then is a no-op."""
     from sqlalchemy import inspect
 
-    _ensure_prep_tables()
-    _ensure_prep_tables()  # second call must not raise
+    # The app fixture's db.create_all() already created both prep tables.
+    # Drop them to exercise the create branch on the first call, then
+    # confirm the second call is a safe no-op. Drop the link first
+    # because it has an FK to trip_prep_item.
+    TripPrepLink.__table__.drop(db.engine)
+    TripPrepItem.__table__.drop(db.engine)
+    tables_before = set(inspect(db.engine).get_table_names())
+    assert "trip_prep_item" not in tables_before
+    assert "trip_prep_link" not in tables_before
 
-    tables = set(inspect(db.engine).get_table_names())
-    assert "trip_prep_item" in tables
-    assert "trip_prep_link" in tables
+    _ensure_prep_tables()  # first call must create both tables
+
+    tables_after_create = set(inspect(db.engine).get_table_names())
+    assert "trip_prep_item" in tables_after_create
+    assert "trip_prep_link" in tables_after_create
+
+    _ensure_prep_tables()  # second call must be a safe no-op
+
+    tables_after_noop = set(inspect(db.engine).get_table_names())
+    assert "trip_prep_item" in tables_after_noop
+    assert "trip_prep_link" in tables_after_noop
+
+
+def test_trip_delete_cascades_prep_items_and_links_but_keeps_cross_trip_items(
+    app, owner, trip,
+):
+    """Deleting a trip removes its per-trip prep items and link rows,
+    but leaves cross-trip (user-level) prep items intact."""
+    # Cross-trip item — lives at user level, should survive trip deletion.
+    cross_trip_item = TripPrepItem(
+        owner_id=owner.id, trip_id=None, title="Renew passport", category="documents",
+    )
+    # Per-trip item — pinned directly to the trip, should die with it.
+    per_trip_item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id, title="Confirm hotel", category="other",
+    )
+    # Per-trip packing item — sanity check that the existing cascade
+    # still works alongside the new ones.
+    packing = PackingItem(trip_id=trip.id, name="Adapter", category="electronics")
+    db.session.add_all([cross_trip_item, per_trip_item, packing])
+    db.session.commit()
+
+    # Link the cross-trip item to this trip — the link row should die
+    # with the trip while the cross-trip item itself survives.
+    link = TripPrepLink(trip_prep_item_id=cross_trip_item.id, trip_id=trip.id)
+    db.session.add(link)
+    db.session.commit()
+
+    cross_trip_item_id = cross_trip_item.id
+    per_trip_item_id = per_trip_item.id
+    link_id = link.id
+    packing_id = packing.id
+    trip_id = trip.id
+
+    db.session.delete(trip)
+    db.session.commit()
+
+    assert db.session.get(Trip, trip_id) is None
+    assert db.session.get(TripPrepItem, per_trip_item_id) is None
+    assert db.session.get(TripPrepLink, link_id) is None
+    assert db.session.get(PackingItem, packing_id) is None
+    # The cross-trip item is at the user level — it must survive.
+    surviving = db.session.get(TripPrepItem, cross_trip_item_id)
+    assert surviving is not None
+    assert surviving.trip_id is None

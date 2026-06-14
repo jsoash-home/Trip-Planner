@@ -418,7 +418,16 @@ class TripPrepItem(db.Model):
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
     owner = db.relationship("User", backref=db.backref("trip_prep_items", lazy=True))
-    trip = db.relationship("Trip", backref=db.backref("prep_items", lazy=True))
+    # Trip-side cascade: a per-trip prep item (trip_id set) dies with the
+    # trip. Cross-trip items (trip_id NULL) are user-level and unaffected
+    # by this relationship — they're reached via owner / TripPrepLink.
+    # Without this cascade, deleting a Trip with per-trip prep items
+    # 500s on Postgres (FK violation); SQLite hides it because FKs are
+    # off by default.
+    trip = db.relationship(
+        "Trip",
+        backref=db.backref("prep_items", lazy=True, cascade="all, delete-orphan"),
+    )
     links = db.relationship(
         "TripPrepLink",
         backref="item",
@@ -450,4 +459,10 @@ class TripPrepLink(db.Model):
     due_offset_days = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    trip = db.relationship("Trip", backref=db.backref("prep_links", lazy=True))
+    # Link rows die with the trip — the link is the per-trip association,
+    # so once the trip is gone the link is meaningless. The cross-trip
+    # TripPrepItem on the other end of the link survives independently.
+    trip = db.relationship(
+        "Trip",
+        backref=db.backref("prep_links", lazy=True, cascade="all, delete-orphan"),
+    )
