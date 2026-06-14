@@ -374,3 +374,80 @@ class ExchangeRateCache(db.Model):
     rate = db.Column(db.Float, nullable=False)
     rate_date = db.Column(db.Date, nullable=False)
     fetched_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class TripPrepItem(db.Model):
+    """A single trip-prep to-do owned by a user.
+
+    Lives at user level — `trip_id` is nullable so an item can be
+    cross-trip ("renew passport") or pinned to a specific trip. A
+    cross-trip item can additionally be linked to one or more specific
+    trips via the TripPrepLink association rows (with per-link due
+    offsets), without losing its user-level identity.
+    """
+
+    __tablename__ = "trip_prep_item"
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    trip_id = db.Column(db.Integer, db.ForeignKey("trip.id"), nullable=True, index=True)
+
+    title = db.Column(db.String(200), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    # One of: documents, health, packing, home, transport, other (see prep_helpers).
+    category = db.Column(db.String(20), nullable=False, default="other")
+
+    # Optional URL the user pasted; link_image_url is the og:image
+    # extracted from it (populated by src/url_metadata.py).
+    link_url = db.Column(db.String(800), nullable=True)
+    link_image_url = db.Column(db.String(800), nullable=True)
+
+    done = db.Column(db.Boolean, nullable=False, default=False)
+    done_at = db.Column(db.DateTime, nullable=True)
+
+    # Days before trip start_date when this item is "due" — positive
+    # means before, negative means after. NULL = no specific due date.
+    due_offset_days = db.Column(db.Integer, nullable=True)
+
+    # When the user dismissed the "add to packing list?" prompt for
+    # this item — keeps the prompt from re-appearing after each
+    # done-toggle.
+    packing_prompt_dismissed_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    owner = db.relationship("User", backref=db.backref("trip_prep_items", lazy=True))
+    trip = db.relationship("Trip", backref=db.backref("prep_items", lazy=True))
+    links = db.relationship(
+        "TripPrepLink",
+        backref="item",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
+
+class TripPrepLink(db.Model):
+    """Association row linking a TripPrepItem to a specific Trip.
+
+    Lets one cross-trip prep item ("renew passport") appear on more
+    than one trip's per-trip prep tab without duplicating the row.
+    Each link can carry its own `due_offset_days` so the same item
+    can be "30 days before Italy" and "60 days before Japan".
+    """
+
+    __tablename__ = "trip_prep_link"
+    __table_args__ = (
+        db.UniqueConstraint("trip_prep_item_id", "trip_id", name="uq_prep_link_item_trip"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    trip_prep_item_id = db.Column(
+        db.Integer, db.ForeignKey("trip_prep_item.id"), nullable=False, index=True,
+    )
+    trip_id = db.Column(db.Integer, db.ForeignKey("trip.id"), nullable=False, index=True)
+
+    due_offset_days = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    trip = db.relationship("Trip", backref=db.backref("prep_links", lazy=True))

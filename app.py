@@ -49,6 +49,8 @@ from models import (
     PackingItem,
     Trip,
     TripCollaborator,
+    TripPrepItem,
+    TripPrepLink,
     TripView,
     User,
     db,
@@ -402,6 +404,27 @@ def _ensure_geocoding_columns() -> None:
                 logger.warning("Migration skipped (%s): %s", stmt, e)
 
 
+def _ensure_prep_tables() -> None:
+    """
+    Create trip_prep_item and trip_prep_link tables if missing.
+
+    Unlike the column-adding _ensure_* helpers above, these are whole
+    new tables — on a fresh DB they're already covered by
+    db.create_all(), but on an existing deployment they need to be
+    added. Safe to call on every boot: we inspect the live schema
+    first and only create what's missing.
+    """
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    existing = set(inspector.get_table_names())
+    if "trip_prep_item" not in existing:
+        TripPrepItem.__table__.create(db.engine)
+        logger.info("Migration: created table trip_prep_item")
+    if "trip_prep_link" not in existing:
+        TripPrepLink.__table__.create(db.engine)
+        logger.info("Migration: created table trip_prep_link")
+
+
 db.init_app(app)
 with app.app_context():
     db.create_all()
@@ -412,6 +435,7 @@ with app.app_context():
     _ensure_weather_columns()
     _ensure_timezone_column()
     _ensure_currency_columns()
+    _ensure_prep_tables()
     logger.info("Database schema ensured")
 
 login_manager = LoginManager(app)

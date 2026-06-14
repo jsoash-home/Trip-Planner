@@ -7,8 +7,17 @@ from datetime import date, datetime
 
 import pytest
 
-from app import _ensure_trip_timezone, app as flask_app
-from models import Booking, ItineraryItem, Trip, TripView, User, db
+from app import _ensure_prep_tables, _ensure_trip_timezone, app as flask_app
+from models import (
+    Booking,
+    ItineraryItem,
+    Trip,
+    TripPrepItem,
+    TripPrepLink,
+    TripView,
+    User,
+    db,
+)
 
 
 @pytest.fixture
@@ -2987,3 +2996,92 @@ def test_budget_no_categories_skips_toggle_and_disclaimer(app, owner):
     assert "via exchangerate.host" not in body
     assert 'name="show_as"' not in body
     assert "No costs to show yet" in body
+
+
+# ──────────────────────────────────────────────────────────────────
+# Trip-prep models — TripPrepItem + TripPrepLink (Task 2)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_trip_prep_item_persists_round_trip(app, owner, trip):
+    """All TripPrepItem fields round-trip through a save + fetch."""
+    created = datetime(2026, 6, 14, 9, 30, 0)
+    item = TripPrepItem(
+        owner_id=owner.id,
+        trip_id=trip.id,
+        title="Renew passport",
+        notes="Check expiry vs return date.",
+        category="documents",
+        link_url="https://travel.state.gov/renew",
+        link_image_url="https://travel.state.gov/og.png",
+        done=False,
+        due_offset_days=60,
+        created_at=created,
+        sort_order=3,
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    db.session.expire_all()
+    fetched = db.session.get(TripPrepItem, item_id)
+    assert fetched is not None
+    assert fetched.owner_id == owner.id
+    assert fetched.trip_id == trip.id
+    assert fetched.title == "Renew passport"
+    assert fetched.notes == "Check expiry vs return date."
+    assert fetched.category == "documents"
+    assert fetched.link_url == "https://travel.state.gov/renew"
+    assert fetched.link_image_url == "https://travel.state.gov/og.png"
+    assert fetched.done is False
+    assert fetched.done_at is None
+    assert fetched.due_offset_days == 60
+    assert fetched.packing_prompt_dismissed_at is None
+    assert fetched.created_at == created
+    assert fetched.sort_order == 3
+
+
+def test_trip_prep_link_unique_constraint(app, owner, trip):
+    """Two links with the same (item_id, trip_id) raise IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+
+    item = TripPrepItem(owner_id=owner.id, title="Buy adapter", category="packing")
+    db.session.add(item)
+    db.session.commit()
+
+    db.session.add(TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id))
+    db.session.commit()
+
+    db.session.add(TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id))
+    with pytest.raises(IntegrityError):
+        db.session.commit()
+    db.session.rollback()
+
+
+def test_trip_prep_item_cascade_deletes_links(app, owner, trip):
+    """Deleting a TripPrepItem cascades to its TripPrepLink rows."""
+    item = TripPrepItem(owner_id=owner.id, title="Confirm hotel", category="other")
+    db.session.add(item)
+    db.session.commit()
+
+    db.session.add(TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id))
+    db.session.commit()
+    assert TripPrepLink.query.filter_by(trip_prep_item_id=item.id).count() == 1
+
+    db.session.delete(item)
+    db.session.commit()
+
+    assert db.session.get(TripPrepItem, item.id) is None
+    assert TripPrepLink.query.filter_by(trip_id=trip.id).count() == 0
+
+
+def test_ensure_prep_tables_is_idempotent(app):
+    """Calling _ensure_prep_tables twice is a no-op the second time."""
+    from sqlalchemy import inspect
+
+    _ensure_prep_tables()
+    _ensure_prep_tables()  # second call must not raise
+
+    tables = set(inspect(db.engine).get_table_names())
+    assert "trip_prep_item" in tables
+    assert "trip_prep_link" in tables
