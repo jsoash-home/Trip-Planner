@@ -1,5 +1,65 @@
 # Session Log
 
+## 2026-06-14 — Date-rot fix + ship in-flight data-safety infra + 12 emoji additions
+
+**Shipped:**
+- **fix:** trip fixture `end_date` bumped from `2026-06-10` to `2030-12-31`
+  (`tests/test_routes.py:42`, commit `4153d8d`). 5 drift-counts dashboard
+  tests had been silently failing on `main` since 2026-06-10 — purely from
+  the calendar rolling past the literal end_date. Now date-rot-proof for
+  years.
+- **feat:** automated DB snapshots (commit `6e38548`) — `src/backup.py`
+  (`snapshot_sqlite_db_if_due`) copies `vacation.db` → `data/backups/` at
+  app startup when latest snapshot >6h old, prunes to 20 most recent.
+  No-op on Postgres / first run. 10 unit tests. Wired in `app.py:212`
+  (SQLite branch only). Same commit adds a `tests/conftest.py` tripwire
+  that hard-fails the suite if SQLAlchemy bound to anything other than
+  `:memory:`. And new "Data safety rules" section in `CLAUDE.md`.
+- **feat:** 12 more trip emojis + theme phrases (commit `3b3ddd7`) —
+  🌲 🏞️ 🛶 🏕️ 🔥 🐻 🏙️ 🌉 🛳️ 🚂 🏀 ⚽ in `src/trip_helpers.py`. 9 new unit tests.
+
+**Test status:** 659 passing / 0 failing — up from 654/5 at session start
+(+5 recovered by the fixture fix, plus +14 net new from this session's work).
+
+**Stopped at:** Three commits pushed to `origin/main`, working tree clean.
+User wants to brainstorm a new **trip-prep to-do list** feature next session
+(e.g. "buy travel backpacks", "finish choosing Svalbard daytrips") —
+brainstorming was started inline this session but deferred so the close-out
+could finish first.
+
+**Pick up next with:** Resume the brainstorming session for the trip-prep
+to-do feature. The user explicitly asked for "several different ideas, be
+creative and modern with the tools and tech used." The `superpowers:brainstorming`
+skill was invoked; restart it cleanly next session. Real example to-dos
+from the user: travel backpacks (gear, household scope), camera lens (gear),
+waterproof shoes (gear), finish choosing Svalbard daytrips (trip-research /
+decision).
+
+**Kickoff prompt for next session:**
+
+> I want to add a trip-prep to-do list to Vacation Planner so I can track
+> things I need to do or buy before a trip. Real examples I gave last
+> session: buy travel backpacks for me + kids, get a new camera lens, buy
+> waterproof shoes, finish choosing Svalbard daytrips. Run
+> `superpowers:brainstorming` and give me several creative, modern
+> approaches before we settle on one. Tests green at 659. The drift-review
+> wizard, packing list, and itinerary are the most relevant existing
+> surfaces to look at when picking an approach. Spec → `docs/superpowers/specs/`,
+> plan → `docs/superpowers/plans/`.
+
+**Loose ends:**
+- The 8 `vacation.db.bak*` files at project root are now redundant given
+  `src/backup.py` snapshots to `data/backups/`. Past session logs kept
+  them intentionally — worth a quick "delete these?" prompt next session.
+- B3 (home-currency budget) manual browser smoke from the 2026-06-09
+  handoff is still outstanding — not blocking, but the tests cover the
+  same paths.
+- Drift detection feature is fully shipped (committed before B3) but
+  wasn't named in the 2026-06-09 handoff — flag for situational
+  awareness in case next session involves dashboard work.
+
+---
+
 ## 2026-06-09 — B3 Home-Currency Budget Totals shipped; Phase 3 complete
 
 **Shipped:**
