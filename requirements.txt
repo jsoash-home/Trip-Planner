@@ -6,6 +6,7 @@ SQLAlchemy==2.0.30
 python-dotenv==1.0.1
 markdown==3.6
 requests==2.32.3
+beautifulsoup4>=4.12
 gunicorn==22.0.0
 psycopg2-binary==2.9.9
 timezonefinder>=6.5
