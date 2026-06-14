@@ -84,6 +84,32 @@ Same pattern as stock-tracker. `DATABASE_URL` env var → Postgres on the
 cloud; absent → SQLite in the project folder. The app rewrites
 `postgres://` to `postgresql://` automatically for SQLAlchemy.
 
+## Data safety rules (read before touching anything DB-related)
+
+The user's real trips live in `vacation.db` at the project root. Treat
+it as production data:
+
+- **Never write seed, fixture, sample, or demo data to `vacation.db`.**
+  Not even temporarily. If you need to verify behaviour with realistic
+  data, write to a throwaway path under `data/` (gitignored) and delete
+  it when done — or ask first.
+- **Never run scripts that call `db.create_all()`, `db.drop_all()`, or
+  raw SQL against `vacation.db`** without confirming with the user
+  first. Migrations are the only exception, and even then say what
+  you're about to do.
+- **Tests must use the in-memory DB.** [tests/conftest.py](tests/conftest.py)
+  sets `DATABASE_URL=sqlite:///:memory:` before importing the app and
+  asserts the binding stuck (the tripwire). Don't weaken either.
+- **Pre-flight snapshots are automatic.** `src/backup.py` snapshots
+  `vacation.db` to `data/backups/` at app startup when the latest
+  snapshot is older than 6 hours, keeping the 20 most recent. To
+  recover: `cp data/backups/vacation-<timestamp>.db vacation.db`
+  (stop the app first).
+- **If the user reports "lost data," check the DB before agreeing.**
+  Query `vacation.db` directly with `sqlite3` and confirm. A
+  redirect_uri_mismatch or wrong-account sign-in looks identical to
+  data loss from the browser but the rows are still there.
+
 ## Deployment caveat
 `os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"` is set in `app.py` for
 localhost HTTP. **Must be removed before deploying** — Railway, Render,

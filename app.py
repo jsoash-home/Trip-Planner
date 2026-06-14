@@ -53,6 +53,7 @@ from models import (
     User,
     db,
 )
+from src.backup import snapshot_sqlite_db_if_due
 from src.booking_helpers import (
     BOOKING_TYPE_CODES,
     BOOKING_TYPE_LABELS,
@@ -211,6 +212,11 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 if _db_url.startswith("sqlite:///"):
     logger.info("Using SQLite database at %s", _db_url.replace("sqlite:///", "", 1))
+    # Pre-flight snapshot of the live DB. No-op when there isn't one
+    # yet, or when a recent snapshot already exists. Cloud / Postgres
+    # paths skip this entirely.
+    _sqlite_file = Path(_db_url.replace("sqlite:///", "", 1))
+    snapshot_sqlite_db_if_due(_sqlite_file, _APP_ROOT / "data" / "backups")
 else:
     logger.info("Using SQLAlchemy database from DATABASE_URL")
 
