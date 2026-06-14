@@ -40,8 +40,11 @@ def owner(app):
 
 @pytest.fixture
 def trip(app, owner):
+    # end_date is far in the future so the fixture stays "active" no
+    # matter when the suite runs — drift checks skip trips whose
+    # end_date is before today.
     t = Trip(owner_id=owner.id, name="Test trip",
-             start_date=date(2026, 6, 1), end_date=date(2026, 6, 10))
+             start_date=date(2026, 6, 1), end_date=date(2030, 12, 31))
     db.session.add(t)
     db.session.commit()
     return t
