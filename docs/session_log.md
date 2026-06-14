@@ -1,8 +1,8 @@
 # Session Log
 
-## 2026-06-14 — Date-rot fix + ship in-flight data-safety infra + 12 emoji additions
+## 2026-06-14 — Date-rot fix + data-safety infra + trip-prep to-dos brainstormed (spec + plan written)
 
-**Shipped:**
+**Shipped (code):**
 - **fix:** trip fixture `end_date` bumped from `2026-06-10` to `2030-12-31`
   (`tests/test_routes.py:42`, commit `4153d8d`). 5 drift-counts dashboard
   tests had been silently failing on `main` since 2026-06-10 — purely from
@@ -18,34 +18,58 @@
 - **feat:** 12 more trip emojis + theme phrases (commit `3b3ddd7`) —
   🌲 🏞️ 🛶 🏕️ 🔥 🐻 🏙️ 🌉 🛳️ 🚂 🏀 ⚽ in `src/trip_helpers.py`. 9 new unit tests.
 
+**Shipped (design):**
+- **Trip-prep to-dos** — brainstormed inline using the visual companion,
+  spec written (commit `32ca314`, `docs/superpowers/specs/2026-06-14-trip-prep-todos-design.md`),
+  implementation plan written (commit `31f1d83`, `docs/superpowers/plans/2026-06-14-trip-prep-todos.md`,
+  15 tasks, 734 lines).
+- Design decisions locked: hybrid per-trip + cross-trip with linking
+  (option C); v1 magic features = paste-to-create from URL + smart
+  trip-relative deadlines + done→packing-list loop; AI suggestions held
+  for v2; per-trip items follow trip sharing rules, cross-trip items
+  always private to owner; IA = three dedicated surfaces (dashboard
+  panel, `/prep`, per-trip prep tab).
+
 **Test status:** 659 passing / 0 failing — up from 654/5 at session start
-(+5 recovered by the fixture fix, plus +14 net new from this session's work).
+(+5 recovered by the fixture fix, plus +14 net new from the code work).
+No tests added for the design work (no code yet).
 
-**Stopped at:** Three commits pushed to `origin/main`, working tree clean.
-User wants to brainstorm a new **trip-prep to-do list** feature next session
-(e.g. "buy travel backpacks", "finish choosing Svalbard daytrips") —
-brainstorming was started inline this session but deferred so the close-out
-could finish first.
+**Stopped at:** Spec + plan committed and pushed. Working tree clean.
+Next move is to start the 15-task implementation via
+`superpowers:subagent-driven-development`.
 
-**Pick up next with:** Resume the brainstorming session for the trip-prep
-to-do feature. The user explicitly asked for "several different ideas, be
-creative and modern with the tools and tech used." The `superpowers:brainstorming`
-skill was invoked; restart it cleanly next session. Real example to-dos
-from the user: travel backpacks (gear, household scope), camera lens (gear),
-waterproof shoes (gear), finish choosing Svalbard daytrips (trip-research /
-decision).
+**Pick up next with:** Open a fresh session and run the kickoff prompt
+below. Start at Task 1 (add `beautifulsoup4` to `requirements.txt`).
 
 **Kickoff prompt for next session:**
 
-> I want to add a trip-prep to-do list to Vacation Planner so I can track
-> things I need to do or buy before a trip. Real examples I gave last
-> session: buy travel backpacks for me + kids, get a new camera lens, buy
-> waterproof shoes, finish choosing Svalbard daytrips. Run
-> `superpowers:brainstorming` and give me several creative, modern
-> approaches before we settle on one. Tests green at 659. The drift-review
-> wizard, packing list, and itinerary are the most relevant existing
-> surfaces to look at when picking an approach. Spec → `docs/superpowers/specs/`,
-> plan → `docs/superpowers/plans/`.
+> Implement the trip-prep to-do feature for Vacation Planner using the
+> plan at `docs/superpowers/plans/2026-06-14-trip-prep-todos.md` (15 tasks,
+> spec at `docs/superpowers/specs/2026-06-14-trip-prep-todos-design.md`).
+>
+> Run the `superpowers:subagent-driven-development` skill — dispatch a
+> fresh subagent per task, review between them, commit one feat: / chore:
+> commit per task. Start at Task 1 (add beautifulsoup4 to requirements.txt).
+>
+> Working on the main branch (trunk-based — no feature branch). Tests
+> are green at 659 — keep them green after every task; do not advance
+> until the new tests pass AND the full suite passes.
+>
+> Critical gotchas to surface in every subagent prompt:
+> - Data safety: tests bind SQLAlchemy to `:memory:` via `tests/conftest.py`.
+>   Never call `db.create_all()` / `db.drop_all()` / raw SQL against
+>   `vacation.db`. See "Data safety rules" in `CLAUDE.md`.
+> - Python 3.9: use `Optional[X]`, NOT `X | None`.
+> - No `print()`; every new module gets `logger = logging.getLogger(__name__)`.
+> - Type hints required on every new function (params + return).
+> - Commit per task, Conventional Commits style.
+> - Task 14 touches dashboard UI — apply the global Frontend Verification
+>   rule from `~/.claude/CLAUDE.md` before claiming it done (start the
+>   dev server on `localhost:5002`, confirm zero browser console errors).
+>
+> When all 15 tasks are committed, do NOT push to origin without my
+> explicit okay. After Task 15, summarize what shipped, what tests
+> pass, and ask whether to push.
 
 **Loose ends:**
 - The 8 `vacation.db.bak*` files at project root are now redundant given
@@ -57,6 +81,10 @@ decision).
 - Drift detection feature is fully shipped (committed before B3) but
   wasn't named in the 2026-06-09 handoff — flag for situational
   awareness in case next session involves dashboard work.
+- The brainstorming session used the visual companion server; mockups
+  persist in `.superpowers/brainstorm/6098-1781443548/` (gitignored).
+  Safe to delete the directory once you don't want to re-view the
+  mockups.
 
 ---
 
