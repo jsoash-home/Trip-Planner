@@ -159,3 +159,12 @@ theme + unit).
 
 ## Local port
 Local dev server runs on port **5002** (stock-tracker uses 5001).
+
+**Always open the app at `http://localhost:5002`, never
+`http://127.0.0.1:5002`.** Flask prints `Running on http://127.0.0.1:5002`
+on startup, but the Google OAuth client only has
+`http://localhost:5002/login/google/authorized` registered as a redirect
+URI. Google treats `localhost` and `127.0.0.1` as different origins and
+will reject sign-in with "Access blocked: This app's request is invalid"
+if you use the 127.0.0.1 form. When opening the app in a browser from
+an agent, always use `open http://localhost:5002`.
