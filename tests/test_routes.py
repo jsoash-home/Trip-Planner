@@ -3377,3 +3377,154 @@ def test_prep_create_empty_input_shows_error_flash(app, owner):
     assert TripPrepItem.query.filter_by(owner_id=owner.id).count() == 0
     # The flashed warning is rendered into the page.
     assert b"Add a to-do or paste a URL" in resp.data
+
+
+# ─── POST /prep/<id>/toggle (Task 9) ────────────────────────────────
+def test_prep_toggle_owner_can_flip_done(app, owner):
+    """The item's owner can flip done from False to True via POST."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Renew passport", category="documents",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+    assert resp.status_code == 302
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is True
+
+
+def test_prep_toggle_sets_done_at_when_marking_done(app, owner):
+    """Marking an item done stamps done_at with utcnow."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Buy adapter", category="packing",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+    assert item.done_at is None
+
+    before = datetime.utcnow()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+    after = datetime.utcnow()
+
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is True
+    assert refreshed.done_at is not None
+    assert before <= refreshed.done_at <= after
+
+
+def test_prep_toggle_clears_done_at_when_marking_undone(app, owner):
+    """Toggling an already-done item back to undone clears done_at."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Confirm hotel", category="other",
+        done=True, done_at=datetime(2026, 1, 1, 12, 0),
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is False
+    assert refreshed.done_at is None
+
+
+def test_prep_toggle_resets_packing_prompt_dismissed_at_when_undone(app, owner):
+    """Un-checking an item also clears packing_prompt_dismissed_at so
+    the prompt can fire again on the next done-toggle."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Pack umbrella", category="packing",
+        done=True, done_at=datetime(2026, 1, 1, 12, 0),
+        packing_prompt_dismissed_at=datetime(2026, 1, 2, 9, 0),
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is False
+    assert refreshed.packing_prompt_dismissed_at is None
+
+
+def test_prep_toggle_404_when_missing(app, owner):
+    """Toggling a non-existent item id returns 404."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post("/prep/99999/toggle", follow_redirects=False)
+    assert resp.status_code == 404
+
+
+def test_prep_toggle_403_for_unrelated_user_on_cross_trip_item(app, owner):
+    """A stranger toggling someone else's cross-trip item gets 403."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="My private to-do", category="other",
+    )
+    db.session.add(item)
+    other = User(google_id="g77", email="stranger@example.com", name="Stranger")
+    db.session.add(other)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, other)
+        resp = client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+    assert resp.status_code == 403
+    # Item state unchanged.
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is False
+
+
+def test_prep_toggle_403_for_viewer_on_per_trip_item(app, owner, trip, viewer):
+    """A viewer collaborator on the trip cannot toggle a per-trip prep item."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Confirm hotel", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, viewer)
+        resp = client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+    assert resp.status_code == 403
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is False
+
+
+def test_prep_toggle_allows_editor_collaborator_on_per_trip_item(
+    app, owner, trip, editor,
+):
+    """An editor collaborator on the trip CAN toggle a per-trip prep item."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Confirm hotel", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, editor)
+        resp = client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+    assert resp.status_code == 302
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.done is True

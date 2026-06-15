@@ -1054,6 +1054,48 @@ def prep_create():
     return redirect(request.referrer or url_for("prep_page"))
 
 
+@app.route("/prep/<int:item_id>/toggle", methods=["POST"])
+@login_required
+def prep_toggle(item_id: int):
+    """Flip the done flag. Sets/clears done_at. May fire the
+    done -> packing-list flash banner (handled in Task 13)."""
+    item = TripPrepItem.query.get(item_id)
+    if item is None:
+        abort(404)
+
+    # Access check. Cross-trip items (trip_id is None) are owner-only —
+    # they live at the user level and aren't shared. Per-trip items can
+    # also be toggled by an editor collaborator on the parent trip; the
+    # item's own owner (whoever created it) can always toggle.
+    if item.trip_id is None:
+        if item.owner_id != current_user.id:
+            abort(403)
+    else:
+        if item.owner_id != current_user.id:
+            trip = Trip.query.get(item.trip_id)
+            if trip is None:
+                abort(404)
+            user_role = get_user_role_for_trip(trip, current_user)
+            if not role_satisfies(user_role, "editor"):
+                abort(403)
+
+    item.done = not item.done
+    if item.done:
+        item.done_at = datetime.utcnow()
+        # TODO Task 13: insert done -> packing-list prompt logic here
+    else:
+        item.done_at = None
+        # Re-open the "add to packing list?" prompt for the next toggle.
+        item.packing_prompt_dismissed_at = None
+
+    db.session.commit()
+    logger.info(
+        "Toggled prep item id=%s done=%s by user_id=%s",
+        item.id, item.done, current_user.id,
+    )
+    return redirect(request.referrer or url_for("prep_page"))
+
+
 # ─── Trips ──────────────────────────────────────────────────────────
 @app.route("/trips")
 @login_required

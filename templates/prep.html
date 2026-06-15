@@ -98,6 +98,15 @@
           {% set due = due_date(it.trip.start_date if it.trip else None, it.due_offset_days) %}
           {% set urgency = urgency_bucket(today, due) %}
           <div class="prep-row d-flex align-items-center py-2 border-top">
+            <form method="POST"
+                  action="{{ url_for('prep_toggle', item_id=it.id) }}"
+                  class="prep-row-toggle m-0 me-2">
+              <input type="checkbox"
+                     class="form-check-input prep-checkbox"
+                     {% if it.done %}checked{% endif %}
+                     onchange="this.form.submit()"
+                     aria-label="Toggle done for {{ it.title }}">
+            </form>
             {% if it.link_image_url %}
               <img class="prep-row-thumb me-2"
                    src="{{ it.link_image_url }}"
@@ -138,6 +147,15 @@
       <div id="prep-done-group" class="collapse mt-3">
         {% for it in done_items %}
           <div class="prep-row d-flex align-items-center py-2 border-top">
+            <form method="POST"
+                  action="{{ url_for('prep_toggle', item_id=it.id) }}"
+                  class="prep-row-toggle m-0 me-2">
+              <input type="checkbox"
+                     class="form-check-input prep-checkbox"
+                     {% if it.done %}checked{% endif %}
+                     onchange="this.form.submit()"
+                     aria-label="Toggle done for {{ it.title }}">
+            </form>
             <div class="prep-row-main flex-grow-1">
               <div class="prep-row-title text-decoration-line-through text-muted">{{ it.title }}</div>
               {% if it.notes %}
