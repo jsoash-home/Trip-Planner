@@ -3145,3 +3145,91 @@ def test_trip_delete_cascades_prep_items_and_links_but_keeps_cross_trip_items(
     surviving = db.session.get(TripPrepItem, cross_trip_item_id)
     assert surviving is not None
     assert surviving.trip_id is None
+
+
+# ─── GET /prep — cross-trip prep list (Task 7) ──────────────────────
+def test_prep_page_requires_login(app):
+    """GET /prep without auth redirects to the login landing page."""
+    with flask_app.test_client() as client:
+        resp = client.get("/prep", follow_redirects=False)
+    assert resp.status_code == 302
+
+
+def test_prep_page_renders_for_owner(app, owner):
+    """A signed-in user with one cross-trip item sees its title in the page."""
+    db.session.add(TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Renew passport", category="admin",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/prep")
+    assert resp.status_code == 200
+    assert b"Renew passport" in resp.data
+
+
+def test_prep_page_empty_state_when_no_items(app, owner):
+    """A signed-in user with zero prep items sees the empty-state nudge."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/prep")
+    assert resp.status_code == 200
+    assert b"no prep to-dos yet" in resp.data
+
+
+def test_prep_page_renders_items_grouped_by_category(app, owner):
+    """Two items in different categories each appear with their category label."""
+    db.session.add_all([
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="Buy travel adapter", category="buy"),
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="Research Lisbon neighborhoods", category="research"),
+    ])
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/prep")
+    assert resp.status_code == 200
+    assert b"Buy travel adapter" in resp.data
+    assert b"Research Lisbon neighborhoods" in resp.data
+    # Each category's label should appear as a group heading.
+    assert b"Buy" in resp.data
+    assert b"Research" in resp.data
+
+
+def test_prep_page_hides_per_trip_items(app, owner, trip):
+    """Per-trip items (trip_id set) are NOT shown on the cross-trip /prep page."""
+    db.session.add_all([
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="Cross-trip passport renewal", category="admin"),
+        TripPrepItem(owner_id=owner.id, trip_id=trip.id,
+                     title="Per-trip confirm hotel", category="admin"),
+    ])
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/prep")
+    assert resp.status_code == 200
+    assert b"Cross-trip passport renewal" in resp.data
+    assert b"Per-trip confirm hotel" not in resp.data
+
+
+def test_prep_page_hides_other_users_items(app, owner):
+    """User B does not see User A's cross-trip prep items on /prep."""
+    other = User(google_id="g2", email="other@example.com", name="Other")
+    db.session.add(other)
+    db.session.commit()
+    db.session.add_all([
+        TripPrepItem(owner_id=other.id, trip_id=None,
+                     title="OtherUserSecretRenewVisa", category="admin"),
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="OwnerOwnPrepItem", category="admin"),
+    ])
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/prep")
+    assert resp.status_code == 200
+    assert b"OwnerOwnPrepItem" in resp.data
+    assert b"OtherUserSecretRenewVisa" not in resp.data

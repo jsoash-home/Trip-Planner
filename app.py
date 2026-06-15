@@ -121,6 +121,15 @@ from src.packing import (
     packing_progress_for_group,
     parse_packing_form,
 )
+from src.prep_helpers import (
+    PREP_CATEGORIES,
+    PREP_CATEGORY_EMOJIS,
+    PREP_CATEGORY_LABELS,
+    URGENCY_NONE,
+    due_date,
+    group_items_by_category,
+    urgency_bucket,
+)
 from src.sharing import (
     SHARE_ROLES,
     SHARE_ROLE_LABELS,
@@ -933,6 +942,31 @@ def settings():
     return render_template(
         "settings.html",
         supported_currencies=SUPPORTED_CURRENCIES,
+    )
+
+
+# ─── Trip prep (cross-trip to-dos) ──────────────────────────────────
+@app.route("/prep", methods=["GET"])
+@login_required
+def prep_page():
+    """User-level cross-trip prep list. Owner-only — cross-trip items
+    are never shared with collaborators."""
+    items = TripPrepItem.query.filter_by(
+        owner_id=current_user.id, trip_id=None,
+    ).all()
+    grouped = group_items_by_category(items)
+    return render_template(
+        "prep.html",
+        items=items,
+        grouped=grouped,
+        today=date.today(),
+        categories=PREP_CATEGORIES,
+        category_labels=PREP_CATEGORY_LABELS,
+        category_emojis=PREP_CATEGORY_EMOJIS,
+        trips=current_user.trips,
+        urgency_none=URGENCY_NONE,
+        due_date=due_date,
+        urgency_bucket=urgency_bucket,
     )
 
 

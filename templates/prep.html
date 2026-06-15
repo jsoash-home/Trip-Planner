@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Trip prep — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Trip prep</h1>
+</div>
+
+{% set first_name = (current_user.name or '').split(' ')[0] or 'there' %}
+
+{% if not items %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">📝</div>
+    <div class="vp-empty-title">Hi {{ first_name }} — no prep to-dos yet</div>
+    <p class="vp-empty-body">
+      This is your cross-trip to-do list — the place for things like
+      renewing your passport, replacing a worn-out backpack, or
+      researching a destination before you book. Items here aren't
+      tied to a single trip, so they stick around until you mark them
+      done.
+    </p>
+  </div>
+{% else %}
+  {% for code, label, emoji in categories %}
+    {% set group_items = grouped.get(code, []) %}
+    {% if group_items %}
+      <div class="vp-card mb-3">
+        <h2 class="h5 mb-3">
+          <span aria-hidden="true">{{ emoji }}</span>
+          {{ label }}
+          <span class="text-muted small ms-1">({{ group_items|length }})</span>
+        </h2>
+        {% for it in group_items %}
+          {% set due = due_date(it.trip.start_date if it.trip else None, it.due_offset_days) %}
+          {% set urgency = urgency_bucket(today, due) %}
+          <div class="prep-row d-flex align-items-center py-2 border-top">
+            {% if it.link_image_url %}
+              <img class="prep-row-thumb me-2"
+                   src="{{ it.link_image_url }}"
+                   alt=""
+                   referrerpolicy="no-referrer"
+                   width="40" height="40">
+            {% endif %}
+            <div class="prep-row-main flex-grow-1">
+              <div class="prep-row-title">{{ it.title }}</div>
+              {% if it.notes %}
+                <div class="text-muted small">{{ it.notes }}</div>
+              {% endif %}
+            </div>
+            {% if urgency and urgency != urgency_none %}
+              <span class="badge vp-pill vp-pill--{{ urgency }} ms-2">{{ urgency }}</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endfor %}
+
+  {% set done_items = grouped.get('done', []) %}
+  {% if done_items %}
+    <div class="vp-card mb-3">
+      <h2 class="h5 mb-0">
+        <button class="btn btn-link p-0 text-decoration-none"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#prep-done-group"
+                aria-expanded="false"
+                aria-controls="prep-done-group">
+          <span aria-hidden="true">✅</span>
+          Done
+          <span class="text-muted small ms-1">({{ done_items|length }})</span>
+        </button>
+      </h2>
+      <div id="prep-done-group" class="collapse mt-3">
+        {% for it in done_items %}
+          <div class="prep-row d-flex align-items-center py-2 border-top">
+            <div class="prep-row-main flex-grow-1">
+              <div class="prep-row-title text-decoration-line-through text-muted">{{ it.title }}</div>
+              {% if it.notes %}
+                <div class="text-muted small text-decoration-line-through">{{ it.notes }}</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
