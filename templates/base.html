@@ -285,9 +285,24 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, msg in messages %}
-          <div class="vp-flash vp-flash--{{ category if category in ['info','success','success-celebrate','warning','danger'] else 'info' }}">
-            {{ msg }}
-          </div>
+          {% if category == "decision" and msg is mapping and msg.type == "prep_packing_prompt" %}
+            <div class="vp-flash vp-flash--info vp-prep-packing-prompt">
+              <p class="mb-2">
+                Add <strong>{{ msg.item_title }}</strong> to the
+                <strong>{{ msg.trip_name }}</strong> packing list?
+              </p>
+              <form method="POST" action="{{ url_for('prep_packing_decision', item_id=msg.item_id, action='add') }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-primary">Yes, add to packing list</button>
+              </form>
+              <form method="POST" action="{{ url_for('prep_packing_decision', item_id=msg.item_id, action='dismiss') }}" class="d-inline ms-2">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">No, just mark done</button>
+              </form>
+            </div>
+          {% else %}
+            <div class="vp-flash vp-flash--{{ category if category in ['info','success','success-celebrate','warning','danger'] else 'info' }}">
+              {{ msg }}
+            </div>
+          {% endif %}
         {% endfor %}
       {% endif %}
     {% endwith %}
@@ -308,7 +323,8 @@
   <script>
     // Auto-dismiss non-danger flash messages after 4 seconds.
     // Hovering pauses dismissal so the user can read at their pace.
-    document.querySelectorAll('.vp-flash:not(.vp-flash--danger)').forEach(function (el) {
+    // The packing-prompt flash requires user action, so don't auto-dismiss it.
+    document.querySelectorAll('.vp-flash:not(.vp-flash--danger):not(.vp-prep-packing-prompt)').forEach(function (el) {
       var dismissTimer = setTimeout(function () {
         el.classList.add('vp-flash--dismissing');
       }, 4000);

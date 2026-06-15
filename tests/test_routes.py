@@ -4181,3 +4181,325 @@ def test_prep_link_delete_403_when_user_not_owner_of_item(app, owner, trip):
         )
     assert resp.status_code == 403
     assert db.session.get(TripPrepLink, link_id) is not None
+
+
+# ─── Done → packing-list prompt (Task 13) ───────────────────────────
+def _packing_prompt_in_session(client) -> dict:
+    """Return the prep_packing_prompt flash payload from the client's
+    session, or None. Flash messages live in session['_flashes'] as a
+    list of (category, message) tuples."""
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes", [])
+    for category, msg in flashes:
+        if category == "decision" and isinstance(msg, dict) and \
+                msg.get("type") == "prep_packing_prompt":
+            return msg
+    return None
+
+
+def test_done_packing_prompt_fires_for_gear_per_trip_item(app, owner, trip):
+    """Marking a per-trip gear item done fires the packing-list prompt."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is not None
+    assert payload["item_id"] == item_id
+    assert payload["item_title"] == "Hiking boots"
+    assert payload["trip_id"] == trip.id
+    assert payload["trip_name"] == trip.name
+
+
+def test_done_packing_prompt_fires_for_buy_with_single_link(app, owner, trip):
+    """A cross-trip buy item with exactly one link fires the prompt
+    using the linked trip."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Travel adapter", category="buy",
+    )
+    db.session.add(item)
+    db.session.commit()
+    link = TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id)
+    db.session.add(link)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is not None
+    assert payload["item_id"] == item_id
+    assert payload["trip_id"] == trip.id
+    assert payload["trip_name"] == trip.name
+
+
+def test_done_packing_prompt_does_not_fire_for_research_category(
+    app, owner, trip,
+):
+    """A per-trip item with a non-gear/buy category does not fire the
+    prompt — research items aren't packing candidates."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Read up on Naples", category="research",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is None
+
+
+def test_done_packing_prompt_does_not_fire_for_cross_trip_with_zero_links(
+    app, owner,
+):
+    """A cross-trip gear item with no links is ambiguous — no prompt."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Backpack", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is None
+
+
+def test_done_packing_prompt_does_not_fire_for_cross_trip_with_multiple_links(
+    app, owner, trip,
+):
+    """A cross-trip item linked to multiple trips is ambiguous — no prompt."""
+    other_trip = Trip(
+        owner_id=owner.id, name="Other trip",
+        start_date=date(2027, 1, 1), end_date=date(2027, 1, 5),
+    )
+    db.session.add(other_trip)
+    db.session.commit()
+
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Travel pillow", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    db.session.add_all([
+        TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id),
+        TripPrepLink(trip_prep_item_id=item.id, trip_id=other_trip.id),
+    ])
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is None
+
+
+def test_done_packing_prompt_does_not_fire_when_already_dismissed(
+    app, owner, trip,
+):
+    """If packing_prompt_dismissed_at is set, the prompt stays quiet
+    even on a fresh done-toggle."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+        packing_prompt_dismissed_at=datetime(2026, 1, 1, 12, 0),
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is None
+
+
+def test_done_packing_prompt_fires_again_after_undone_then_done(
+    app, owner, trip,
+):
+    """Toggling done True (prompt fires), dismissing, toggling done
+    False (clears dismissed_at), toggling done True again — the prompt
+    fires again. Confirms Task 9's reset path is wired."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        # First done → prompt fires.
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        assert _packing_prompt_in_session(client) is not None
+        # Dismiss the prompt — stamps packing_prompt_dismissed_at.
+        client.post(
+            f"/prep/{item_id}/packing-decision?action=dismiss",
+            follow_redirects=False,
+        )
+        # Un-done → clears packing_prompt_dismissed_at.
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        # Re-done → prompt fires again.
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        payload = _packing_prompt_in_session(client)
+    assert payload is not None
+    assert payload["item_id"] == item_id
+
+
+def test_packing_decision_add_creates_packing_item(app, owner, trip):
+    """POST /prep/<id>/packing-decision?action=add creates a PackingItem
+    on the resolved trip with name = item title and category 'other'."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/packing-decision?action=add",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    created = PackingItem.query.filter_by(trip_id=trip.id).all()
+    assert len(created) == 1
+    assert created[0].name == "Hiking boots"
+    assert created[0].category == "other"
+    assert created[0].packed is False
+
+
+def test_packing_decision_dismiss_does_not_create_packing_item(
+    app, owner, trip,
+):
+    """POST /prep/<id>/packing-decision?action=dismiss stamps
+    dismissed_at but does NOT create a PackingItem."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/packing-decision?action=dismiss",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert PackingItem.query.filter_by(trip_id=trip.id).count() == 0
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.packing_prompt_dismissed_at is not None
+
+
+def test_packing_decision_add_marks_dismissed_so_prompt_does_not_refire(
+    app, owner, trip,
+):
+    """After action=add, packing_prompt_dismissed_at is stamped, so
+    the prompt would not re-fire on the next done-toggle as long as
+    the item isn't un-done first. (Task 9 clears dismissed_at on
+    un-toggle — covered separately by the fires_again_after_undone
+    test.)"""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        # Toggle done -> prompt fires.
+        client.post(f"/prep/{item_id}/toggle", follow_redirects=False)
+        assert _packing_prompt_in_session(client) is not None
+        # User clicks "Yes, add to packing list".
+        client.post(
+            f"/prep/{item_id}/packing-decision?action=add",
+            follow_redirects=False,
+        )
+        # Drain any flashes from the add response.
+        with client.session_transaction() as sess:
+            sess.pop("_flashes", None)
+        # The item is still done; dismissed_at is set; the next time
+        # we (somehow) toggled THIS done item again the prompt
+        # wouldn't fire. We verify the persistent state instead:
+        refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.packing_prompt_dismissed_at is not None
+    assert PackingItem.query.filter_by(trip_id=trip.id).count() == 1
+
+
+def test_packing_decision_403_when_not_owner(app, owner, trip):
+    """A non-owner of the item cannot POST the decision route."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    stranger = User(
+        google_id="g_pkdec_stranger", email="pkdec_stranger@example.com",
+        name="Stranger",
+    )
+    db.session.add(stranger)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.post(
+            f"/prep/{item_id}/packing-decision?action=add",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    assert PackingItem.query.filter_by(trip_id=trip.id).count() == 0
+
+
+def test_packing_decision_400_when_action_invalid(app, owner, trip):
+    """Any action other than 'add' or 'dismiss' is rejected with 400."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Hiking boots", category="gear",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/packing-decision?action=bogus",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    # And no action arg at all is also a 400.
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/packing-decision",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400

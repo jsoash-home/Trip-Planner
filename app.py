@@ -978,6 +978,19 @@ def _prep_item_access_or_403(item: TripPrepItem) -> None:
         abort(403)
 
 
+def _resolved_single_trip_for_prep(
+    item: TripPrepItem,
+) -> Tuple[Optional[int], Optional[Trip]]:
+    """Return (trip_id, trip) when exactly one trip is linked to this item,
+    else (None, None). Used by the done -> packing-list prompt."""
+    if item.trip_id is not None:
+        return item.trip_id, item.trip
+    if len(item.links) == 1:
+        link = item.links[0]
+        return link.trip_id, link.trip
+    return None, None
+
+
 @app.route("/prep", methods=["GET"])
 @login_required
 def prep_page():
@@ -1098,7 +1111,27 @@ def prep_toggle(item_id: int):
     item.done = not item.done
     if item.done:
         item.done_at = datetime.utcnow()
-        # TODO Task 13: insert done -> packing-list prompt logic here
+        # Fire the "add to packing list?" prompt when:
+        #   1. The item is gear or buy (something the user might actually pack).
+        #   2. They haven't already dismissed this prompt for this item.
+        #   3. Exactly one trip is linked (so we know which packing list).
+        prompt_trip_id, prompt_trip = _resolved_single_trip_for_prep(item)
+        if (
+            item.category in {"gear", "buy"}
+            and item.packing_prompt_dismissed_at is None
+            and prompt_trip_id is not None
+            and prompt_trip is not None
+        ):
+            flash(
+                {
+                    "type": "prep_packing_prompt",
+                    "item_id": item.id,
+                    "item_title": item.title,
+                    "trip_id": prompt_trip_id,
+                    "trip_name": prompt_trip.name,
+                },
+                "decision",
+            )
     else:
         item.done_at = None
         # Re-open the "add to packing list?" prompt for the next toggle.
@@ -1109,6 +1142,61 @@ def prep_toggle(item_id: int):
         "Toggled prep item id=%s done=%s by user_id=%s",
         item.id, item.done, current_user.id,
     )
+    return redirect(request.referrer or url_for("prep_page"))
+
+
+@app.route("/prep/<int:item_id>/packing-decision", methods=["POST"])
+@login_required
+def prep_packing_decision(item_id: int):
+    """Accept (?action=add) or dismiss (?action=dismiss) the
+    done -> packing prompt.
+
+    Always stamps ``packing_prompt_dismissed_at`` so the prompt doesn't
+    re-fire on the next done-toggle. Owner-only; the prompt only fires
+    after a successful toggle, so this just guards direct POSTs.
+    """
+    item = TripPrepItem.query.get(item_id)
+    if item is None:
+        abort(404)
+    if item.owner_id != current_user.id:
+        abort(403)
+
+    action = request.args.get("action")
+    if action not in {"add", "dismiss"}:
+        abort(400)
+
+    resolved_trip_id, resolved_trip = _resolved_single_trip_for_prep(item)
+    if resolved_trip_id is None or resolved_trip is None:
+        # Defensive: should never happen, because prep_toggle only flashes
+        # the prompt when there's exactly one linked trip.
+        abort(400)
+
+    item.packing_prompt_dismissed_at = datetime.utcnow()
+
+    if action == "add":
+        packing_item = PackingItem(
+            trip_id=resolved_trip_id,
+            name=item.title,
+            category="other",
+            packed=False,
+        )
+        db.session.add(packing_item)
+        db.session.commit()
+        logger.info(
+            "Added prep item id=%s to packing list trip_id=%s by user_id=%s",
+            item.id, resolved_trip_id, current_user.id,
+        )
+        flash(
+            f"Added “{item.title}” to {resolved_trip.name}'s packing list.",
+            "success",
+        )
+    else:
+        db.session.commit()
+        logger.info(
+            "Dismissed packing prompt for prep item id=%s by user_id=%s",
+            item.id, current_user.id,
+        )
+
     return redirect(request.referrer or url_for("prep_page"))
 
 
