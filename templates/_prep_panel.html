@@ -1,0 +1,79 @@
+{# Dashboard trip-prep panel — rendered below the trip-cards section on
+   the dashboard (/trips). Hidden entirely when there are no open
+   prep items for this user. #}
+{% if prep_panel_items %}
+<section class="vp-card mb-3 prep-panel">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h2 class="h5 mb-0">
+      <span aria-hidden="true">🎒</span>
+      Trip prep
+    </h2>
+    <a class="prep-panel-see-all small text-decoration-none"
+       href="{{ url_for('prep_page') }}">
+      See all →
+    </a>
+  </div>
+
+  {# Inline "paste or type" — same shape as /prep. request.referrer
+     will be /trips so prep_create redirects back here automatically. #}
+  <form action="{{ url_for('prep_create') }}" method="POST" class="mb-3">
+    <div class="input-group input-group-sm">
+      <input type="text"
+             name="input"
+             class="form-control"
+             placeholder="Add a to-do or paste a URL…"
+             aria-label="Add a to-do or paste a URL"
+             autocomplete="off">
+      <button type="submit" class="btn btn-primary">Add</button>
+    </div>
+  </form>
+
+  {% for it in prep_panel_items %}
+    {% set _trip_start = it.trip.start_date if it.trip else None %}
+    {% set due = due_date(_trip_start, it.due_offset_days) %}
+    {% set urgency = urgency_bucket(today, due) %}
+    <div class="prep-panel-row d-flex align-items-center py-2 border-top">
+      <form method="POST"
+            action="{{ url_for('prep_toggle', item_id=it.id) }}"
+            class="m-0 me-2">
+        <input type="checkbox"
+               class="form-check-input prep-checkbox"
+               {% if it.done %}checked{% endif %}
+               onchange="this.form.submit()"
+               aria-label="Toggle done for {{ it.title }}">
+      </form>
+
+      <div class="prep-thumb me-2" aria-hidden="true">
+        {% if it.link_image_url %}
+          <img src="{{ it.link_image_url }}"
+               alt=""
+               referrerpolicy="no-referrer">
+        {% else %}
+          <span class="prep-thumb-emoji">
+            {{ category_emojis.get(it.category, category_emojis.get('other', '📦')) }}
+          </span>
+        {% endif %}
+      </div>
+
+      <div class="prep-panel-row-main flex-grow-1">
+        <div class="prep-panel-row-title">{{ it.title }}</div>
+        <div class="prep-panel-row-subtitle text-muted small">
+          {% if it.trip_id %}
+            per-trip · {{ it.trip.name }}
+          {% elif it.links | length == 1 %}
+            cross-trip · linked to {{ it.links[0].trip.name }}
+          {% elif it.links | length == 0 %}
+            cross-trip · gear list
+          {% else %}
+            cross-trip · linked to {{ it.links | length }} trips
+          {% endif %}
+        </div>
+      </div>
+
+      {% if urgency and urgency != urgency_none %}
+        <span class="badge prep-pill prep-pill--{{ urgency }} ms-2">{{ urgency }}</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+</section>
+{% endif %}

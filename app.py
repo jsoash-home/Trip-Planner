@@ -129,6 +129,7 @@ from src.prep_helpers import (
     URGENCY_NONE,
     due_date,
     group_items_by_category,
+    items_for_dashboard_panel,
     parse_prep_form,
     urgency_bucket,
 )
@@ -1433,6 +1434,14 @@ def trips_list():
     has_any = any(grouped.values())
     counts = _drift_counts_for_trips(trips)
     on_this_day_entries = on_this_day(trips, today)
+
+    # Dashboard trip-prep panel: top open to-dos owned by this user
+    # across any trip (per-trip + cross-trip), sliced to 5.
+    prep_items_all = TripPrepItem.query.filter_by(
+        owner_id=current_user.id, done=False,
+    ).all()
+    prep_panel_items = items_for_dashboard_panel(prep_items_all, today, limit=5)
+
     return render_template(
         "trips_list.html",
         grouped=grouped,
@@ -1440,6 +1449,11 @@ def trips_list():
         today=today,
         counts=counts,
         on_this_day_entries=on_this_day_entries,
+        prep_panel_items=prep_panel_items,
+        category_emojis=PREP_CATEGORY_EMOJIS,
+        due_date=due_date,
+        urgency_bucket=urgency_bucket,
+        urgency_none=URGENCY_NONE,
     )
 
 

@@ -1094,6 +1094,100 @@
   flex-shrink: 0;
 }
 
+/* ─── Trip-prep dashboard panel ──────────────────────────── */
+.prep-panel-see-all {
+  color: var(--vp-accent);
+  font-weight: 500;
+}
+.prep-panel-see-all:hover {
+  color: var(--vp-accent-hover);
+  text-decoration: underline;
+}
+.prep-panel-row:first-of-type { border-top: none !important; }
+.prep-panel-row-title {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+.prep-panel-row-subtitle { margin-top: 0.1rem; }
+
+/* 40 x 40 rounded thumbnail tile — image when link_image_url is set,
+   otherwise a centred category-emoji fallback. */
+.prep-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--vp-surface-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.prep-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.prep-thumb-emoji {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* Urgency pills for the dashboard panel. Colours follow the same
+   warm/cool semantic as Bootstrap's danger/warning/info, but tuned
+   to sit quietly next to the coral accent. */
+.prep-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  line-height: 1.3;
+}
+.prep-pill--overdue {
+  background-color: #fde2e2;
+  color: #8a1f1f;
+  border: 1px solid #f5b8b8;
+}
+.prep-pill--urgent {
+  background-color: #ffe1c2;
+  color: #8a4a00;
+  border: 1px solid #fcc88a;
+}
+.prep-pill--soon {
+  background-color: #e0f2fe;
+  color: #075985;
+  border: 1px solid #bae6fd;
+}
+.prep-pill--later {
+  background-color: var(--vp-surface-2);
+  color: var(--vp-text-muted);
+  border: 1px solid var(--vp-border);
+}
+.prep-pill--none {
+  background-color: var(--vp-surface-2);
+  color: var(--vp-text-muted);
+  border: 1px solid var(--vp-border);
+}
+
+[data-theme="dark"] .prep-pill--overdue {
+  background-color: #3a1717;
+  color: #f3a8a8;
+  border-color: #5a2222;
+}
+[data-theme="dark"] .prep-pill--urgent {
+  background-color: #3a2a14;
+  color: #f3c969;
+  border-color: #5b4520;
+}
+[data-theme="dark"] .prep-pill--soon {
+  background-color: #15293a;
+  color: #7cc4ee;
+  border-color: #2b4a66;
+}
+
 /* ─── Share / collaborators ──────────────────────────────── */
 .share-row {
   display: flex;

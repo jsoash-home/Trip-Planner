@@ -4503,3 +4503,99 @@ def test_packing_decision_400_when_action_invalid(app, owner, trip):
             follow_redirects=False,
         )
     assert resp.status_code == 400
+
+
+# ─── Dashboard trip-prep panel (Task 14) ────────────────────────────
+def test_dashboard_includes_prep_panel_when_items_exist(app, owner):
+    """The dashboard renders the prep panel title + item titles when
+    the user has at least one open prep item."""
+    db.session.add(TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="DashboardPrepPanelItem", category="admin",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"Trip prep" in resp.data
+    assert b"DashboardPrepPanelItem" in resp.data
+
+
+def test_dashboard_hides_prep_panel_when_no_items(app, owner):
+    """With zero prep items, the dashboard does NOT render the panel
+    (the section, including its title, is omitted entirely)."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"Trip prep" not in resp.data
+    assert b"prep-panel" not in resp.data
+
+
+def test_dashboard_prep_panel_shows_at_most_five_items(app, owner):
+    """Six open prep items render only five rows in the dashboard panel."""
+    for i in range(6):
+        db.session.add(TripPrepItem(
+            owner_id=owner.id, trip_id=None,
+            title=f"PanelItem{i}", category="other",
+        ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert resp.data.count(b'class="prep-panel-row ') == 5
+
+
+def test_dashboard_prep_panel_excludes_done_items(app, owner):
+    """A done item is filtered out of the panel; an open one appears."""
+    db.session.add_all([
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="OpenPanelItem", category="other", done=False),
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="DonePanelItem", category="other", done=True),
+    ])
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"OpenPanelItem" in resp.data
+    assert b"DonePanelItem" not in resp.data
+
+
+def test_dashboard_prep_panel_includes_per_trip_and_cross_trip_items(
+    app, owner, trip,
+):
+    """The panel surfaces both per-trip and cross-trip open items."""
+    db.session.add_all([
+        TripPrepItem(owner_id=owner.id, trip_id=trip.id,
+                     title="PerTripPanelItem", category="other"),
+        TripPrepItem(owner_id=owner.id, trip_id=None,
+                     title="CrossTripPanelItem", category="other"),
+    ])
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"PerTripPanelItem" in resp.data
+    assert b"CrossTripPanelItem" in resp.data
+
+
+def test_dashboard_prep_panel_other_users_items_hidden(app, owner):
+    """User B does not see user A's prep items in the dashboard panel."""
+    other = User(google_id="g2", email="other@example.com", name="Other")
+    db.session.add(other)
+    db.session.commit()
+    db.session.add(TripPrepItem(
+        owner_id=other.id, trip_id=None,
+        title="OtherUserPanelSecret", category="other",
+    ))
+    db.session.commit()
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"OtherUserPanelSecret" not in resp.data
