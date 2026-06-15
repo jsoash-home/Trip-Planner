@@ -1,9 +1,9 @@
 """
 src/url_metadata.py
 
-Pure helpers for the trip-prep "save by URL" feature.
+Helpers for the trip-prep "save by URL" feature.
 
-Two pieces:
+Pure pieces:
   - looks_like_url(text) — quick check used by the form handler to decide
     whether the user typed a URL versus a free-text idea.
   - extract_metadata_from_html(html, source_url) — given the raw HTML of
@@ -11,8 +11,10 @@ Two pieces:
     title and (optionally) a hero image, using OpenGraph / Twitter Card
     meta tags with sensible fallbacks.
 
-No network here — this module is the pure half. The impure fetch wrapper
-lives in a separate task.
+Impure piece:
+  - fetch_url_metadata(url) — fetches a URL over HTTP and feeds the
+    response through extract_metadata_from_html. Silent on failure: any
+    error path returns a fallback dict and logs a WARNING.
 """
 
 import logging
@@ -20,6 +22,7 @@ import re
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
+import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -91,3 +94,50 @@ def extract_metadata_from_html(html: str, source_url: str) -> Dict[str, Any]:
         image = urljoin(source_url, image.strip())
 
     return {"title": title, "image_url": image, "source_url": source_url}
+
+
+# ───────────────────────────  fetch_url_metadata  ──────────────────────────
+
+# Network timeout for the metadata fetch. Kept short — the user is waiting
+# on a form submit. A slow page is fine to fall back on.
+FETCH_TIMEOUT_SECONDS: float = 5.0
+
+# Some sites serve a cleaner page (or any page at all) to non-bot UAs.
+FETCH_USER_AGENT: str = "Mozilla/5.0 (compatible; VacationPlanner/1.0)"
+
+
+def fetch_url_metadata(url: str, timeout: float = FETCH_TIMEOUT_SECONDS) -> Dict[str, Any]:
+    """Fetch URL and return {title, image_url, source_url}.
+
+    Silent failure: any requests exception, non-200 status, non-HTML
+    content type, or parse exception is caught and logged at WARNING,
+    and the function returns a fallback dict with the URL itself as
+    the title and no image.
+    """
+    fallback: Dict[str, Any] = {"title": url, "image_url": None, "source_url": url}
+    try:
+        response = requests.get(
+            url,
+            timeout=timeout,
+            headers={"User-Agent": FETCH_USER_AGENT},
+        )
+        if response.status_code != 200:
+            logger.warning(
+                "fetch_url_metadata: HTTP %s for %s", response.status_code, url
+            )
+            return fallback
+        content_type = response.headers.get("content-type", "")
+        if not (
+            content_type.startswith("text/html")
+            or content_type.startswith("application/xhtml")
+        ):
+            logger.warning(
+                "fetch_url_metadata: non-HTML content-type %r for %s",
+                content_type,
+                url,
+            )
+            return fallback
+        return extract_metadata_from_html(response.text, url)
+    except Exception as e:
+        logger.warning("fetch_url_metadata: failed for %s: %s", url, e)
+        return fallback
