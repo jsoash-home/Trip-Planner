@@ -3528,3 +3528,240 @@ def test_prep_toggle_allows_editor_collaborator_on_per_trip_item(
     assert resp.status_code == 302
     refreshed = db.session.get(TripPrepItem, item_id)
     assert refreshed.done is True
+
+
+# ─── POST /prep/<id>/edit + /prep/<id>/delete (Task 10) ─────────────
+def test_prep_edit_owner_updates_title_and_notes(app, owner):
+    """The owner can rename a cross-trip item and update its notes."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Old title", notes="Old notes", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/edit",
+            data={
+                "title": "New title",
+                "notes": "New notes",
+                "category": "other",
+                "trip_id": "none",
+                "due_offset_days": "",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.title == "New title"
+    assert refreshed.notes == "New notes"
+
+
+def test_prep_edit_changes_category(app, owner):
+    """Editing an item can change its category code."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Buy thing", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/edit",
+            data={
+                "title": "Buy thing",
+                "category": "buy",
+                "trip_id": "none",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.category == "buy"
+
+
+def test_prep_edit_changes_due_offset(app, owner):
+    """Editing an item can set or change due_offset_days."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Renew passport", category="admin",
+        due_offset_days=None,
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/edit",
+            data={
+                "title": "Renew passport",
+                "category": "admin",
+                "trip_id": "none",
+                "due_offset_days": "30",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.due_offset_days == 30
+
+
+def test_prep_edit_changing_trip_id_to_inaccessible_trip_rejected(app, owner):
+    """If the user edits an item to point at a trip they can't edit, 403."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="My item", category="other",
+    )
+    db.session.add(item)
+
+    # A different user owns a different trip; current owner has no
+    # access to it.
+    stranger = User(google_id="g88", email="stranger@example.com", name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+    foreign_trip = Trip(
+        owner_id=stranger.id, name="Foreign trip",
+        start_date=date(2026, 7, 1), end_date=date(2026, 7, 10),
+    )
+    db.session.add(foreign_trip)
+    db.session.commit()
+    item_id = item.id
+    foreign_trip_id = foreign_trip.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/edit",
+            data={
+                "title": "My item",
+                "category": "other",
+                "trip_id": str(foreign_trip_id),
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    # Item unchanged.
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.trip_id is None
+
+
+def test_prep_edit_empty_title_returns_error_flash(app, owner):
+    """Submitting an edit with an empty title flashes an error and does
+    not change the item."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Keep me", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/edit",
+            data={
+                "title": "   ",
+                "category": "other",
+                "trip_id": "none",
+            },
+            follow_redirects=True,
+        )
+    assert resp.status_code == 200
+    assert b"Title is required" in resp.data
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.title == "Keep me"
+
+
+def test_prep_delete_owner_removes_item(app, owner):
+    """The owner can delete a cross-trip item."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Goodbye", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/prep/{item_id}/delete", follow_redirects=False)
+    assert resp.status_code == 302
+    assert db.session.get(TripPrepItem, item_id) is None
+
+
+def test_prep_delete_cascades_links(app, owner, trip):
+    """Deleting a prep item also removes its TripPrepLink rows via the
+    cascade='all, delete-orphan' relationship."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Cross-trip", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    link = TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id)
+    db.session.add(link)
+    db.session.commit()
+    item_id = item.id
+    link_id = link.id
+    assert db.session.get(TripPrepLink, link_id) is not None
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(f"/prep/{item_id}/delete", follow_redirects=False)
+    assert resp.status_code == 302
+    assert db.session.get(TripPrepItem, item_id) is None
+    assert db.session.get(TripPrepLink, link_id) is None
+
+
+def test_prep_edit_403_for_unrelated_user(app, owner):
+    """A stranger editing someone else's cross-trip item gets 403."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="My private to-do", category="other",
+    )
+    db.session.add(item)
+    stranger = User(google_id="g99", email="stranger2@example.com", name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.post(
+            f"/prep/{item_id}/edit",
+            data={
+                "title": "Hacked",
+                "category": "other",
+                "trip_id": "none",
+            },
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    refreshed = db.session.get(TripPrepItem, item_id)
+    assert refreshed.title == "My private to-do"
+
+
+def test_prep_delete_403_for_viewer_collaborator(app, owner, trip, viewer):
+    """A viewer collaborator on the trip cannot delete a per-trip prep item."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Confirm hotel", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, viewer)
+        resp = client.post(f"/prep/{item_id}/delete", follow_redirects=False)
+    assert resp.status_code == 403
+    assert db.session.get(TripPrepItem, item_id) is not None

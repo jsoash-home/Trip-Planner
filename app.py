@@ -129,6 +129,7 @@ from src.prep_helpers import (
     URGENCY_NONE,
     due_date,
     group_items_by_category,
+    parse_prep_form,
     urgency_bucket,
 )
 from src.sharing import (
@@ -948,6 +949,28 @@ def settings():
 
 
 # ─── Trip prep (cross-trip to-dos) ──────────────────────────────────
+def _prep_item_access_or_403(item: TripPrepItem) -> None:
+    """Allow if current user is the item owner, OR (the item is per-trip
+    AND the user has editor access on the parent trip). Otherwise 403.
+
+    Cross-trip items (trip_id is None) live at user level and are never
+    shared — only the owner can touch them. Per-trip items can also be
+    touched by an editor collaborator on the parent trip.
+    """
+    if item.trip_id is None:
+        if item.owner_id != current_user.id:
+            abort(403)
+        return
+    if item.owner_id == current_user.id:
+        return
+    trip = Trip.query.get(item.trip_id)
+    if trip is None:
+        abort(404)
+    user_role = get_user_role_for_trip(trip, current_user)
+    if not role_satisfies(user_role, "editor"):
+        abort(403)
+
+
 @app.route("/prep", methods=["GET"])
 @login_required
 def prep_page():
@@ -1063,21 +1086,7 @@ def prep_toggle(item_id: int):
     if item is None:
         abort(404)
 
-    # Access check. Cross-trip items (trip_id is None) are owner-only —
-    # they live at the user level and aren't shared. Per-trip items can
-    # also be toggled by an editor collaborator on the parent trip; the
-    # item's own owner (whoever created it) can always toggle.
-    if item.trip_id is None:
-        if item.owner_id != current_user.id:
-            abort(403)
-    else:
-        if item.owner_id != current_user.id:
-            trip = Trip.query.get(item.trip_id)
-            if trip is None:
-                abort(404)
-            user_role = get_user_role_for_trip(trip, current_user)
-            if not role_satisfies(user_role, "editor"):
-                abort(403)
+    _prep_item_access_or_403(item)
 
     item.done = not item.done
     if item.done:
@@ -1093,6 +1102,70 @@ def prep_toggle(item_id: int):
         "Toggled prep item id=%s done=%s by user_id=%s",
         item.id, item.done, current_user.id,
     )
+    return redirect(request.referrer or url_for("prep_page"))
+
+
+@app.route("/prep/<int:item_id>/edit", methods=["POST"])
+@login_required
+def prep_edit(item_id: int):
+    """Update title, notes, category, due_offset_days, trip_id."""
+    item = TripPrepItem.query.get(item_id)
+    if item is None:
+        abort(404)
+
+    _prep_item_access_or_403(item)
+
+    try:
+        parsed = parse_prep_form(request.form)
+    except ValueError:
+        flash("Title is required.", "warning")
+        return redirect(request.referrer or url_for("prep_page"))
+
+    new_trip_id: Optional[int] = parsed["trip_id"]
+    # If the user is moving the item to a (different) trip, they must
+    # have at least editor access to that destination trip.
+    if new_trip_id is not None and new_trip_id != item.trip_id:
+        dest_trip = Trip.query.get(new_trip_id)
+        if dest_trip is None:
+            abort(403)
+        user_role = get_user_role_for_trip(dest_trip, current_user)
+        if not role_satisfies(user_role, "editor"):
+            abort(403)
+
+    item.title = parsed["title"]
+    item.notes = parsed["notes"]
+    item.category = parsed["category"]
+    item.due_offset_days = parsed["due_offset_days"]
+    item.trip_id = new_trip_id
+
+    db.session.commit()
+    logger.info(
+        "Updated prep item id=%s by user_id=%s trip_id=%s",
+        item.id, current_user.id, item.trip_id,
+    )
+    flash(f"Updated “{item.title}”.", "success")
+    return redirect(request.referrer or url_for("prep_page"))
+
+
+@app.route("/prep/<int:item_id>/delete", methods=["POST"])
+@login_required
+def prep_delete(item_id: int):
+    """Delete the item. Cascade removes its links via the
+    cascade='all, delete-orphan' relationship from Task 2."""
+    item = TripPrepItem.query.get(item_id)
+    if item is None:
+        abort(404)
+
+    _prep_item_access_or_403(item)
+
+    title = item.title
+    db.session.delete(item)
+    db.session.commit()
+    logger.info(
+        "Deleted prep item id=%s title=%r by user_id=%s",
+        item_id, title, current_user.id,
+    )
+    flash(f"Deleted “{title}”.", "success")
     return redirect(request.referrer or url_for("prep_page"))
 
 
