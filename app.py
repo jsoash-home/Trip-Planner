@@ -821,6 +821,13 @@ def _section_tiles_for(trip: Trip):
             "status": "ready",
         },
         {
+            "emoji": "📝",
+            "name": "Prep",
+            "summary": "To-dos before you go",
+            "url": url_for("trip_prep_tab", trip_id=trip.id),
+            "status": "ready",
+        },
+        {
             "emoji": "🧳",
             "name": "Packing",
             "summary": packing_summary,
@@ -1167,6 +1174,53 @@ def prep_delete(item_id: int):
     )
     flash(f"Deleted “{title}”.", "success")
     return redirect(request.referrer or url_for("prep_page"))
+
+
+@app.route("/trips/<int:trip_id>/prep", methods=["GET"])
+@login_required
+def trip_prep_tab(trip_id: int):
+    """Per-trip prep tab. Visible per the trip's sharing rules.
+
+    Splits items into:
+      - Linked from your gear: cross-trip items linked to this trip
+        via TripPrepLink (owner only — invisible to collaborators).
+      - Trip-specific: items with trip_id=<this trip>, visible per
+        sharing rules.
+    """
+    trip, user_role = _trip_with_access_or_404(trip_id, role="viewer")
+    is_owner_here = trip.owner_id == current_user.id
+
+    trip_specific = TripPrepItem.query.filter_by(trip_id=trip.id).all()
+
+    linked: Optional[List[Tuple[TripPrepItem, TripPrepLink]]]
+    if is_owner_here:
+        linked = (
+            db.session.query(TripPrepItem, TripPrepLink)
+            .join(TripPrepLink, TripPrepLink.trip_prep_item_id == TripPrepItem.id)
+            .filter(
+                TripPrepLink.trip_id == trip.id,
+                TripPrepItem.owner_id == current_user.id,
+            )
+            .all()
+        )
+    else:
+        linked = None
+
+    return render_template(
+        "trip_prep.html",
+        trip=trip,
+        user_role=user_role,
+        trip_specific=trip_specific,
+        linked=linked,
+        today=date.today(),
+        categories=PREP_CATEGORIES,
+        category_labels=PREP_CATEGORY_LABELS,
+        category_emojis=PREP_CATEGORY_EMOJIS,
+        trips=current_user.trips,
+        urgency_none=URGENCY_NONE,
+        due_date=due_date,
+        urgency_bucket=urgency_bucket,
+    )
 
 
 # ─── Trips ──────────────────────────────────────────────────────────

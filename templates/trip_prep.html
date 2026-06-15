@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_prep_item_row.html" import prep_item_row %}
+{% block title %}Prep — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{% block content %}
+<div class="text-muted small mb-2">
+  <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
+  &nbsp;›&nbsp;
+  <a class="text-muted text-decoration-none" href="{{ url_for('trip_overview', trip_id=trip.id) }}">{{ trip.name }}</a>
+  &nbsp;›&nbsp; Prep
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">Prep</h1>
+</div>
+
+{% if can_edit(user_role) %}
+  {# Inline create card — defaults trip_id to this trip so the new
+     item lands in the trip-specific section. #}
+  <div class="vp-card mb-3 prep-create">
+    <form action="{{ url_for('prep_create') }}" method="POST">
+      <input type="hidden" name="trip_id" value="{{ trip.id }}">
+      <div class="input-group">
+        <input type="text"
+               name="input"
+               class="form-control"
+               placeholder="Add a to-do or paste a URL…"
+               aria-label="Add a to-do or paste a URL"
+               autocomplete="off">
+        <button type="submit" class="btn btn-primary">Add</button>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-link btn-sm p-0 text-decoration-none"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#trip-prep-create-details"
+                aria-expanded="false"
+                aria-controls="trip-prep-create-details">
+          More options
+        </button>
+      </div>
+      <div id="trip-prep-create-details" class="collapse mt-2">
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label class="form-label small mb-1" for="trip-prep-create-category">Category</label>
+            <select id="trip-prep-create-category" name="category" class="form-select form-select-sm">
+              {% for code, label, emoji in categories %}
+                <option value="{{ code }}"{% if code == 'other' %} selected{% endif %}>
+                  {{ emoji }} {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small mb-1" for="trip-prep-create-offset">Days before trip</label>
+            <input id="trip-prep-create-offset"
+                   type="number"
+                   name="due_offset_days"
+                   class="form-control form-control-sm"
+                   placeholder="e.g. 30">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1" for="trip-prep-create-notes">Notes</label>
+            <textarea id="trip-prep-create-notes"
+                      name="notes"
+                      class="form-control form-control-sm"
+                      rows="2"
+                      placeholder="Optional details"></textarea>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+{% endif %}
+
+{% if linked is not none and linked %}
+  <div class="vp-card mb-3">
+    <h2 class="h5 mb-3">
+      <span aria-hidden="true">🔗</span>
+      Linked from your gear
+      <span class="text-muted small ms-1">({{ linked|length }})</span>
+    </h2>
+    {% for item, link in linked %}
+      {{ prep_item_row(item, today, categories, due_date, urgency_bucket, urgency_none, trips, link=link) }}
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if trip_specific %}
+  <div class="vp-card mb-3">
+    <h2 class="h5 mb-3">
+      <span aria-hidden="true">✅</span>
+      Trip-specific
+      <span class="text-muted small ms-1">({{ trip_specific|length }})</span>
+    </h2>
+    {% for it in trip_specific %}
+      {{ prep_item_row(it, today, categories, due_date, urgency_bucket, urgency_none, trips) }}
+    {% endfor %}
+  </div>
+{% elif not (linked is not none and linked) %}
+  <div class="vp-empty">
+    <div class="vp-empty-emoji" aria-hidden="true">📝</div>
+    <div class="vp-empty-title">No prep to-dos for this trip yet</div>
+    <p class="vp-empty-body">
+      Use the box above to add things you want to do before you go —
+      research a neighborhood, confirm a reservation, pack a specific
+      item. Cross-trip items you've linked to this trip will appear
+      here too.
+    </p>
+  </div>
+{% endif %}
+{% endblock %}

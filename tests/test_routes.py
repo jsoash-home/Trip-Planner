@@ -3765,3 +3765,162 @@ def test_prep_delete_403_for_viewer_collaborator(app, owner, trip, viewer):
         resp = client.post(f"/prep/{item_id}/delete", follow_redirects=False)
     assert resp.status_code == 403
     assert db.session.get(TripPrepItem, item_id) is not None
+
+
+# ─── GET /trips/<id>/prep — per-trip tab (Task 11) ──────────────────
+def test_trip_prep_tab_owner_sees_trip_specific_items(app, owner, trip):
+    """Owner viewing the per-trip prep tab sees per-trip items in body."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Confirm hotel booking", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/prep")
+    assert resp.status_code == 200
+    assert b"Confirm hotel booking" in resp.data
+
+
+def test_trip_prep_tab_owner_sees_linked_cross_trip_items(app, owner, trip):
+    """Owner sees a cross-trip item that's linked to this trip via TripPrepLink."""
+    cross = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Pack travel adapter", category="gear",
+    )
+    db.session.add(cross)
+    db.session.commit()
+    link = TripPrepLink(trip_prep_item_id=cross.id, trip_id=trip.id)
+    db.session.add(link)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/prep")
+    assert resp.status_code == 200
+    assert b"Pack travel adapter" in resp.data
+
+
+def test_trip_prep_tab_editor_collaborator_sees_trip_specific_only(
+    app, owner, trip, editor,
+):
+    """Editor collaborator sees per-trip items but NOT the owner's linked
+    cross-trip items (the gear section is owner-only)."""
+    per_trip = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Print boarding passes", category="other",
+    )
+    cross = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Owner private gear item", category="gear",
+    )
+    db.session.add_all([per_trip, cross])
+    db.session.commit()
+    db.session.add(TripPrepLink(
+        trip_prep_item_id=cross.id, trip_id=trip.id,
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, editor)
+        resp = client.get(f"/trips/{trip.id}/prep")
+    assert resp.status_code == 200
+    assert b"Print boarding passes" in resp.data
+    assert b"Owner private gear item" not in resp.data
+
+
+def test_trip_prep_tab_viewer_collaborator_sees_trip_specific_only_readonly(
+    app, owner, trip, viewer,
+):
+    """Viewer collaborator sees per-trip items but NOT owner's linked
+    items, and the create form is hidden (gated on can_edit)."""
+    per_trip = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Print boarding passes", category="other",
+    )
+    cross = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Owner private gear item", category="gear",
+    )
+    db.session.add_all([per_trip, cross])
+    db.session.commit()
+    db.session.add(TripPrepLink(
+        trip_prep_item_id=cross.id, trip_id=trip.id,
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, viewer)
+        resp = client.get(f"/trips/{trip.id}/prep")
+    assert resp.status_code == 200
+    assert b"Print boarding passes" in resp.data
+    assert b"Owner private gear item" not in resp.data
+    # Create form's text input is named "input" — viewers don't see it.
+    assert b'name="input"' not in resp.data
+
+
+def test_trip_prep_tab_viewer_collaborator_does_not_see_linked_section(
+    app, owner, trip, viewer,
+):
+    """The 'Linked from your gear' section header is owner-only."""
+    per_trip = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Print boarding passes", category="other",
+    )
+    cross = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Owner private gear item", category="gear",
+    )
+    db.session.add_all([per_trip, cross])
+    db.session.commit()
+    db.session.add(TripPrepLink(
+        trip_prep_item_id=cross.id, trip_id=trip.id,
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, viewer)
+        resp = client.get(f"/trips/{trip.id}/prep")
+    assert resp.status_code == 200
+    assert b"Linked from your gear" not in resp.data
+
+
+def test_trip_prep_tab_404_when_trip_missing(app, owner):
+    """A signed-in user requesting a non-existent trip gets 404."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips/9999/prep")
+    assert resp.status_code == 404
+
+
+def test_trip_prep_tab_403_when_not_a_collaborator(app, owner, trip):
+    """A signed-in user with no access to the trip gets 404.
+
+    Note: test name says 403 to match the plan vocabulary, but
+    _trip_with_access_or_404 deliberately returns 404 (not 403) so
+    that probing for trip existence is blocked. Assertion matches
+    the helper's actual behaviour.
+    """
+    stranger = User(
+        google_id="g_stranger_prep", email="stranger_prep@example.com",
+        name="Stranger",
+    )
+    db.session.add(stranger)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.get(f"/trips/{trip.id}/prep")
+    assert resp.status_code == 404
+
+
+def test_trip_overview_nav_includes_prep_link(app, owner, trip):
+    """The trip overview page surfaces a link to the per-trip prep tab."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}")
+    assert resp.status_code == 200
+    expected = f"/trips/{trip.id}/prep".encode("utf-8")
+    assert expected in resp.data
