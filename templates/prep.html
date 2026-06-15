@@ -8,6 +8,70 @@
 
 {% set first_name = (current_user.name or '').split(' ')[0] or 'there' %}
 
+{# Sticky create card — paste a URL or type a free-text to-do. #}
+<div class="vp-card mb-3 prep-create position-sticky" style="top: 0; z-index: 5;">
+  <form action="{{ url_for('prep_create') }}" method="POST">
+    <div class="input-group">
+      <input type="text"
+             name="input"
+             class="form-control"
+             placeholder="Add a to-do or paste a URL…"
+             aria-label="Add a to-do or paste a URL"
+             autocomplete="off">
+      <button type="submit" class="btn btn-primary">Add</button>
+    </div>
+    <div class="mt-2">
+      <button class="btn btn-link btn-sm p-0 text-decoration-none"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#prep-create-details"
+              aria-expanded="false"
+              aria-controls="prep-create-details">
+        More options
+      </button>
+    </div>
+    <div id="prep-create-details" class="collapse mt-2">
+      <div class="row g-2">
+        <div class="col-sm-6">
+          <label class="form-label small mb-1" for="prep-create-category">Category</label>
+          <select id="prep-create-category" name="category" class="form-select form-select-sm">
+            {% for code, label, emoji in categories %}
+              <option value="{{ code }}"{% if code == 'other' %} selected{% endif %}>
+                {{ emoji }} {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label small mb-1" for="prep-create-trip">Link to trip</label>
+          <select id="prep-create-trip" name="trip_id" class="form-select form-select-sm">
+            <option value="none">None — cross-trip</option>
+            {% for t in trips %}
+              <option value="{{ t.id }}">{{ t.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label small mb-1" for="prep-create-offset">Days before trip</label>
+          <input id="prep-create-offset"
+                 type="number"
+                 name="due_offset_days"
+                 class="form-control form-control-sm"
+                 placeholder="e.g. 30">
+        </div>
+        <div class="col-12">
+          <label class="form-label small mb-1" for="prep-create-notes">Notes</label>
+          <textarea id="prep-create-notes"
+                    name="notes"
+                    class="form-control form-control-sm"
+                    rows="2"
+                    placeholder="Optional details"></textarea>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
 {% if not items %}
   <div class="vp-empty">
     <div class="vp-empty-emoji" aria-hidden="true">📝</div>

@@ -123,6 +123,7 @@ from src.packing import (
 )
 from src.prep_helpers import (
     PREP_CATEGORIES,
+    PREP_CATEGORY_CODES,
     PREP_CATEGORY_EMOJIS,
     PREP_CATEGORY_LABELS,
     URGENCY_NONE,
@@ -140,6 +141,7 @@ from src.sharing import (
     parse_collaborator_form,
     role_satisfies,
 )
+from src.url_metadata import fetch_url_metadata, looks_like_url
 from src.trip_helpers import (
     SUGGESTED_TRIP_EMOJIS,
     countdown_label,
@@ -968,6 +970,88 @@ def prep_page():
         due_date=due_date,
         urgency_bucket=urgency_bucket,
     )
+
+
+@app.route("/prep", methods=["POST"])
+@login_required
+def prep_create():
+    """Create a new TripPrepItem from the single "paste or type" field.
+
+    If the user pasted a URL, we fetch the page metadata so the saved
+    item gets a real title + hero image. Plain text is taken as-is.
+    The optional details section on the form can also pin the new
+    item to a specific trip the user owns or can edit.
+    """
+    raw_input = (request.form.get("input") or "").strip()
+    if not raw_input:
+        flash("Add a to-do or paste a URL first.", "warning")
+        return redirect(request.referrer or url_for("prep_page"))
+
+    # Resolve title + optional link_url / image from the input.
+    link_url: Optional[str] = None
+    link_image_url: Optional[str] = None
+    if looks_like_url(raw_input):
+        meta = fetch_url_metadata(raw_input)
+        title = (meta.get("title") or raw_input).strip() or raw_input
+        link_url = raw_input
+        link_image_url = meta.get("image_url")
+    else:
+        title = raw_input
+
+    # Optional "more options" fields. Defaults match parse_prep_form's.
+    category = (request.form.get("category") or "").strip().lower()
+    if category not in PREP_CATEGORY_CODES:
+        category = "other"
+
+    notes = (request.form.get("notes") or "").strip() or None
+
+    offset_str = (request.form.get("due_offset_days") or "").strip()
+    due_offset_days: Optional[int]
+    if not offset_str:
+        due_offset_days = None
+    else:
+        try:
+            due_offset_days = int(offset_str)
+        except ValueError:
+            due_offset_days = None
+
+    trip_id_raw = (request.form.get("trip_id") or "").strip()
+    trip_id: Optional[int] = None
+    if trip_id_raw and trip_id_raw.lower() != "none":
+        try:
+            trip_id = int(trip_id_raw)
+        except ValueError:
+            trip_id = None
+
+    # If a trip_id was provided, the user must have at least editor
+    # access. Reject (403) rather than silently rewriting to cross-trip
+    # — the surfacing of the error is clearer than a quiet downgrade.
+    if trip_id is not None:
+        trip = Trip.query.get(trip_id)
+        if trip is None:
+            abort(403)
+        user_role = get_user_role_for_trip(trip, current_user)
+        if not role_satisfies(user_role, "editor"):
+            abort(403)
+
+    item = TripPrepItem(
+        owner_id=current_user.id,
+        trip_id=trip_id,
+        title=title,
+        notes=notes,
+        category=category,
+        due_offset_days=due_offset_days,
+        link_url=link_url,
+        link_image_url=link_image_url,
+    )
+    db.session.add(item)
+    db.session.commit()
+    logger.info(
+        "Created prep item id=%s title=%r owner_id=%s trip_id=%s",
+        item.id, item.title, current_user.id, trip_id,
+    )
+    flash(f"Added “{title}”.", "success")
+    return redirect(request.referrer or url_for("prep_page"))
 
 
 # ─── Trips ──────────────────────────────────────────────────────────

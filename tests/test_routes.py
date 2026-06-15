@@ -3233,3 +3233,147 @@ def test_prep_page_hides_other_users_items(app, owner):
     assert resp.status_code == 200
     assert b"OwnerOwnPrepItem" in resp.data
     assert b"OtherUserSecretRenewVisa" not in resp.data
+
+
+# ─── POST /prep — create + paste-to-create flow (Task 8) ────────────
+def test_prep_create_plain_text_title(app, owner):
+    """Plain text in `input` becomes the item title; no URL fields set."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post("/prep", data={"input": "Renew passport"},
+                           follow_redirects=False)
+    assert resp.status_code == 302
+    rows = TripPrepItem.query.filter_by(owner_id=owner.id).all()
+    assert len(rows) == 1
+    assert rows[0].title == "Renew passport"
+    assert rows[0].link_url is None
+    assert rows[0].link_image_url is None
+
+
+def test_prep_create_with_url_calls_fetch_metadata(app, owner, monkeypatch):
+    """A pasted URL triggers fetch_url_metadata; returned title + image
+    are stored on the new item, link_url holds the original URL."""
+    called: dict = {}
+
+    def fake_fetch(url: str):
+        called["url"] = url
+        return {
+            "title": "Best Hiking Boots 2026",
+            "image_url": "https://example.com/boots.jpg",
+            "source_url": url,
+        }
+
+    monkeypatch.setattr("app.fetch_url_metadata", fake_fetch)
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            "/prep",
+            data={"input": "https://example.com/boots"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert called["url"] == "https://example.com/boots"
+    row = TripPrepItem.query.filter_by(owner_id=owner.id).one()
+    assert row.title == "Best Hiking Boots 2026"
+    assert row.link_url == "https://example.com/boots"
+    assert row.link_image_url == "https://example.com/boots.jpg"
+
+
+def test_prep_create_url_failure_still_creates_item_with_url_as_title(
+    app, owner, monkeypatch,
+):
+    """When fetch_url_metadata's fallback shape comes back (title=URL,
+    image=None), we still create the item — title is the URL itself."""
+    def fake_fetch(url: str):
+        return {"title": url, "image_url": None, "source_url": url}
+
+    monkeypatch.setattr("app.fetch_url_metadata", fake_fetch)
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            "/prep",
+            data={"input": "https://example.com/unreachable"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    row = TripPrepItem.query.filter_by(owner_id=owner.id).one()
+    assert row.title == "https://example.com/unreachable"
+    assert row.link_url == "https://example.com/unreachable"
+    assert row.link_image_url is None
+
+
+def test_prep_create_assigns_owner_to_current_user(app, owner):
+    """A new item's owner_id is the signed-in user, not anyone else."""
+    other = User(google_id="g99", email="other@example.com", name="Other")
+    db.session.add(other)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post("/prep", data={"input": "Buy adapter"},
+                           follow_redirects=False)
+    assert resp.status_code == 302
+    row = TripPrepItem.query.filter_by(title="Buy adapter").one()
+    assert row.owner_id == owner.id
+    assert row.owner_id != other.id
+
+
+def test_prep_create_with_trip_id_creates_per_trip_item(app, owner, trip):
+    """trip_id pointing at one of the user's trips creates a per-trip item."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            "/prep",
+            data={"input": "Confirm hotel", "trip_id": str(trip.id)},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    row = TripPrepItem.query.filter_by(title="Confirm hotel").one()
+    assert row.trip_id == trip.id
+    assert row.owner_id == owner.id
+
+
+def test_prep_create_with_other_users_trip_id_rejects(app, owner):
+    """trip_id pointing at someone else's trip returns 403 — no item created."""
+    other = User(google_id="g42", email="stranger@example.com", name="Stranger")
+    db.session.add(other)
+    db.session.commit()
+    other_trip = Trip(owner_id=other.id, name="Their trip",
+                      start_date=date(2026, 7, 1), end_date=date(2026, 7, 10))
+    db.session.add(other_trip)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            "/prep",
+            data={"input": "Sneaky item", "trip_id": str(other_trip.id)},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    assert TripPrepItem.query.filter_by(title="Sneaky item").count() == 0
+
+
+def test_prep_create_defaults_category_to_other(app, owner):
+    """When no category is submitted, the new item lands in 'other'."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post("/prep", data={"input": "Untagged thing"},
+                           follow_redirects=False)
+    assert resp.status_code == 302
+    row = TripPrepItem.query.filter_by(title="Untagged thing").one()
+    assert row.category == "other"
+
+
+def test_prep_create_empty_input_shows_error_flash(app, owner):
+    """Submitting a blank input flashes an error and creates nothing."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post("/prep", data={"input": "   "},
+                           follow_redirects=True)
+    assert resp.status_code == 200
+    assert TripPrepItem.query.filter_by(owner_id=owner.id).count() == 0
+    # The flashed warning is rendered into the page.
+    assert b"Add a to-do or paste a URL" in resp.data
