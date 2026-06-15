@@ -410,3 +410,23 @@ status table here.
 This document does not get deleted when phase 3 finishes. It becomes
 the historical record of how phase 3 was scoped, what was built, and
 what got reshaped along the way.
+
+---
+
+## Phase 4 — Beyond
+
+Phase 3 is now complete. Phase 4 captures the features built after the
+six-feature phase 3 set. Each row is a feature that has shipped (or is
+parked) post-phase-3.
+
+| Feature                  | Status      | Spec                                                          | Plan                                                       |
+|--------------------------|-------------|---------------------------------------------------------------|------------------------------------------------------------|
+| Trip-prep to-dos (v1)    | ✓ shipped   | [docs/superpowers/specs/2026-06-14-trip-prep-todos-design.md](superpowers/specs/2026-06-14-trip-prep-todos-design.md) | [docs/superpowers/plans/2026-06-14-trip-prep-todos.md](superpowers/plans/2026-06-14-trip-prep-todos.md) |
+
+### Parked
+
+- **Trip-prep to-dos v2: AI-suggested prep tasks.** Use the trip's
+  destination, dates, and bookings to suggest a starter set of prep
+  to-dos (e.g. "Check passport expiry — Japan requires 6 months
+  validity", "Order JR Pass before departure"). Builds on the v1
+  to-do surface; needs a prompt template and a one-shot LLM call.

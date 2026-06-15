@@ -4599,3 +4599,21 @@ def test_dashboard_prep_panel_other_users_items_hidden(app, owner):
         resp = client.get("/trips")
     assert resp.status_code == 200
     assert b"OtherUserPanelSecret" not in resp.data
+
+
+# ─── base.html includes prep.js when authenticated (Task 15) ────────
+def test_base_template_includes_prep_js_when_authenticated(app, owner):
+    """A signed-in user's pages load prep.js for the paste-hint helper."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips")
+    assert resp.status_code == 200
+    assert b"prep.js" in resp.data
+
+
+def test_base_template_does_not_include_prep_js_when_anonymous(app):
+    """The logged-out landing page must not include prep.js — it's authed-only."""
+    with flask_app.test_client() as client:
+        resp = client.get("/")
+    assert resp.status_code == 200
+    assert b"prep.js" not in resp.data
