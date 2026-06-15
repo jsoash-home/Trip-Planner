@@ -82,6 +82,19 @@
     </h2>
     {% for item, link in linked %}
       {{ prep_item_row(item, today, categories, due_date, urgency_bucket, urgency_none, trips, link=link) }}
+      {% if can_edit(user_role) %}
+        <div class="prep-row-unlink ms-4 mb-2">
+          <form method="POST"
+                action="{{ url_for('prep_link_delete', item_id=item.id, link_id=link.id) }}"
+                class="d-inline">
+            <button type="submit"
+                    class="btn btn-sm btn-outline-secondary"
+                    onclick="return confirm('Unlink this from your trip?');">
+              Unlink
+            </button>
+          </form>
+        </div>
+      {% endif %}
     {% endfor %}
   </div>
 {% endif %}

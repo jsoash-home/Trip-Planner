@@ -3924,3 +3924,260 @@ def test_trip_overview_nav_includes_prep_link(app, owner, trip):
     assert resp.status_code == 200
     expected = f"/trips/{trip.id}/prep".encode("utf-8")
     assert expected in resp.data
+
+
+# ─── POST /prep/<id>/link + /prep/<id>/link/<link_id> (Task 12) ─────
+def test_prep_link_create_attaches_link(app, owner, trip):
+    """Posting trip_id links a cross-trip item to that trip."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Pack travel adapter", category="packing",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(trip.id)},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    links = TripPrepLink.query.filter_by(
+        trip_prep_item_id=item_id, trip_id=trip.id,
+    ).all()
+    assert len(links) == 1
+
+
+def test_prep_link_create_stores_offset(app, owner, trip):
+    """A submitted due_offset_days is stored on the new link row."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Renew passport", category="documents",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(trip.id), "due_offset_days": "14"},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    link = TripPrepLink.query.filter_by(
+        trip_prep_item_id=item_id, trip_id=trip.id,
+    ).one()
+    assert link.due_offset_days == 14
+
+
+def test_prep_link_create_400_when_item_is_per_trip(app, owner, trip):
+    """Per-trip items (trip_id set) cannot be linked — 400."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=trip.id,
+        title="Confirm hotel", category="other",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(trip.id)},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    assert TripPrepLink.query.count() == 0
+
+
+def test_prep_link_create_400_when_trip_id_missing(app, owner):
+    """A POST without a trip_id field returns 400."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Buy adapter", category="packing",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/link",
+            data={},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 400
+    assert TripPrepLink.query.count() == 0
+
+
+def test_prep_link_create_403_when_user_not_owner_of_item(app, owner, trip):
+    """A stranger linking someone else's cross-trip item gets 403."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Owner private item", category="packing",
+    )
+    db.session.add(item)
+    stranger = User(google_id="g_stranger_lnk", email="stranger_lnk@example.com",
+                    name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(trip.id)},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    assert TripPrepLink.query.count() == 0
+
+
+def test_prep_link_create_403_when_user_has_no_access_to_target_trip(app, owner):
+    """Linking the owner's own item to a trip they can't see returns 403."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="My gear", category="packing",
+    )
+    db.session.add(item)
+    stranger = User(google_id="g_stranger_t", email="stranger_t@example.com",
+                    name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+    foreign_trip = Trip(
+        owner_id=stranger.id, name="Foreign trip",
+        start_date=date(2026, 7, 1), end_date=date(2026, 7, 10),
+    )
+    db.session.add(foreign_trip)
+    db.session.commit()
+    item_id = item.id
+    foreign_trip_id = foreign_trip.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(foreign_trip_id)},
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    assert TripPrepLink.query.count() == 0
+
+
+def test_prep_link_create_rejects_duplicate_link(app, owner, trip):
+    """A second link with the same (item_id, trip_id) flashes a warning
+    and is NOT inserted — total link count stays at 1."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Pack travel adapter", category="packing",
+    )
+    db.session.add(item)
+    db.session.commit()
+    item_id = item.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        first = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(trip.id)},
+            follow_redirects=False,
+        )
+        assert first.status_code == 302
+        second = client.post(
+            f"/prep/{item_id}/link",
+            data={"trip_id": str(trip.id)},
+            follow_redirects=False,
+        )
+    assert second.status_code == 302
+    assert TripPrepLink.query.filter_by(
+        trip_prep_item_id=item_id, trip_id=trip.id,
+    ).count() == 1
+
+
+def test_prep_link_delete_removes_link(app, owner, trip):
+    """Posting to /prep/<id>/link/<link_id> deletes that link."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Pack travel adapter", category="packing",
+    )
+    db.session.add(item)
+    db.session.commit()
+    link = TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id)
+    db.session.add(link)
+    db.session.commit()
+    item_id = item.id
+    link_id = link.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_id}/link/{link_id}",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 302
+    assert db.session.get(TripPrepLink, link_id) is None
+
+
+def test_prep_link_delete_404_when_link_does_not_belong_to_item(app, owner, trip):
+    """A link_id that exists but belongs to a different item returns 404."""
+    item_x = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Item X", category="packing",
+    )
+    item_y = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Item Y", category="packing",
+    )
+    db.session.add_all([item_x, item_y])
+    db.session.commit()
+    # The link belongs to item_y, but we'll POST to item_x's URL.
+    link = TripPrepLink(trip_prep_item_id=item_y.id, trip_id=trip.id)
+    db.session.add(link)
+    db.session.commit()
+    item_x_id = item_x.id
+    link_id = link.id
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/prep/{item_x_id}/link/{link_id}",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 404
+    # Link survives.
+    assert db.session.get(TripPrepLink, link_id) is not None
+
+
+def test_prep_link_delete_403_when_user_not_owner_of_item(app, owner, trip):
+    """A stranger unlinking someone else's item gets 403."""
+    item = TripPrepItem(
+        owner_id=owner.id, trip_id=None,
+        title="Owner private item", category="packing",
+    )
+    db.session.add(item)
+    db.session.commit()
+    link = TripPrepLink(trip_prep_item_id=item.id, trip_id=trip.id)
+    db.session.add(link)
+    stranger = User(google_id="g_stranger_dl", email="stranger_dl@example.com",
+                    name="Stranger")
+    db.session.add(stranger)
+    db.session.commit()
+    item_id = item.id
+    link_id = link.id
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.post(
+            f"/prep/{item_id}/link/{link_id}",
+            follow_redirects=False,
+        )
+    assert resp.status_code == 403
+    assert db.session.get(TripPrepLink, link_id) is not None

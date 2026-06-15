@@ -49,6 +49,29 @@
     </form>
   </div>
 
+  {# Cross-trip items: small "Link to trip" dropdown + list of current links. #}
+  {% if not it.trip_id and trips %}
+    <div class="prep-row-links ms-4 small text-muted">
+      <form method="POST"
+            action="{{ url_for('prep_link_create', item_id=it.id) }}"
+            class="d-inline">
+        <select name="trip_id"
+                class="form-select form-select-sm d-inline-block"
+                style="width: auto;"
+                onchange="this.form.submit()"
+                aria-label="Link {{ it.title }} to a trip">
+          <option value="">Link to trip…</option>
+          {% for t in trips %}
+            <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% for ln in it.links %}
+        <span class="ms-2">Linked: {{ ln.trip.name }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
   {# Edit modal — pre-filled with the item's current values. #}
   <div class="modal fade" id="prep-edit-modal-{{ it.id }}" tabindex="-1"
        aria-labelledby="prep-edit-label-{{ it.id }}" aria-hidden="true">

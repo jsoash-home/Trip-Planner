@@ -1176,6 +1176,101 @@ def prep_delete(item_id: int):
     return redirect(request.referrer or url_for("prep_page"))
 
 
+@app.route("/prep/<int:item_id>/link", methods=["POST"])
+@login_required
+def prep_link_create(item_id: int):
+    """Link a cross-trip item to a trip via TripPrepLink.
+
+    Form body: ``trip_id`` (required), ``due_offset_days`` (optional).
+    Returns 400 if the item is per-trip (its own ``trip_id`` is set —
+    those don't get extra links) or if no ``trip_id`` was submitted.
+    Owner-only on the item; the target trip must also be visible to
+    the user (viewer+) so this route can't be used to probe the
+    existence of trips they can't see.
+    """
+    item = TripPrepItem.query.get(item_id)
+    if item is None:
+        abort(404)
+    if item.owner_id != current_user.id:
+        abort(403)
+    if item.trip_id is not None:
+        abort(400)
+
+    trip_id_raw = (request.form.get("trip_id") or "").strip()
+    if not trip_id_raw:
+        abort(400)
+    try:
+        trip_id = int(trip_id_raw)
+    except ValueError:
+        abort(400)
+
+    target = Trip.query.get(trip_id)
+    if target is None:
+        abort(403)
+    user_role = get_user_role_for_trip(target, current_user)
+    if not role_satisfies(user_role, "viewer"):
+        abort(403)
+
+    offset_str = (request.form.get("due_offset_days") or "").strip()
+    due_offset_days: Optional[int]
+    if not offset_str:
+        due_offset_days = None
+    else:
+        try:
+            due_offset_days = int(offset_str)
+        except ValueError:
+            due_offset_days = None
+
+    # Check first for a clean flash — the unique constraint would
+    # otherwise raise IntegrityError and surface an ugly 500.
+    existing = TripPrepLink.query.filter_by(
+        trip_prep_item_id=item.id, trip_id=trip_id,
+    ).first()
+    if existing:
+        flash("Already linked to that trip.", "warning")
+        return redirect(request.referrer or url_for("prep_page"))
+
+    link = TripPrepLink(
+        trip_prep_item_id=item.id,
+        trip_id=trip_id,
+        due_offset_days=due_offset_days,
+    )
+    db.session.add(link)
+    db.session.commit()
+    logger.info(
+        "Created prep link id=%s item_id=%s trip_id=%s by user_id=%s",
+        link.id, item.id, trip_id, current_user.id,
+    )
+    flash(f"Linked “{item.title}” to {target.name}.", "success")
+    return redirect(request.referrer or url_for("prep_page"))
+
+
+@app.route("/prep/<int:item_id>/link/<int:link_id>", methods=["POST"])
+@login_required
+def prep_link_delete(item_id: int, link_id: int):
+    """Delete a TripPrepLink. Owner-only on the parent item.
+
+    404 if the link doesn't exist or doesn't belong to the URL's item.
+    """
+    link = TripPrepLink.query.get(link_id)
+    if link is None or link.trip_prep_item_id != item_id:
+        abort(404)
+    item = TripPrepItem.query.get(item_id)
+    if item is None:
+        abort(404)
+    if item.owner_id != current_user.id:
+        abort(403)
+
+    db.session.delete(link)
+    db.session.commit()
+    logger.info(
+        "Deleted prep link id=%s item_id=%s by user_id=%s",
+        link_id, item_id, current_user.id,
+    )
+    flash(f"Unlinked “{item.title}”.", "success")
+    return redirect(request.referrer or url_for("prep_page"))
+
+
 @app.route("/trips/<int:trip_id>/prep", methods=["GET"])
 @login_required
 def trip_prep_tab(trip_id: int):
