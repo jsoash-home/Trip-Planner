@@ -1,5 +1,87 @@
 # Session Log
 
+## 2026-06-15 — Trip-prep to-dos v1 shipped + DATA-LOSS NEAR-MISS (recovered)
+
+**Shipped:**
+- v1 trip-prep to-dos feature end-to-end: 2 new models (`TripPrepItem`,
+  `TripPrepLink`), 2 pure-helper modules (`src/prep_helpers.py`,
+  `src/url_metadata.py`), 8 new routes, 3 surfaces (dashboard panel,
+  `/prep`, `/trips/<id>/prep`), paste-to-create URL enrich, smart "needs
+  by" deadlines + urgency pills, done→packing-list prompt.
+- 16 commits `e3ea578..e13058e` pushed to `origin/main`.
+- Phase 4 section added to `docs/PHASE_3_ROADMAP.md` (trip-prep v1
+  ✓ shipped; v2 AI suggestions parked).
+
+**Test status:** 781 passing / 0 failing (was 659). +122 new tests.
+
+**🚨 INCIDENT — vacation.db clobbered then restored:**
+- During the session, `vacation.db` was overwritten with a tiny fixture
+  (1 user `owner@example.com`, 0 trips). Real data was gone from the
+  live file.
+- Recovered by `cp data/backups/vacation-2026-06-15-074214.db
+  vacation.db` (the auto-snapshot from Jun 14 ~4 PM — saved by
+  `src/backup.py`).
+- Clobbered file preserved at `vacation.db.pre-restore-2026-06-15.bak`
+  for forensics.
+- All 9 trips + 29 bookings + 65 itinerary items + 108 packing items
+  back. 0 prep items (snapshot predates the UI — expected; OAuth has
+  blocked sign-in this whole session so no real prep data was ever
+  created).
+- Two orphan `python3 app.py` processes (PIDs 20580/20600) were holding
+  `vacation.db` open when restore started — likely the clobber culprit,
+  started during Task 14's frontend verification without
+  `DATABASE_URL=sqlite:///:memory:`. Killed before restore.
+- Root cause unconfirmed: stale Flask server vs. a subagent's ad-hoc
+  `python3 -c …` invocation vs. pip-install side effect. The
+  `conftest.py` tripwire only fires during pytest; nothing protects
+  ad-hoc scripts or `python3 app.py` against the real DB.
+
+**Stopped at:** Feature complete + recovered from incident.
+
+**Pick up next with:** **Investigate the clobber.** Compare
+`vacation.db.pre-restore-2026-06-15.bak` against the good snapshot,
+check the git diff around session start for any script that imported
+the app without the in-memory env var, and decide whether to harden:
+(a) startup guard in `app.py` that refuses to boot against
+`vacation.db` if the launcher isn't an interactive shell, OR
+(b) a CLAUDE.md rule that every ad-hoc `python3 -c "from app …"` must
+set `DATABASE_URL=sqlite:///:memory:` first.
+
+**Kickoff prompt for next session:**
+
+> Pick up at the Vacation Planner data-loss incident from 2026-06-15
+> (see `docs/session_log.md` top entry). The real `vacation.db` was
+> clobbered during the trip-prep-to-dos session, recovered from
+> `data/backups/vacation-2026-06-15-074214.db`. The clobbered version
+> is preserved at `vacation.db.pre-restore-2026-06-15.bak`.
+>
+> Goal: figure out exactly what overwrote it, then harden against a
+> repeat. The current `conftest.py` tripwire only fires under pytest;
+> ad-hoc `python3 app.py` and `python3 -c "from app import …"` both
+> open the real DB unprotected. Two hardening options to weigh:
+> (a) startup guard in `app.py` that refuses to bind to `vacation.db`
+> unless an interactive shell is launching it, or (b) a CLAUDE.md rule
+> for agents requiring `DATABASE_URL=sqlite:///:memory:` on every
+> ad-hoc invocation.
+>
+> Tests should still be green at 781. Trip-prep feature is shipped to
+> `origin/main`. After the incident is closed, the deferred work is:
+> (1) brainstorm the next Phase 4 feature, or (2) clean up the
+> SQLAlchemy 2.0 LegacyAPIWarning sweep (`.query.get(id)` →
+> `db.session.get(Model, id)`, ~395 warnings in test output).
+
+**Loose ends:**
+- `vacation.db.pre-restore-2026-06-15.bak` — keep until incident is
+  understood, then delete.
+- Two pre-existing `.bak` files at the project root
+  (`vacation.db.bak` from May 25, `vacation.db.bad-budget-fixture-
+  2026-06-09.bak` from Jun 9) — pending user decision on keep / move to
+  `data/backups/` / delete. Both predate this incident.
+- Data-safety hardening (see "Pick up next with").
+- SQLAlchemy 2.0 LegacyAPIWarning sweep deferred.
+
+---
+
 ## 2026-06-14 — Date-rot fix + data-safety infra + trip-prep to-dos brainstormed (spec + plan written)
 
 **Shipped (code):**
