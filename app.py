@@ -69,6 +69,7 @@ from src.booking_helpers import (
     booking_type_label,
     clear_stale_geocode_on_booking_edit,
     detect_drift,
+    first_linked_itinerary_item,
     format_datetime_range,
     group_bookings_by_type,
     missing_auto_kinds_for_booking,
@@ -1963,6 +1964,12 @@ def bookings_list(trip_id):
     bookings = bookings_query.all()
     grouped = group_bookings_by_type(bookings)
 
+    first_linked_item_id: Dict[int, int] = {}
+    for b in bookings:
+        first = first_linked_itinerary_item(b.itinerary_items)
+        if first is not None:
+            first_linked_item_id[b.id] = first.id
+
     totals = total_cost_by_currency(bookings)
     if totals:
         total_label = " + ".join(
@@ -1982,6 +1989,7 @@ def bookings_list(trip_id):
         booking_types=BOOKING_TYPES,
         active_type=active_type,
         active_type_label=active_type_label,
+        first_linked_item_id=first_linked_item_id,
     )
 
 
