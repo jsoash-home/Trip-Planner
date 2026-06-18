@@ -8,7 +8,7 @@ formatter. No DB, no Flask imports.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, time as _time
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from src.map_helpers import should_clear_geocode
@@ -185,6 +185,31 @@ def group_bookings_by_type(bookings: Iterable) -> List[Tuple[str, str, str, List
         items.sort(key=lambda b: (b.start_datetime is None, b.start_datetime))
         out.append((code, label, emoji, items))
     return out
+
+
+def first_linked_itinerary_item(items: Iterable) -> Optional[Any]:
+    """
+    Pick the chronologically first item from a sequence of ItineraryItem
+    rows linked to one booking.
+
+    Sort order matches the spec: (day_date, start_time None-last,
+    order_within_day, id). Returns None for an empty input. Pure: takes
+    any objects exposing day_date/start_time/order_within_day/id.
+    """
+    def _key(it):
+        st = getattr(it, "start_time", None)
+        return (
+            getattr(it, "day_date", None),
+            st is None,
+            st or _time.min,
+            getattr(it, "order_within_day", 0) or 0,
+            getattr(it, "id", 0) or 0,
+        )
+
+    candidates = list(items)
+    if not candidates:
+        return None
+    return min(candidates, key=_key)
 
 
 def total_cost_by_currency(bookings: Iterable) -> Dict[str, float]:

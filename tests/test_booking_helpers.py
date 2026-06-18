@@ -1,7 +1,7 @@
 """Unit tests for src/booking_helpers.py."""
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 from types import SimpleNamespace
 
@@ -13,6 +13,7 @@ from src.booking_helpers import (
     booking_type_emoji,
     booking_type_label,
     clear_stale_geocode_on_booking_edit,
+    first_linked_itinerary_item,
     format_datetime_range,
     group_bookings_by_type,
     parse_booking_form,
@@ -672,3 +673,59 @@ def test_booking_edit_preserves_geocode_when_manually_pinned():
     clear_stale_geocode_on_booking_edit(b, new_location="Lyon")
     assert b.geocoded_lat == 48.85           # untouched
     assert b.geocoded_country_code == "FR"   # untouched
+
+
+# ─────────────────────────  first_linked_itinerary_item  ──────────────────────
+
+
+@dataclass
+class FakeItem:
+    """Minimal stand-in for an ItineraryItem row — no DB needed for tests."""
+
+    id: int = 0
+    day_date: Optional[date] = None
+    start_time: Optional[time] = None
+    order_within_day: int = 0
+
+
+def test_first_linked_itinerary_item_empty_returns_none():
+    assert first_linked_itinerary_item([]) is None
+
+
+def test_first_linked_itinerary_item_single_item_returns_it():
+    only = FakeItem(id=1, day_date=date(2026, 6, 1), start_time=time(9, 0))
+    assert first_linked_itinerary_item([only]) is only
+
+
+def test_first_linked_itinerary_item_earliest_day_wins():
+    later = FakeItem(id=1, day_date=date(2026, 6, 5), start_time=time(8, 0))
+    earlier = FakeItem(id=2, day_date=date(2026, 6, 1), start_time=time(18, 0))
+    # Even though `earlier` has a later time-of-day, its day_date is sooner.
+    assert first_linked_itinerary_item([later, earlier]) is earlier
+
+
+def test_first_linked_itinerary_item_timed_beats_untimed_same_day():
+    untimed = FakeItem(id=1, day_date=date(2026, 6, 1), start_time=None)
+    timed = FakeItem(id=2, day_date=date(2026, 6, 1), start_time=time(20, 0))
+    # On the same day, a timed item beats an untimed one regardless of input order.
+    assert first_linked_itinerary_item([untimed, timed]) is timed
+
+
+def test_first_linked_itinerary_item_earlier_time_wins_same_day():
+    later = FakeItem(id=1, day_date=date(2026, 6, 1), start_time=time(15, 0))
+    earlier = FakeItem(id=2, day_date=date(2026, 6, 1), start_time=time(9, 0))
+    assert first_linked_itinerary_item([later, earlier]) is earlier
+
+
+def test_first_linked_itinerary_item_order_within_day_breaks_tie():
+    # Same day, both untimed → order_within_day breaks the tie.
+    second = FakeItem(id=1, day_date=date(2026, 6, 1), start_time=None, order_within_day=2)
+    first = FakeItem(id=2, day_date=date(2026, 6, 1), start_time=None, order_within_day=1)
+    assert first_linked_itinerary_item([second, first]) is first
+
+
+def test_first_linked_itinerary_item_id_breaks_tie_when_keys_equal():
+    # Same day, same time, same order_within_day → lowest id wins.
+    higher = FakeItem(id=99, day_date=date(2026, 6, 1), start_time=time(9, 0), order_within_day=0)
+    lower = FakeItem(id=2, day_date=date(2026, 6, 1), start_time=time(9, 0), order_within_day=0)
+    assert first_linked_itinerary_item([higher, lower]) is lower
