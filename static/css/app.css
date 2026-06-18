@@ -743,6 +743,32 @@
   gap: 0.35rem;
 }
 
+.booking-row-itin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--vp-border);
+  background: var(--vp-surface);
+  color: var(--vp-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.booking-row-itin-chip:hover {
+  background: var(--vp-surface-2);
+  color: var(--vp-text);
+  border-color: var(--vp-text-muted);
+}
+.booking-row-itin-chip:focus-visible {
+  outline: 2px solid var(--vp-accent);
+  outline-offset: 2px;
+}
+
 /* ─── Itinerary day picker (mobile only) ─────────────────── */
 .itin-day-chips {
   display: none;
@@ -926,6 +952,43 @@
   gap: 0.25rem;
   margin-top: 0.4rem;
 }
+
+.itin-chip-booking-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--vp-border);
+  background: var(--vp-surface);
+  color: var(--vp-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.itin-chip-booking-link:hover {
+  background: var(--vp-surface-2);
+  color: var(--vp-text);
+  border-color: var(--vp-text-muted);
+}
+.itin-chip-booking-link:focus-visible {
+  outline: 2px solid var(--vp-accent);
+  outline-offset: 2px;
+}
+
+/* Per-booking-type background tint — subtle, so it reads as
+   "from this booking family" without competing with the parent
+   itin-chip's category color. */
+.itin-chip-booking-link.is-flight     { background: rgba(34, 197, 94, 0.10); }
+.itin-chip-booking-link.is-hotel      { background: rgba(59, 130, 246, 0.10); }
+.itin-chip-booking-link.is-car        { background: rgba(234, 179, 8, 0.10); }
+.itin-chip-booking-link.is-restaurant { background: rgba(244, 114, 182, 0.10); }
+.itin-chip-booking-link.is-activity   { background: rgba(168, 85, 247, 0.10); }
+.itin-chip-booking-link.is-transport,
+.itin-chip-booking-link.is-other      { background: var(--vp-surface); }
 
 /* Category colors — left border + faint background tint. */
 .itin-chip.is-sightseeing { border-left-color: var(--vp-cat-sightseeing-fg); background: var(--vp-cat-sightseeing-bg); }
