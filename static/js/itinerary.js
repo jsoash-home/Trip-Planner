@@ -85,4 +85,18 @@
       : 1;
   }
   activate(initial, false);
+
+  // Item-level arrival flash. If the page loaded with #item-N in the
+  // URL (e.g. from the bookings-list chip), briefly highlight that chip
+  // using the existing data-just-synced animation.
+  var itemMatch = (location.hash || '').match(/^#item-(\d+)$/);
+  if (itemMatch) {
+    var target = document.getElementById('item-' + itemMatch[1]);
+    if (target) {
+      target.setAttribute('data-just-synced', 'true');
+      setTimeout(function () {
+        target.removeAttribute('data-just-synced');
+      }, 1400);
+    }
+  }
 }());
