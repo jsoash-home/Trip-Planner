@@ -117,6 +117,15 @@
             {% if b.notes %}
               <div class="booking-row-notes">{{ b.notes }}</div>
             {% endif %}
+            {% set linked_count = b.itinerary_items | length %}
+            {% if linked_count > 0 and first_linked_item_id.get(b.id) %}
+              <a class="booking-row-itin-chip"
+                 href="{{ url_for('trip_itinerary', trip_id=trip.id) }}#item-{{ first_linked_item_id[b.id] }}"
+                 aria-label="Jump to {{ linked_count }} linked itinerary item{{ '' if linked_count == 1 else 's' }}">
+                <span aria-hidden="true">🗓</span>
+                {{ linked_count }} in itinerary →
+              </a>
+            {% endif %}
           </div>
           <div class="booking-row-right">
             <div class="booking-row-cost">
