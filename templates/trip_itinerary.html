@@ -104,6 +104,7 @@
           {% endif %}
           {% for it in items %}
             <div class="itin-chip {{ category_css(it.category) }}"
+                 id="item-{{ it.id }}"
                  {% if it.id|string in just_synced_ids %}data-just-synced="true"{% endif %}>
               <button type="button"
                       class="star-toggle"
@@ -118,12 +119,18 @@
               <div class="itin-chip-title">
                 <span class="itin-chip-emoji" aria-hidden="true">{{ category_emoji(it.category) }}</span>
                 {{ it.title }}
-                {% if it.linked_booking_id %}
-                  <span class="itin-chip-link" title="Linked to a booking" aria-label="Linked to a booking">
-                    {{ icon('link-45deg') }}
-                  </span>
-                {% endif %}
               </div>
+              {% if it.linked_booking %}
+                {% set b = it.linked_booking %}
+                {% set chip_label = b.vendor or b.title %}
+                <a class="itin-chip-booking-link is-{{ b.type }}"
+                   href="{{ url_for('booking_edit', trip_id=trip.id, booking_id=b.id) }}"
+                   title="Linked to a booking — click to view"
+                   aria-label="View booking: {{ chip_label }}">
+                  <span aria-hidden="true">{{ booking_type_emoji(b.type) }}</span>
+                  {{ chip_label }} <span aria-hidden="true">→</span>
+                </a>
+              {% endif %}
               {% if it.location %}
                 <div class="itin-chip-meta">📍 {{ it.location }}</div>
               {% endif %}
