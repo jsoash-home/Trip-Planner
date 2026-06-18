@@ -1,5 +1,34 @@
 # Session Log
 
+## 2026-06-18 — Booking ↔ itinerary chips shipped
+
+**Shipped:**
+- New pure helper `first_linked_itinerary_item` in src/booking_helpers.py + 7 unit tests
+- `bookings_list` route now passes `first_linked_item_id` dict to template
+- Booking rows show `🗓 N in itinerary →` chip linking to the chronologically-first linked item
+- Itinerary items show a clickable `.itin-chip-booking-link` pill (booking emoji + vendor/title) replacing the old icon-only hint; `id="item-N"` anchors added to every chip
+- CSS for both chips with per-type background tints (flight/hotel/car/restaurant/activity green/blue/yellow/pink/purple)
+- Arrival flash in static/js/itinerary.js — reuses existing `data-just-synced` animation
+- Tidiness: moved 9 root-level `vacation.db.*bak*` files into `data/backups/`
+
+**Test status:** 788 passing / 0 failing
+
+**Stopped at:** Feature complete and pushed to origin/main; spec, plan, and code all live.
+
+**Pick up next with:** Open call. The two non-blocking follow-ups surfaced during review:
+  1. N+1 lazy-load on `b.itinerary_items` in `bookings_list` — fix with `joinedload(Booking.itinerary_items)` on the query.
+  2. Hardcoded RGBA tints in `static/css/app.css` for `.itin-chip-booking-link.is-{type}` — promote to `--vp-booking-<type>-tint` vars before a dark-mode pass.
+
+**Kickoff prompt for next session:**
+
+> Vacation Planner — last session shipped booking ↔ itinerary cross-link chips (commits 8fcd1ff..a4bbc22, all on origin/main). Two non-blocking follow-ups are open: (1) N+1 in `bookings_list` — add `joinedload(Booking.itinerary_items)` to the `bookings_query` in app.py around line 1960; (2) extract the hardcoded RGBA tints in `static/css/app.css` (`.itin-chip-booking-link.is-flight/.is-hotel/.is-car/.is-restaurant/.is-activity`) into `--vp-booking-<type>-tint` CSS vars so a future dark-mode pass can override them. Tests green at 788. Verify which task to start with — or proceed with something new.
+
+**Loose ends:**
+- N+1 query on `bookings_list` (perf, low priority at current trip sizes)
+- Hardcoded RGBA tints for booking-type chip backgrounds (dark-mode prep)
+
+---
+
 ## 2026-06-15 — Trip-prep to-dos v1 shipped + DATA-LOSS NEAR-MISS (recovered)
 
 **Shipped:**
