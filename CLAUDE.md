@@ -158,6 +158,35 @@ Three pure helpers in `src/trip_helpers.py` back this:
 phrase lookup), `themed_countdown_label` (wraps `countdown_label` with
 theme + unit).
 
+## Trip guide
+
+A Claude-Code-only skill (`.claude/skills/trip-guide/SKILL.md`) generates a
+bespoke single-file HTML guide for any trip. The skill reads the trip's
+bookings + itinerary from `vacation.db` (via `src/guide_builder.py`),
+prompts you for which sections to include (day-by-day, field guide,
+things-to-do, weather, history, fun facts + practical tips, food + drink),
+researches a palette, composes the HTML, and saves to
+`data/guides/<trip_id>.html`.
+
+The trip overview page renders a hero card with an "Open guide" button
+when the file exists. A nullable `guide_share_token` column on `Trip`
+optionally mints a public URL (`/guides/share/<token>`) for sharing with
+non-collaborators.
+
+**Storage abstraction.** All guide IO goes through
+`src/guide_builder.read_guide` / `save_guide` — Flask routes never touch
+the filesystem directly. A `GUIDE_STORAGE` env var (default `filesystem`)
+dispatches between local-file and a future database backend; the latter
+is unimplemented in v1 (raises `NotImplementedError`) and exists to make
+later cloud-hosting work cheap.
+
+**Run the skill:** type `/trip-guide` in Claude Code inside this repo.
+The skill is project-local and only surfaces here.
+
+**Migration:** `scripts/2026-06-19_add_guide_share_token.py` adds the
+share-token column to existing `vacation.db`. Run once locally; backed
+up automatically by the script before altering.
+
 ## Local port
 Local dev server runs on port **5002** (stock-tracker uses 5001).
 
