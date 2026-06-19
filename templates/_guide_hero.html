@@ -1,0 +1,18 @@
+{% if guide_exists %}
+<section class="card guide-hero">
+  <p class="eyebrow">TRIP GUIDE</p>
+  <h2 class="guide-hero__title">{{ trip.name }}</h2>
+  <div class="guide-hero__actions">
+    <a class="btn btn-primary" href="{{ url_for('trip_guide', trip_id=trip.id) }}">Open guide</a>
+    {% if share_url %}
+    <div class="guide-hero__share">
+      <button class="btn btn-link" data-share-url="{{ share_url }}" aria-label="Copy share link">Copy share link</button>
+      <code class="mono">{{ share_url }}</code>
+    </div>
+    {% endif %}
+  </div>
+  {% if guide_last_generated_at %}
+  <p class="guide-hero__meta">Last updated · {{ guide_last_generated_at }}</p>
+  {% endif %}
+</section>
+{% endif %}

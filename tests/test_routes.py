@@ -4864,3 +4864,50 @@ def test_trip_overview_no_guide_passes_guide_exists_false(app, owner, trip, patc
         resp = client.get(f"/trips/{trip.id}")
     assert resp.status_code == 200
     assert b"TRIP GUIDE" not in resp.data
+
+
+# ─── _guide_hero.html partial (Task 11) ──────────────────────────────
+
+
+def test_trip_overview_with_guide_passes_guide_exists_true(app, owner, trip, patch_guides_dir_routes):
+    """Owner visits /trips/<id> when a guide file exists; hero card renders."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<h1>Guide content</h1>")
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}")
+    assert resp.status_code == 200
+    assert b"TRIP GUIDE" in resp.data
+
+
+def test_trip_overview_owner_with_share_token_sees_share_url(app, owner, trip, patch_guides_dir_routes):
+    """Owner with a share token set sees the share URL in the hero card."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<h1>Guide content</h1>")
+    trip.guide_share_token = "test-token-uuid"
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}")
+    assert resp.status_code == 200
+    assert b"test-token-uuid" in resp.data
+
+
+def test_trip_overview_editor_does_not_see_share_url(app, owner, trip, editor, patch_guides_dir_routes):
+    """Editor sees the guide hero card but not the share URL (owners only)."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<h1>Guide content</h1>")
+    trip.guide_share_token = "test-token-uuid"
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, editor)
+        resp = client.get(f"/trips/{trip.id}")
+    assert resp.status_code == 200
+    assert b"TRIP GUIDE" in resp.data
+    assert b"test-token-uuid" not in resp.data
