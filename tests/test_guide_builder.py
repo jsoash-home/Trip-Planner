@@ -482,6 +482,12 @@ def test_clear_share_token_idempotent_on_already_null(app, trip):
     assert trip.guide_share_token is None
 
 
+def test_clear_share_token_unknown_trip_raises_trip_not_found(app):
+    """clear_share_token raises TripNotFound for an unknown trip_id."""
+    with pytest.raises(TripNotFound):
+        clear_share_token(99999)
+
+
 def test_trip_by_share_token_finds_correct_trip(app, owner):
     """Two trips with two tokens; lookup returns the right Trip by token."""
     t1 = Trip(owner_id=owner.id, name="Trip A", destination="Paris",
