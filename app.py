@@ -1580,7 +1580,7 @@ def trip_overview(trip_id):
 
 @app.route("/trips/<int:trip_id>/guide")
 @login_required
-def trip_guide(trip_id: int):
+def trip_guide(trip_id: int) -> Response:
     """Serve the pre-built HTML guide for a trip. Viewer access required."""
     _trip_with_access_or_404(trip_id, role="viewer")
     try:
@@ -1591,10 +1591,11 @@ def trip_guide(trip_id: int):
 
 
 @app.route("/guides/share/<token>")
-def guide_share(token: str):
+def guide_share(token: str) -> Response:
     """Public share URL — the token IS the credential. No login required."""
     trip = guide_builder.trip_by_share_token(token)
     if trip is None:
+        # 404 not 403 — don't leak that a token exists.
         abort(404)
     try:
         html = guide_builder.read_guide(trip.id)
