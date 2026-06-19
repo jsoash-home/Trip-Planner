@@ -7,9 +7,10 @@ are deliberately small and tested. HTML composition lives in the skill, not here
 import json
 import logging
 import os
+import shutil
 import uuid
 from dataclasses import dataclass, asdict
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -209,3 +210,75 @@ def load_trip_data(trip_id: int) -> Dict[str, Any]:
         "itinerary": itinerary,
         "collaborators": collaborators,
     }
+
+
+# ─── storage helpers ────────────────────────────────────────────────────────
+# GUIDE_STORAGE dispatch: functions reference the module global by bare name.
+# Python resolves module globals at call time, so monkeypatch.setattr on
+# guide_builder.GUIDE_STORAGE works correctly without any extra indirection.
+
+
+def guide_path(trip_id: int) -> Path:
+    """Pure path computation. Does not check existence."""
+    return GUIDES_DIR / f"{trip_id}.html"
+
+
+def guide_exists(trip_id: int) -> bool:
+    """Return True if a guide HTML file exists for this trip."""
+    if GUIDE_STORAGE == "filesystem":
+        return guide_path(trip_id).exists()
+    elif GUIDE_STORAGE == "database":
+        raise NotImplementedError("database backend pending hosted-deployment work")
+    else:
+        raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
+
+
+def save_guide(trip_id: int, html: str) -> Path:
+    """
+    Write guide HTML for trip_id.
+
+    Filesystem backend: rotates any existing HTML to .bak, atomic-writes the
+    new HTML via a temp file + os.replace, then bumps last_generated_at on the
+    config sidecar. Returns the written path.
+    """
+    if GUIDE_STORAGE == "filesystem":
+        path = guide_path(trip_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Rotate existing file to .bak before overwriting.
+        if path.exists():
+            shutil.copy2(path, path.with_suffix(".html.bak"))
+
+        tmp = path.parent / f"{trip_id}.html.tmp"
+        try:
+            tmp.write_text(html, encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            raise
+
+        # Bump last_generated_at on the config sidecar.
+        cfg = load_or_init_config(trip_id)
+        cfg.last_generated_at = datetime.now(timezone.utc).isoformat()
+        save_config(trip_id, cfg)
+
+        return path
+    elif GUIDE_STORAGE == "database":
+        raise NotImplementedError("database backend pending hosted-deployment work")
+    else:
+        raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
+
+
+def read_guide(trip_id: int) -> bytes:
+    """
+    Read guide HTML for trip_id. Raises GuideMissing if not present.
+    """
+    if GUIDE_STORAGE == "filesystem":
+        path = guide_path(trip_id)
+        if not path.exists():
+            raise GuideMissing(f"No guide found for trip {trip_id}")
+        return path.read_bytes()
+    elif GUIDE_STORAGE == "database":
+        raise NotImplementedError("database backend pending hosted-deployment work")
+    else:
+        raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")

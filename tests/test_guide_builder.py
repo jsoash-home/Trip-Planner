@@ -12,11 +12,16 @@ from models import Booking, ItineraryItem, Trip, TripCollaborator, User, db
 from src import guide_builder
 from src.guide_builder import (
     CONFIG_SCHEMA_VERSION,
+    GuideMissing,
     GuideConfig,
     TripNotFound,
+    guide_exists,
+    guide_path,
     load_or_init_config,
     load_trip_data,
+    read_guide,
     save_config,
+    save_guide,
 )
 
 
@@ -331,3 +336,100 @@ def test_save_config_atomic_write(patch_guides_dir, monkeypatch):
     assert (guides / "99.config.json").read_text() == original_text
     # The .tmp scratch file must be cleaned up — no leftover debris
     assert not (guides / "99.config.json.tmp").exists()
+
+
+# ─── guide_path / guide_exists / save_guide / read_guide ───────────────────
+
+
+def test_guide_path_computes_expected_path(patch_guides_dir):
+    """guide_path returns GUIDES_DIR / '<trip_id>.html'."""
+    expected = patch_guides_dir / "42.html"
+    assert guide_path(42) == expected
+
+
+def test_guide_exists_returns_false_when_missing(patch_guides_dir):
+    """guide_exists is False when no HTML file is on disk."""
+    assert guide_exists(1) is False
+
+
+def test_guide_exists_returns_true_when_present(patch_guides_dir):
+    """guide_exists is True after the HTML file has been written."""
+    guides = patch_guides_dir
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / "5.html").write_text("<html/>", encoding="utf-8")
+    assert guide_exists(5) is True
+
+
+def test_save_guide_writes_file(patch_guides_dir):
+    """save_guide writes the HTML content to the expected path."""
+    html = "<html><body>Rome Guide</body></html>"
+    written = save_guide(7, html)
+    assert written == patch_guides_dir / "7.html"
+    assert written.read_text(encoding="utf-8") == html
+
+
+def test_save_guide_creates_directory_if_missing(tmp_path, monkeypatch):
+    """save_guide creates GUIDES_DIR when it does not yet exist."""
+    guides = tmp_path / "nonexistent_guides"
+    monkeypatch.setattr(guide_builder, "GUIDES_DIR", guides)
+    assert not guides.exists()
+    save_guide(8, "<html/>")
+    assert guides.exists()
+    assert (guides / "8.html").exists()
+
+
+def test_save_guide_rotates_previous_to_bak(patch_guides_dir):
+    """Calling save_guide a second time rotates the old file to .html.bak."""
+    save_guide(9, "<html>v1</html>")
+    save_guide(9, "<html>v2</html>")
+
+    bak = patch_guides_dir / "9.html.bak"
+    assert bak.exists()
+    assert bak.read_text(encoding="utf-8") == "<html>v1</html>"
+    assert (patch_guides_dir / "9.html").read_text(encoding="utf-8") == "<html>v2</html>"
+
+
+def test_save_guide_no_bak_on_first_run(patch_guides_dir):
+    """No .bak file is created on the very first save."""
+    save_guide(11, "<html>first</html>")
+    assert not (patch_guides_dir / "11.html.bak").exists()
+
+
+def test_save_guide_bumps_last_generated_at(patch_guides_dir):
+    """save_guide updates last_generated_at in the config sidecar."""
+    save_guide(12, "<html/>")
+    cfg = load_or_init_config(12)
+    assert cfg.last_generated_at is not None
+    # Sanity-check it parses as an ISO datetime string with timezone info.
+    from datetime import datetime
+    dt = datetime.fromisoformat(cfg.last_generated_at)
+    assert dt.tzinfo is not None
+
+
+def test_read_guide_returns_bytes_when_present(patch_guides_dir):
+    """read_guide returns bytes of the saved HTML."""
+    html = "<html><body>hello</body></html>"
+    save_guide(20, html)
+    result = read_guide(20)
+    assert isinstance(result, bytes)
+    assert result == html.encode("utf-8")
+
+
+def test_read_guide_raises_guide_missing_when_absent(patch_guides_dir):
+    """read_guide raises GuideMissing when no file exists."""
+    with pytest.raises(GuideMissing):
+        read_guide(999)
+
+
+def test_save_guide_database_storage_raises_not_implemented(patch_guides_dir, monkeypatch):
+    """GUIDE_STORAGE='database' → NotImplementedError."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+    with pytest.raises(NotImplementedError):
+        save_guide(30, "<html/>")
+
+
+def test_save_guide_unknown_storage_raises_value_error(patch_guides_dir, monkeypatch):
+    """GUIDE_STORAGE='whatever' → ValueError."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "whatever")
+    with pytest.raises(ValueError, match="unknown GUIDE_STORAGE"):
+        save_guide(31, "<html/>")
