@@ -1,12 +1,23 @@
 """Tests for src/guide_builder."""
 
+import json
+import logging
+import os
 from datetime import date, datetime, time
 
 import pytest
 
 from app import app as flask_app
 from models import Booking, ItineraryItem, Trip, TripCollaborator, User, db
-from src.guide_builder import TripNotFound, load_trip_data
+from src import guide_builder
+from src.guide_builder import (
+    CONFIG_SCHEMA_VERSION,
+    GuideConfig,
+    TripNotFound,
+    load_or_init_config,
+    load_trip_data,
+    save_config,
+)
 
 
 def test_module_imports():
@@ -183,3 +194,140 @@ def test_load_trip_data_with_collaborator_returns_role(app, trip):
 
     result = load_trip_data(trip.id)
     assert result["collaborators"] == [{"email": "friend@example.com", "role": "viewer"}]
+
+
+# ─── config sidecar helpers ────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=False)
+def patch_guides_dir(tmp_path, monkeypatch):
+    """Redirect GUIDES_DIR to a temp directory so tests never touch data/guides/."""
+    guides = tmp_path / "guides"
+    monkeypatch.setattr(guide_builder, "GUIDES_DIR", guides)
+    return guides
+
+
+def test_load_or_init_config_returns_fresh_when_missing(patch_guides_dir):
+    """No file present → returns a fresh empty GuideConfig."""
+    cfg = load_or_init_config(42)
+    assert cfg.trip_id == 42
+    assert cfg.schema_version == CONFIG_SCHEMA_VERSION
+    assert cfg.sections == []
+    assert cfg.palette == {}
+    assert cfg.last_generated_at is None
+
+
+def test_load_or_init_config_returns_fresh_when_corrupt_json(patch_guides_dir, caplog):
+    """Corrupt JSON file → returns fresh config and logs a warning."""
+    guides = patch_guides_dir
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / "7.config.json").write_text("this is not json", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="src.guide_builder"):
+        cfg = load_or_init_config(7)
+
+    assert cfg.trip_id == 7
+    assert cfg.sections == []
+    assert any("corrupt" in rec.message.lower() for rec in caplog.records)
+
+
+def test_load_or_init_config_returns_fresh_when_schema_version_mismatched(
+    patch_guides_dir, caplog
+):
+    """schema_version mismatch → returns fresh config and logs a warning."""
+    guides = patch_guides_dir
+    guides.mkdir(parents=True, exist_ok=True)
+    bad = {
+        "schema_version": 999,
+        "trip_id": 5,
+        "sections": ["day_by_day"],
+        "palette": {},
+        "last_generated_at": None,
+    }
+    (guides / "5.config.json").write_text(json.dumps(bad), encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="src.guide_builder"):
+        cfg = load_or_init_config(5)
+
+    assert cfg.trip_id == 5
+    assert cfg.sections == []
+    assert any("schema_version" in rec.message.lower() for rec in caplog.records)
+
+
+def test_load_or_init_config_returns_saved_when_valid(patch_guides_dir):
+    """Round-trip: save then load returns an equal GuideConfig."""
+    original = GuideConfig(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=10,
+        sections=["day_by_day", "food"],
+        palette={"primary": "#ff5500"},
+        last_generated_at="2026-06-19T12:00:00",
+    )
+    save_config(10, original)
+    loaded = load_or_init_config(10)
+
+    assert loaded.schema_version == original.schema_version
+    assert loaded.trip_id == original.trip_id
+    assert loaded.sections == original.sections
+    assert loaded.palette == original.palette
+    assert loaded.last_generated_at == original.last_generated_at
+
+
+def test_save_config_creates_directory_if_missing(tmp_path, monkeypatch):
+    """save_config creates the guides directory when it does not yet exist."""
+    guides = tmp_path / "new_guides"
+    monkeypatch.setattr(guide_builder, "GUIDES_DIR", guides)
+    assert not guides.exists()
+
+    cfg = GuideConfig(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=3,
+        sections=[],
+        palette={},
+        last_generated_at=None,
+    )
+    written = save_config(3, cfg)
+
+    assert guides.exists()
+    assert written == guides / "3.config.json"
+    assert written.exists()
+
+
+def test_save_config_atomic_write(patch_guides_dir, monkeypatch):
+    """If os.replace raises, the existing destination file is untouched.
+
+    The .tmp file may linger (save_config does not clean up on error), but the
+    critical invariant is that the good file at the destination path is intact.
+    """
+    guides = patch_guides_dir
+    guides.mkdir(parents=True, exist_ok=True)
+
+    # Write an existing good config first
+    good_cfg = GuideConfig(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=99,
+        sections=["food"],
+        palette={},
+        last_generated_at=None,
+    )
+    save_config(99, good_cfg)
+    original_text = (guides / "99.config.json").read_text()
+
+    # Now make os.replace raise on the next call
+    def broken_replace(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", broken_replace)
+
+    new_cfg = GuideConfig(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=99,
+        sections=["day_by_day"],
+        palette={},
+        last_generated_at=None,
+    )
+    with pytest.raises(OSError, match="disk full"):
+        save_config(99, new_cfg)
+
+    # The destination file must be untouched — this is the atomic-write guarantee
+    assert (guides / "99.config.json").read_text() == original_text

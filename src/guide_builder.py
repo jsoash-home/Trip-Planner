@@ -50,6 +50,68 @@ class GuideConfig:
     last_generated_at: Optional[str]
 
 
+def _fresh_config(trip_id: int) -> "GuideConfig":
+    return GuideConfig(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=trip_id,
+        sections=[],
+        palette={},
+        last_generated_at=None,
+    )
+
+
+def load_or_init_config(trip_id: int) -> "GuideConfig":
+    """
+    Read data/guides/<trip_id>.config.json; return a fresh empty
+    GuideConfig if the file is missing, corrupt, or has a mismatched
+    schema_version (logs a warning in the latter two cases).
+    """
+    path = GUIDES_DIR / f"{trip_id}.config.json"
+    if not path.exists():
+        return _fresh_config(trip_id)
+
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("guide_builder: corrupt config for trip %s: %s", trip_id, exc)
+        return _fresh_config(trip_id)
+
+    if data.get("schema_version") != CONFIG_SCHEMA_VERSION:
+        logger.warning(
+            "guide_builder: schema_version mismatch for trip %s (got %s, expected %s)",
+            trip_id,
+            data.get("schema_version"),
+            CONFIG_SCHEMA_VERSION,
+        )
+        return _fresh_config(trip_id)
+
+    return GuideConfig(
+        schema_version=data["schema_version"],
+        trip_id=data["trip_id"],
+        sections=data.get("sections", []),
+        palette=data.get("palette", {}),
+        last_generated_at=data.get("last_generated_at"),
+    )
+
+
+def save_config(trip_id: int, config: "GuideConfig") -> Path:
+    """
+    Write the config to data/guides/<trip_id>.config.json.
+    Atomic write (temp file + os.replace). Creates the directory if
+    needed. Returns the written path.
+    """
+    path = GUIDES_DIR / f"{trip_id}.config.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    tmp_path = path.parent / f"{trip_id}.config.json.tmp"
+    with tmp_path.open("w", encoding="utf-8") as fh:
+        json.dump(asdict(config), fh, indent=2)
+
+    os.replace(tmp_path, path)
+    return path
+
+
 def load_trip_data(trip_id: int) -> Dict[str, Any]:
     """
     Return {"trip": dict, "bookings": [dict, ...], "itinerary": [dict, ...],
