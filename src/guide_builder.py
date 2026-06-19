@@ -10,7 +10,7 @@ import os
 import uuid
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,6 @@ class GuideMissing(GuideError):
 class GuideConfig:
     schema_version: int
     trip_id: int
-    sections: list
-    palette: dict
+    sections: List[str]
+    palette: Dict[str, Any]
     last_generated_at: Optional[str]
