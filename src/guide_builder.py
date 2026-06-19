@@ -9,6 +9,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass, asdict
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -60,6 +61,7 @@ def load_trip_data(trip_id: int) -> Dict[str, Any]:
 
     Raises TripNotFound if no row exists.
     """
+    # Deferred imports — top-level would cause a circular import via models → app → src/guide_builder.
     from models import Booking, ItineraryItem, Trip, TripCollaborator
     from src.itinerary import sort_within_day
     from src.trip_helpers import emoji_theme
@@ -102,7 +104,7 @@ def load_trip_data(trip_id: int) -> Dict[str, Any]:
             "linked_itinerary_ids": sorted(linked_ids_by_booking[b.id]),
         })
 
-    items_by_day: Dict[Any, List] = {}
+    items_by_day: Dict[date, List] = {}
     for item in all_items:
         items_by_day.setdefault(item.day_date, []).append(item)
 
