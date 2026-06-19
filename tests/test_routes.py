@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 import pytest
 
+from src import guide_builder
 from app import _ensure_prep_tables, _ensure_trip_timezone, app as flask_app
 from models import (
     Booking,
@@ -4689,3 +4690,94 @@ def test_base_template_does_not_include_prep_js_when_anonymous(app):
         resp = client.get("/")
     assert resp.status_code == 200
     assert b"prep.js" not in resp.data
+
+
+# ─── GET /trips/<id>/guide (Task 8) ──────────────────────────────────
+
+
+@pytest.fixture
+def patch_guides_dir_routes(tmp_path, monkeypatch):
+    """Redirect guide_builder.GUIDES_DIR to a temp dir so tests never touch data/guides/."""
+    guides = tmp_path / "guides"
+    monkeypatch.setattr(guide_builder, "GUIDES_DIR", guides)
+    return guides
+
+
+def test_trip_guide_owner_gets_200(app, owner, trip, patch_guides_dir_routes):
+    """Owner of a trip with a built guide gets a 200 response."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<h1>Guide</h1>")
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/guide")
+    assert resp.status_code == 200
+    assert b"<h1>Guide</h1>" in resp.data
+
+
+def test_trip_guide_viewer_collaborator_gets_200(app, owner, trip, viewer, patch_guides_dir_routes):
+    """A viewer collaborator can access the guide."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<p>Viewer guide</p>")
+
+    with flask_app.test_client() as client:
+        _login(client, viewer)
+        resp = client.get(f"/trips/{trip.id}/guide")
+    assert resp.status_code == 200
+    assert b"<p>Viewer guide</p>" in resp.data
+
+
+def test_trip_guide_editor_collaborator_gets_200(app, owner, trip, editor, patch_guides_dir_routes):
+    """An editor collaborator can access the guide."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<p>Editor guide</p>")
+
+    with flask_app.test_client() as client:
+        _login(client, editor)
+        resp = client.get(f"/trips/{trip.id}/guide")
+    assert resp.status_code == 200
+    assert b"<p>Editor guide</p>" in resp.data
+
+
+def test_trip_guide_non_collaborator_gets_403(app, owner, trip, patch_guides_dir_routes):
+    """A signed-in user with no access to the trip gets 404.
+
+    Note: test name says 403 to match the plan vocabulary, but
+    _trip_with_access_or_404 deliberately returns 404 (not 403) so
+    that probing for trip existence is blocked. Assertion matches
+    the helper's actual behaviour.
+    """
+    stranger = User(
+        google_id="g_stranger_guide", email="stranger_guide@example.com",
+        name="Stranger",
+    )
+    db.session.add(stranger)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.get(f"/trips/{trip.id}/guide")
+    assert resp.status_code == 404
+
+
+def test_trip_guide_missing_file_returns_404(app, owner, trip, patch_guides_dir_routes):
+    """When no guide file exists for the trip, the route returns 404."""
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}/guide")
+    assert resp.status_code == 404
+
+
+def test_trip_guide_unknown_trip_returns_404(app, owner):
+    """Requesting a guide for a trip ID that does not exist returns 404.
+
+    _trip_with_access_or_404 returns 404 (not 403) for unknown trips so
+    that callers cannot probe for trip existence.
+    """
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get("/trips/9999/guide")
+    assert resp.status_code == 404

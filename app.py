@@ -24,6 +24,7 @@ import markdown as md_lib
 from dotenv import load_dotenv
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     jsonify,
@@ -93,6 +94,7 @@ from src.exchange_rates import cross_rates_via_usd, get_rates_for
 from src.destination_clock import COMMON_TIMEZONES, iana_from_coords
 from src.drift_review import chronological_order
 from src.geocoding import ensure_geocoded
+from src import guide_builder
 from src.itinerary import (
     ITINERARY_CATEGORIES,
     category_css,
@@ -1574,6 +1576,18 @@ def trip_overview(trip_id):
         has_pins=has_pins,
         initial_dest_time=initial_dest_time,
     )
+
+
+@app.route("/trips/<int:trip_id>/guide")
+@login_required
+def trip_guide(trip_id: int):
+    """Serve the pre-built HTML guide for a trip. Viewer access required."""
+    _trip_with_access_or_404(trip_id, role="viewer")
+    try:
+        html = guide_builder.read_guide(trip_id)
+    except guide_builder.GuideMissing:
+        abort(404)
+    return Response(html, mimetype="text/html")
 
 
 def _changes_banner_and_mark_seen(trip_id: int, user_id: int) -> Optional[str]:
