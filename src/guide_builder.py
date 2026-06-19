@@ -50,7 +50,7 @@ class GuideConfig:
     last_generated_at: Optional[str]
 
 
-def _fresh_config(trip_id: int) -> "GuideConfig":
+def _fresh_config(trip_id: int) -> GuideConfig:
     return GuideConfig(
         schema_version=CONFIG_SCHEMA_VERSION,
         trip_id=trip_id,
@@ -60,7 +60,7 @@ def _fresh_config(trip_id: int) -> "GuideConfig":
     )
 
 
-def load_or_init_config(trip_id: int) -> "GuideConfig":
+def load_or_init_config(trip_id: int) -> GuideConfig:
     """
     Read data/guides/<trip_id>.config.json; return a fresh empty
     GuideConfig if the file is missing, corrupt, or has a mismatched
@@ -86,16 +86,24 @@ def load_or_init_config(trip_id: int) -> "GuideConfig":
         )
         return _fresh_config(trip_id)
 
-    return GuideConfig(
-        schema_version=data["schema_version"],
-        trip_id=data["trip_id"],
-        sections=data.get("sections", []),
-        palette=data.get("palette", {}),
-        last_generated_at=data.get("last_generated_at"),
-    )
+    try:
+        return GuideConfig(
+            schema_version=data["schema_version"],
+            trip_id=data["trip_id"],
+            sections=data.get("sections", []),
+            palette=data.get("palette", {}),
+            last_generated_at=data.get("last_generated_at"),
+        )
+    except KeyError as e:
+        logger.warning(
+            "guide_builder: missing required key in config for trip %s: %s",
+            trip_id,
+            e,
+        )
+        return _fresh_config(trip_id)
 
 
-def save_config(trip_id: int, config: "GuideConfig") -> Path:
+def save_config(trip_id: int, config: GuideConfig) -> Path:
     """
     Write the config to data/guides/<trip_id>.config.json.
     Atomic write (temp file + os.replace). Creates the directory if
@@ -108,7 +116,11 @@ def save_config(trip_id: int, config: "GuideConfig") -> Path:
     with tmp_path.open("w", encoding="utf-8") as fh:
         json.dump(asdict(config), fh, indent=2)
 
-    os.replace(tmp_path, path)
+    try:
+        os.replace(tmp_path, path)
+    except OSError:
+        tmp_path.unlink(missing_ok=True)
+        raise
     return path
 
 

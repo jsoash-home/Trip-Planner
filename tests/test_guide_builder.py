@@ -294,10 +294,8 @@ def test_save_config_creates_directory_if_missing(tmp_path, monkeypatch):
 
 
 def test_save_config_atomic_write(patch_guides_dir, monkeypatch):
-    """If os.replace raises, the existing destination file is untouched.
-
-    The .tmp file may linger (save_config does not clean up on error), but the
-    critical invariant is that the good file at the destination path is intact.
+    """If os.replace raises, the existing destination file is untouched
+    and the .tmp scratch file is cleaned up.
     """
     guides = patch_guides_dir
     guides.mkdir(parents=True, exist_ok=True)
@@ -331,3 +329,5 @@ def test_save_config_atomic_write(patch_guides_dir, monkeypatch):
 
     # The destination file must be untouched — this is the atomic-write guarantee
     assert (guides / "99.config.json").read_text() == original_text
+    # The .tmp scratch file must be cleaned up — no leftover debris
+    assert not (guides / "99.config.json.tmp").exists()
