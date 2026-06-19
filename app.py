@@ -1590,6 +1590,19 @@ def trip_guide(trip_id: int):
     return Response(html, mimetype="text/html")
 
 
+@app.route("/guides/share/<token>")
+def guide_share(token: str):
+    """Public share URL — the token IS the credential. No login required."""
+    trip = guide_builder.trip_by_share_token(token)
+    if trip is None:
+        abort(404)
+    try:
+        html = guide_builder.read_guide(trip.id)
+    except guide_builder.GuideMissing:
+        abort(404)
+    return Response(html, mimetype="text/html")
+
+
 def _changes_banner_and_mark_seen(trip_id: int, user_id: int) -> Optional[str]:
     """
     Read this user's TripView for the trip, build the banner string from

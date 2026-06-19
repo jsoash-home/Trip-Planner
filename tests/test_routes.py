@@ -4781,3 +4781,69 @@ def test_trip_guide_unknown_trip_returns_404(app, owner):
         _login(client, owner)
         resp = client.get("/trips/9999/guide")
     assert resp.status_code == 404
+
+
+# ─── GET /guides/share/<token> (Task 9) ──────────────────────────────────
+
+
+def test_guide_share_valid_token_returns_200(app, owner, trip, patch_guides_dir_routes):
+    """A valid share token with a built guide returns 200 with the HTML."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<h1>Shared Guide</h1>")
+    token = guide_builder.set_share_token(trip.id)
+
+    with flask_app.test_client() as client:
+        resp = client.get(f"/guides/share/{token}")
+    assert resp.status_code == 200
+    assert b"<h1>Shared Guide</h1>" in resp.data
+
+
+def test_guide_share_unknown_token_returns_404(app, owner, trip, patch_guides_dir_routes):
+    """An unrecognised token returns 404 (not 403 — don't leak existence)."""
+    with flask_app.test_client() as client:
+        resp = client.get("/guides/share/no-such-token")
+    assert resp.status_code == 404
+
+
+def test_guide_share_token_with_no_file_returns_404(app, owner, trip, patch_guides_dir_routes):
+    """A valid token whose guide file has not been generated yet returns 404."""
+    token = guide_builder.set_share_token(trip.id)
+
+    with flask_app.test_client() as client:
+        resp = client.get(f"/guides/share/{token}")
+    assert resp.status_code == 404
+
+
+def test_guide_share_works_when_logged_out(app, owner, trip, patch_guides_dir_routes):
+    """The share URL is accessible without being logged in."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<p>Public</p>")
+    token = guide_builder.set_share_token(trip.id)
+
+    with flask_app.test_client() as client:
+        resp = client.get(f"/guides/share/{token}")
+    assert resp.status_code == 200
+    assert b"<p>Public</p>" in resp.data
+
+
+def test_guide_share_works_for_different_user(app, owner, trip, patch_guides_dir_routes):
+    """A signed-in user who has no access to the trip can still read via the share URL."""
+    guides = patch_guides_dir_routes
+    guides.mkdir(parents=True, exist_ok=True)
+    (guides / f"{trip.id}.html").write_bytes(b"<p>Token bypass</p>")
+    token = guide_builder.set_share_token(trip.id)
+
+    stranger = User(
+        google_id="g_stranger_share", email="stranger_share@example.com",
+        name="Stranger",
+    )
+    db.session.add(stranger)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, stranger)
+        resp = client.get(f"/guides/share/{token}")
+    assert resp.status_code == 200
+    assert b"<p>Token bypass</p>" in resp.data
