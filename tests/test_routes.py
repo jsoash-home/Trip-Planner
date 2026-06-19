@@ -4742,7 +4742,7 @@ def test_trip_guide_editor_collaborator_gets_200(app, owner, trip, editor, patch
     assert b"<p>Editor guide</p>" in resp.data
 
 
-def test_trip_guide_non_collaborator_gets_403(app, owner, trip, patch_guides_dir_routes):
+def test_trip_guide_non_collaborator_gets_404(app, owner, trip, patch_guides_dir_routes):
     """A signed-in user with no access to the trip gets 404.
 
     Note: test name says 403 to match the plan vocabulary, but
