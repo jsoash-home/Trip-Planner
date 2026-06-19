@@ -401,7 +401,6 @@ def test_save_guide_bumps_last_generated_at(patch_guides_dir):
     cfg = load_or_init_config(12)
     assert cfg.last_generated_at is not None
     # Sanity-check it parses as an ISO datetime string with timezone info.
-    from datetime import datetime
     dt = datetime.fromisoformat(cfg.last_generated_at)
     assert dt.tzinfo is not None
 

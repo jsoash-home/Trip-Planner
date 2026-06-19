@@ -28,6 +28,7 @@ SECTION_KEYS = (
     "food",
 )
 GUIDE_STORAGE = os.getenv("GUIDE_STORAGE", "filesystem")
+BAK_SUFFIX = ".html.bak"
 
 
 class GuideError(Exception):
@@ -104,6 +105,18 @@ def load_or_init_config(trip_id: int) -> GuideConfig:
         return _fresh_config(trip_id)
 
 
+def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
+    """Atomically write text to path via temp file + os.replace. Cleans up the
+    temp file on failure and re-raises."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_text(text, encoding=encoding)
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def save_config(trip_id: int, config: GuideConfig) -> Path:
     """
     Write the config to data/guides/<trip_id>.config.json.
@@ -112,16 +125,7 @@ def save_config(trip_id: int, config: GuideConfig) -> Path:
     """
     path = GUIDES_DIR / f"{trip_id}.config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    tmp_path = path.parent / f"{trip_id}.config.json.tmp"
-    with tmp_path.open("w", encoding="utf-8") as fh:
-        json.dump(asdict(config), fh, indent=2)
-
-    try:
-        os.replace(tmp_path, path)
-    except OSError:
-        tmp_path.unlink(missing_ok=True)
-        raise
+    _atomic_write_text(path, json.dumps(asdict(config), indent=2))
     return path
 
 
@@ -245,19 +249,11 @@ def save_guide(trip_id: int, html: str) -> Path:
         path = guide_path(trip_id)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Rotate existing file to .bak before overwriting.
         if path.exists():
-            shutil.copy2(path, path.with_suffix(".html.bak"))
+            shutil.copy2(path, path.with_suffix(BAK_SUFFIX))
 
-        tmp = path.parent / f"{trip_id}.html.tmp"
-        try:
-            tmp.write_text(html, encoding="utf-8")
-            os.replace(tmp, path)
-        except OSError:
-            tmp.unlink(missing_ok=True)
-            raise
+        _atomic_write_text(path, html)
 
-        # Bump last_generated_at on the config sidecar.
         cfg = load_or_init_config(trip_id)
         cfg.last_generated_at = datetime.now(timezone.utc).isoformat()
         save_config(trip_id, cfg)
