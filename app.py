@@ -1558,6 +1558,14 @@ def trip_overview(trip_id):
         for r in list(trip.bookings) + list(trip.itinerary_items)
     )
 
+    guide_exists = guide_builder.guide_exists(trip_id)
+    share_url = None
+    if guide_exists and trip.guide_share_token and is_owner(user_role):
+        share_url = url_for("guide_share", token=trip.guide_share_token, _external=True)
+    guide_last_generated_at = None
+    if guide_exists:
+        guide_last_generated_at = guide_builder.load_or_init_config(trip_id).last_generated_at
+
     return render_template(
         "trip_overview.html",
         trip=trip,
@@ -1575,6 +1583,9 @@ def trip_overview(trip_id):
         changes_banner=changes_banner,
         has_pins=has_pins,
         initial_dest_time=initial_dest_time,
+        guide_exists=guide_exists,
+        share_url=share_url,
+        guide_last_generated_at=guide_last_generated_at,
     )
 
 

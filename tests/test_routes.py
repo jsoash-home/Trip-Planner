@@ -4847,3 +4847,20 @@ def test_guide_share_works_for_different_user(app, owner, trip, patch_guides_dir
         resp = client.get(f"/guides/share/{token}")
     assert resp.status_code == 200
     assert b"<p>Token bypass</p>" in resp.data
+
+
+# ─── trip_overview guide context (Task 10) ────────────────────────────
+
+
+def test_trip_overview_no_guide_passes_guide_exists_false(app, owner, trip, patch_guides_dir_routes):
+    """Owner visits /trips/<id> when no guide file exists.
+
+    guide_exists is False so TRIP GUIDE text must not appear in the page.
+    The guides dir is monkeypatched to a fresh tmp dir so no real file can
+    satisfy guide_exists().
+    """
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.get(f"/trips/{trip.id}")
+    assert resp.status_code == 200
+    assert b"TRIP GUIDE" not in resp.data
