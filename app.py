@@ -2099,8 +2099,12 @@ def booking_edit(trip_id, booking_id):
         ).all()
         linked_count = len(linked_items)
         existing_kinds = {it.auto_kind for it in linked_items if it.auto_kind}
+        existing_lodging_days = {
+            it.day_date for it in linked_items if it.auto_kind == "lodging"
+        }
         new_items = missing_auto_kinds_for_booking(
             booking, existing_kinds, trip.start_date, trip.end_date,
+            existing_lodging_days=existing_lodging_days,
         )
         new_count = len(new_items)
 
@@ -2225,12 +2229,17 @@ def _drift_counts_for_trips(trips: List["Trip"]) -> Dict[int, Tuple[int, int]]:
 
     items_by_trip: Dict[int, list] = {}
     existing_kinds_by_booking: Dict[int, set] = {}
+    existing_lodging_days_by_booking: Dict[int, set] = {}
     for it in items:
         items_by_trip.setdefault(it.trip_id, []).append(it)
         if it.linked_booking_id and it.auto_kind:
             existing_kinds_by_booking.setdefault(
                 it.linked_booking_id, set()
             ).add(it.auto_kind)
+            if it.auto_kind == "lodging":
+                existing_lodging_days_by_booking.setdefault(
+                    it.linked_booking_id, set()
+                ).add(it.day_date)
 
     out: Dict[int, Tuple[int, int]] = {}
     for t in active:
@@ -2252,8 +2261,10 @@ def _drift_counts_for_trips(trips: List["Trip"]) -> Dict[int, Tuple[int, int]]:
         new_count = 0
         for b in bookings_by_trip.get(t.id, []):
             existing = existing_kinds_by_booking.get(b.id, set())
+            lodging_days = existing_lodging_days_by_booking.get(b.id, set())
             new_count += len(missing_auto_kinds_for_booking(
                 b, existing, t.start_date, t.end_date,
+                existing_lodging_days=lodging_days,
             ))
 
         if drift > 0 or new_count > 0:
@@ -2275,15 +2286,22 @@ def _annotate_new_items_for_trip(trip) -> List["NewItemSuggestion"]:
         ItineraryItem.linked_booking_id.in_(booking_ids)
     ).all()
     existing_by_booking: dict = {}
+    existing_lodging_days_by_booking: dict = {}
     for it in items:
         if it.auto_kind:
             existing_by_booking.setdefault(it.linked_booking_id, set()).add(it.auto_kind)
+            if it.auto_kind == "lodging":
+                existing_lodging_days_by_booking.setdefault(
+                    it.linked_booking_id, set()
+                ).add(it.day_date)
 
     out: List[NewItemSuggestion] = []
     for b in bookings:
         existing = existing_by_booking.get(b.id, set())
+        lodging_days = existing_lodging_days_by_booking.get(b.id, set())
         for w in missing_auto_kinds_for_booking(
             b, existing, trip.start_date, trip.end_date,
+            existing_lodging_days=lodging_days,
         ):
             out.append(NewItemSuggestion(
                 booking=b, auto_kind=w["auto_kind"], item_data=w,

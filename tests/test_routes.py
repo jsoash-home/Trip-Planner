@@ -894,10 +894,10 @@ def test_bulk_add_creates_all_missing_items(app, trip, owner):
         resp = client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
     assert resp.status_code == 302
 
-    # 4 items total: depart + arrive (flight), check_in + check_out (hotel)
+    # 5 items: depart + arrive (flight), check_in + lodging (6/2) + check_out (hotel).
     all_items = ItineraryItem.query.filter_by(trip_id=trip.id).all()
     kinds = sorted(it.auto_kind for it in all_items)
-    assert kinds == ["arrive", "check_in", "check_out", "depart"]
+    assert kinds == ["arrive", "check_in", "check_out", "depart", "lodging"]
     assert all(it.auto_fields_touched == "" for it in all_items)
 
 

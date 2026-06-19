@@ -8,7 +8,7 @@ formatter. No DB, no Flask imports.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, time as _time
+from datetime import date as _date, datetime, time as _time, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from src.map_helpers import should_clear_geocode
@@ -254,10 +254,12 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
     Mapping:
       flight     → "Depart <vendor>" on dep day, "Arrive <vendor>" on arr day  (transit)
       hotel      → "Check in: <vendor>" / "Check out: <vendor>"                (other)
+                   + "Staying at <vendor>" on each day between check-in and
+                     check-out (auto_kind="lodging", multi-instance)
       car        → "Pick up car: <vendor>" / "Return car: <vendor>"            (transit)
       restaurant → booking.title at the booked time                            (meal)
       activity   → booking.title at the booked time                            (sightseeing)
-      transport  → none
+      transport  → booking.title at the booked time                            (transit)
       other      → none
 
     Items with a missing required datetime are skipped (a flight with no
@@ -311,6 +313,24 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "notes": None,
                 "auto_kind": "check_in",
             })
+        # Middle-day lodging chips: one timeless "Staying at <label>" per day
+        # strictly between check-in and check-out. Skipped when either date is
+        # missing or when the stay is same-day / 1-night (no middle day).
+        if start_dt is not None and end_dt is not None:
+            day = start_dt.date() + timedelta(days=1)
+            last_middle = end_dt.date() - timedelta(days=1)
+            while day <= last_middle:
+                out.append({
+                    "title": _auto_title("Staying at", label, sep=" "),
+                    "category": "other",
+                    "day_date": day,
+                    "start_time": None,
+                    "end_time": None,
+                    "location": None,
+                    "notes": None,
+                    "auto_kind": "lodging",
+                })
+                day += timedelta(days=1)
         if end_dt is not None:
             out.append({
                 "title": _auto_title("Check out:", label, sep=" "),
@@ -381,7 +401,23 @@ def auto_itinerary_items_for_booking(booking) -> List[Dict[str, Any]]:
                 "auto_kind": "single",
             })
 
-    # transport / other: no auto-link. (Falls through to the empty list.)
+    elif type_ == "transport":
+        if start_dt is not None:
+            same_day_end_time = (
+                end_dt.time() if end_dt and end_dt.date() == start_dt.date() else None
+            )
+            out.append({
+                "title": title or label or "Transport",
+                "category": "transit",
+                "day_date": start_dt.date(),
+                "start_time": start_dt.time(),
+                "end_time": same_day_end_time,
+                "location": location,
+                "notes": None,
+                "auto_kind": "single",
+            })
+
+    # other: no auto-link. (Falls through to the empty list.)
 
     return out
 
@@ -495,8 +531,19 @@ def detect_drift(item, booking) -> Optional[DriftReport]:
     if not matches:
         return DriftReport(fields=[], is_orphaned=True)
 
+    # Multi-instance auto_kinds (lodging) generate one would-be per day, so
+    # we narrow by day_date. For single-instance kinds the day_date is
+    # deterministic, so falling back to matches[0] is safe.
+    if len(matches) > 1:
+        item_day = getattr(item, "day_date", None)
+        day_matches = [w for w in matches if w.get("day_date") == item_day]
+        if not day_matches:
+            return DriftReport(fields=[], is_orphaned=True)
+        would_be = day_matches[0]
+    else:
+        would_be = matches[0]
+
     touched = parse_touched(getattr(item, "auto_fields_touched", ""))
-    would_be = matches[0]
     drifts: List[FieldDrift] = []
     for f in DRIFT_FIELDS:
         if f in touched:
@@ -526,21 +573,33 @@ def missing_auto_kinds_for_booking(
     existing_kinds: Iterable[str],
     trip_start_date,
     trip_end_date,
+    existing_lodging_days: Iterable[_date] = (),
 ) -> List[Dict[str, Any]]:
     """
     Return the list of would-be itinerary item dicts (from
-    auto_itinerary_items_for_booking) whose auto_kind is NOT in
-    `existing_kinds` AND whose day_date falls within
-    [trip_start_date, trip_end_date].
+    auto_itinerary_items_for_booking) that don't have a linked item yet
+    AND whose day_date falls within [trip_start_date, trip_end_date].
 
-    Pure: no DB, no Flask. Caller pre-fetches `existing_kinds`.
+    Single-instance auto_kinds (depart, check_in, single, …) are deduped
+    by kind alone — if the kind is in `existing_kinds`, the would-be is
+    skipped.
+
+    Multi-instance auto_kinds (lodging) are deduped by day — pass the
+    set of dates already covered as `existing_lodging_days`. The
+    "lodging" string in `existing_kinds` is ignored for lodging dedup.
+
+    Pure: no DB, no Flask. Caller pre-fetches both args.
     """
     existing = set(existing_kinds)
+    lodging_days = set(existing_lodging_days)
     out: List[Dict[str, Any]] = []
     for w in auto_itinerary_items_for_booking(booking):
         kind = w.get("auto_kind")
         day = w.get("day_date")
-        if kind in existing:
+        if kind == "lodging":
+            if day in lodging_days:
+                continue
+        elif kind in existing:
             continue
         if day is None or day < trip_start_date or day > trip_end_date:
             continue

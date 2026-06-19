@@ -367,7 +367,8 @@ def test_auto_itinerary_flight_no_label_just_uses_prefix():
     assert items[0]["title"] == "Depart"
 
 
-def test_auto_itinerary_hotel_check_in_and_out():
+def test_auto_itinerary_hotel_check_in_lodging_check_out():
+    """4-night stay: check-in, 3 lodging chips for the middle days, check-out."""
     b = FakeBooking(
         type="hotel", title="Marriott Florence", vendor="Marriott",
         start_datetime=datetime(2026, 6, 1, 15, 0),
@@ -375,12 +376,75 @@ def test_auto_itinerary_hotel_check_in_and_out():
         location="Piazza Repubblica, Florence",
     )
     items = auto_itinerary_items_for_booking(b)
-    assert len(items) == 2
+    kinds = [i["auto_kind"] for i in items]
+    assert kinds == ["check_in", "lodging", "lodging", "lodging", "check_out"]
     assert items[0]["title"] == "Check in: Marriott"
     assert items[0]["category"] == "other"
     assert items[0]["location"] == "Piazza Repubblica, Florence"
-    assert items[1]["title"] == "Check out: Marriott"
-    assert items[1]["location"] is None  # checkout location only on checkin item
+    assert items[-1]["title"] == "Check out: Marriott"
+    assert items[-1]["location"] is None  # checkout location only on checkin item
+    middle = items[1:4]
+    assert [m["day_date"] for m in middle] == [
+        date(2026, 6, 2), date(2026, 6, 3), date(2026, 6, 4),
+    ]
+    assert all(m["title"] == "Staying at Marriott" for m in middle)
+    assert all(m["category"] == "other" for m in middle)
+    assert all(m["start_time"] is None and m["end_time"] is None for m in middle)
+    assert all(m["location"] is None for m in middle)
+
+
+def test_auto_itinerary_hotel_1_night_no_lodging_chips():
+    """1-night stay: check_in on day 1, check_out on day 2, no middle days."""
+    b = FakeBooking(
+        type="hotel", title="The Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=datetime(2026, 6, 2, 11, 0),
+    )
+    items = auto_itinerary_items_for_booking(b)
+    assert [i["auto_kind"] for i in items] == ["check_in", "check_out"]
+
+
+def test_auto_itinerary_hotel_same_day_no_lodging_chips():
+    """Same-day hotel (e.g. day-use): no middle days."""
+    b = FakeBooking(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 9, 0),
+        end_datetime=datetime(2026, 6, 1, 17, 0),
+    )
+    items = auto_itinerary_items_for_booking(b)
+    assert [i["auto_kind"] for i in items] == ["check_in", "check_out"]
+
+
+def test_auto_itinerary_hotel_lodging_falls_back_to_title_when_no_vendor():
+    b = FakeBooking(
+        type="hotel", title="Beach cabin", vendor=None,
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=datetime(2026, 6, 3, 11, 0),  # 2 nights → 1 middle day
+    )
+    items = auto_itinerary_items_for_booking(b)
+    middle = [i for i in items if i["auto_kind"] == "lodging"]
+    assert len(middle) == 1
+    assert middle[0]["title"] == "Staying at Beach cabin"
+
+
+def test_auto_itinerary_hotel_missing_end_no_lodging():
+    b = FakeBooking(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=None,
+    )
+    items = auto_itinerary_items_for_booking(b)
+    assert [i["auto_kind"] for i in items] == ["check_in"]
+
+
+def test_auto_itinerary_hotel_missing_start_no_lodging():
+    b = FakeBooking(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=None,
+        end_datetime=datetime(2026, 6, 4, 11, 0),
+    )
+    items = auto_itinerary_items_for_booking(b)
+    assert [i["auto_kind"] for i in items] == ["check_out"]
 
 
 def test_auto_itinerary_car_pickup_and_return():
@@ -427,12 +491,37 @@ def test_auto_itinerary_activity_creates_sightseeing_item():
     assert items[0]["category"] == "sightseeing"
 
 
-def test_auto_itinerary_transport_makes_zero_items():
+def test_auto_itinerary_transport_one_transit_item():
     b = FakeBooking(
-        type="transport", title="Train",
+        type="transport", title="Bergen → Flåm scenic train", vendor="",
         start_datetime=datetime(2026, 6, 2, 9, 30),
+        end_datetime=datetime(2026, 6, 2, 11, 45),
+        location="Bergen Station",
     )
+    items = auto_itinerary_items_for_booking(b)
+    assert len(items) == 1
+    assert items[0]["title"] == "Bergen → Flåm scenic train"
+    assert items[0]["category"] == "transit"
+    assert items[0]["start_time"].strftime("%H:%M") == "09:30"
+    assert items[0]["end_time"].strftime("%H:%M") == "11:45"
+    assert items[0]["location"] == "Bergen Station"
+
+
+def test_auto_itinerary_transport_no_start_skipped():
+    b = FakeBooking(type="transport", title="Bergen → Flåm scenic train")
     assert auto_itinerary_items_for_booking(b) == []
+
+
+def test_auto_itinerary_transport_drops_end_time_on_different_day():
+    # Overnight train — don't pretend it's a 12-hour single-day item.
+    b = FakeBooking(
+        type="transport", title="Night train",
+        start_datetime=datetime(2026, 6, 2, 22, 0),
+        end_datetime=datetime(2026, 6, 3, 7, 30),
+    )
+    items = auto_itinerary_items_for_booking(b)
+    assert items[0]["end_time"] is None
+    assert items[0]["day_date"] == date(2026, 6, 2)
 
 
 def test_auto_itinerary_other_makes_zero_items():
@@ -470,7 +559,7 @@ def test_auto_kind_set_for_hotel():
                     start_datetime=datetime(2026, 6, 1, 15, 0),
                     end_datetime=datetime(2026, 6, 3, 11, 0))
     items = auto_itinerary_items_for_booking(b)
-    assert [it["auto_kind"] for it in items] == ["check_in", "check_out"]
+    assert [it["auto_kind"] for it in items] == ["check_in", "lodging", "check_out"]
 
 
 def test_auto_kind_set_for_car():
@@ -495,11 +584,12 @@ def test_auto_kind_set_for_activity():
     assert items[0]["auto_kind"] == "single"
 
 
-def test_auto_kind_transport_returns_no_items():
+def test_auto_kind_set_for_transport():
     b = FakeBooking(type="transport", title="Train",
                     start_datetime=datetime(2026, 6, 1, 10, 0),
                     end_datetime=datetime(2026, 6, 1, 12, 0))
-    assert auto_itinerary_items_for_booking(b) == []
+    items = auto_itinerary_items_for_booking(b)
+    assert items[0]["auto_kind"] == "single"
 
 
 # ─────────────────────────────  parse_touched and serialize_touched  ────────
@@ -619,8 +709,8 @@ def test_missing_auto_kinds_excludes_items_outside_trip_range():
 
 
 def test_missing_auto_kinds_empty_for_non_spawning_booking_types():
-    """Transport and 'other' bookings generate no auto-slots."""
-    b = SimpleNamespace(type="transport", title="Subway", vendor=None,
+    """'other' bookings generate no auto-slots."""
+    b = SimpleNamespace(type="other", title="Insurance", vendor=None,
                         start_datetime=datetime(2026, 6, 1, 10, 0),
                         end_datetime=None, location=None)
     result = missing_auto_kinds_for_booking(
@@ -628,6 +718,42 @@ def test_missing_auto_kinds_empty_for_non_spawning_booking_types():
         trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
     )
     assert result == []
+
+
+def test_missing_auto_kinds_lodging_dedups_by_day():
+    """Lodging is multi-instance — `existing_lodging_days` says which middle
+    days are already linked, so the helper can surface only the remaining ones."""
+    b = SimpleNamespace(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=datetime(2026, 6, 5, 11, 0),  # 4 nights → 3 lodging days
+        location=None,
+    )
+    result = missing_auto_kinds_for_booking(
+        b,
+        existing_kinds={"check_in", "check_out", "lodging"},
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+        existing_lodging_days={date(2026, 6, 2)},
+    )
+    days_missing = [w["day_date"] for w in result if w["auto_kind"] == "lodging"]
+    assert days_missing == [date(2026, 6, 3), date(2026, 6, 4)]
+
+
+def test_missing_auto_kinds_lodging_surfaces_all_days_when_none_linked():
+    """No lodging chips yet → all middle days surface."""
+    b = SimpleNamespace(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=datetime(2026, 6, 4, 11, 0),  # 3 nights → 2 lodging days
+        location=None,
+    )
+    result = missing_auto_kinds_for_booking(
+        b,
+        existing_kinds={"check_in", "check_out"},
+        trip_start_date=date(2026, 6, 1), trip_end_date=date(2026, 6, 10),
+    )
+    lodging_days = [w["day_date"] for w in result if w["auto_kind"] == "lodging"]
+    assert lodging_days == [date(2026, 6, 2), date(2026, 6, 3)]
 
 
 def test_new_item_suggestion_carries_booking_kind_and_data():

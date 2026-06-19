@@ -55,11 +55,12 @@ back to the booking via `linked_booking_id`:
 | Booking type | Auto-created itinerary items | Category |
 |---|---|---|
 | flight | "Depart {vendor}" on dep day, "Arrive {vendor}" on arr day | transit |
-| hotel | "Check in: {vendor}" on start day, "Check out: {vendor}" on end day | other |
+| hotel | "Check in: {vendor}" on start day, "Staying at {vendor}" on each middle day, "Check out: {vendor}" on end day | other |
 | car | "Pick up car: {vendor}" on start day, "Return car: {vendor}" on end day | transit |
 | restaurant | booking title on the booked day at booked time | meal |
 | activity | booking title on the booked day at booked time | sightseeing |
-| transport / other | none | — |
+| transport | booking title on the booked day at booked time | transit |
+| other | none | — |
 
 Required-field rule: an item is only auto-created when its source
 datetime exists. A flight with no `start_datetime` emits no Depart

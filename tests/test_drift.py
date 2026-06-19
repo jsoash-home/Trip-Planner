@@ -134,3 +134,70 @@ def test_touched_set_without_actual_drift_returns_none():
     item = _item(auto_fields_touched=serialize_touched({"title"}))
     # All fields match the booking → no drift even though title is touched.
     assert detect_drift(item, _flight()) is None
+
+
+# ─── Multi-instance auto_kind (lodging) ──────────────────────────────
+
+
+def _hotel_3_nights():
+    """4-night stay → lodging chips on 6/2, 6/3, 6/4."""
+    return SimpleNamespace(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=datetime(2026, 6, 5, 11, 0),
+        location=None,
+    )
+
+
+def _lodging_item(**overrides):
+    base = dict(
+        linked_booking_id=1,
+        auto_kind="lodging",
+        customized_by_user=False,
+        auto_fields_touched="",
+        title="Staying at Plaza",
+        category="other",
+        day_date=date(2026, 6, 3),
+        start_time=None,
+        end_time=None,
+        location=None,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_lodging_in_sync_returns_none():
+    """Stored lodging chip matches the would-be on the same day → no drift."""
+    assert detect_drift(_lodging_item(), _hotel_3_nights()) is None
+
+
+def test_lodging_drift_matches_on_day_date_not_first_kind():
+    """If the stored chip is on 6/3 and 6/3's would-be matches, no drift —
+    even though there are two other lodging would-bes (6/2, 6/4)."""
+    # Title is right for 6/3; would NOT match if we naively compared to the
+    # first lodging would-be (6/2) — but day_date would still match by value,
+    # so this test mainly guards the matching logic by being explicit.
+    assert detect_drift(_lodging_item(day_date=date(2026, 6, 3)), _hotel_3_nights()) is None
+
+
+def test_lodging_orphaned_when_day_outside_new_range():
+    """User shortened the stay; this lodging chip's day is no longer covered."""
+    short_stay = SimpleNamespace(
+        type="hotel", title="Plaza", vendor="Plaza",
+        start_datetime=datetime(2026, 6, 1, 15, 0),
+        end_datetime=datetime(2026, 6, 2, 11, 0),  # 1 night → no middle days
+        location=None,
+    )
+    drift = detect_drift(_lodging_item(day_date=date(2026, 6, 3)), short_stay)
+    assert drift is not None
+    assert drift.is_orphaned
+
+
+def test_lodging_title_drift_flagged():
+    """Stored lodging title says 'Staying at Marriott' but booking now says
+    'Plaza' → drift on title for the matching day."""
+    item = _lodging_item(title="Staying at Marriott", day_date=date(2026, 6, 3))
+    report = detect_drift(item, _hotel_3_nights())
+    assert report is not None
+    fields = {f.field_name for f in report.fields}
+    assert "title" in fields
