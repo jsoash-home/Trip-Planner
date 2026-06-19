@@ -2182,3 +2182,54 @@ body.vp-public main { padding-top: 2rem; }
 .vp-destclock [data-clock-offset]:empty {
   display: none;
 }
+
+/* ── Trip-guide hero card ──────────────────────────────────────
+   Lives inside a .vp-card (which already supplies background,
+   border, border-radius, and box-shadow). The left accent border
+   and internal spacing are all this block adds. */
+.guide-hero {
+  border-left: 4px solid var(--vp-accent);
+  padding: 1.25rem 1.5rem;
+}
+.guide-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.guide-hero__share {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+.guide-hero__share code {
+  background: var(--vp-surface-2);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+}
+.guide-hero__meta {
+  font-size: 0.75rem;
+  color: var(--vp-text-muted);
+  margin: 0.75rem 0 0;
+}
+
+/* Eyebrow label — small mono uppercase used on the guide hero and
+   possibly other cards later. */
+.eyebrow {
+  font-family: ui-monospace, 'Space Mono', SFMono-Regular, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vp-text-muted);
+  margin: 0 0 0.75rem;
+}
+
+/* Monospace utility class (e.g. for share-URL <code> spans). */
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media print {
+  .guide-hero { display: none; }
+}

@@ -1,7 +1,6 @@
 {% if guide_exists %}
-<section class="vp-card guide-hero">
+<section class="vp-card guide-hero" aria-label="Trip guide">
   <p class="eyebrow">TRIP GUIDE</p>
-  <h2 class="guide-hero__title">{{ trip.name }}</h2>
   <div class="guide-hero__actions">
     <a class="btn btn-primary" href="{{ url_for('trip_guide', trip_id=trip.id) }}">Open guide</a>
     {% if share_url %}
