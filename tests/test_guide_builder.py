@@ -15,6 +15,7 @@ from src.guide_builder import (
     GuideMissing,
     GuideConfig,
     TripNotFound,
+    clear_share_token,
     guide_exists,
     guide_path,
     load_or_init_config,
@@ -22,6 +23,8 @@ from src.guide_builder import (
     read_guide,
     save_config,
     save_guide,
+    set_share_token,
+    trip_by_share_token,
 )
 
 
@@ -432,3 +435,78 @@ def test_save_guide_unknown_storage_raises_value_error(patch_guides_dir, monkeyp
     monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "whatever")
     with pytest.raises(ValueError, match="unknown GUIDE_STORAGE"):
         save_guide(31, "<html/>")
+
+
+# ─── share-token helpers ────────────────────────────────────────────────────
+
+
+def test_set_share_token_generates_36_char_token(app, trip):
+    """set_share_token returns a 36-character hyphenated UUID string."""
+    token = set_share_token(trip.id)
+    assert len(token) == 36
+
+
+def test_set_share_token_persists_to_trip(app, trip):
+    """Trip.guide_share_token equals the returned value after set_share_token."""
+    token = set_share_token(trip.id)
+    db.session.expire(trip)
+    assert trip.guide_share_token == token
+
+
+def test_set_share_token_idempotent_returns_existing(app, trip):
+    """Calling set_share_token twice returns the same token without rotating."""
+    token_first = set_share_token(trip.id)
+    token_second = set_share_token(trip.id)
+    assert token_first == token_second
+
+
+def test_set_share_token_unknown_trip_raises_trip_not_found(app):
+    """set_share_token raises TripNotFound for an unknown trip_id."""
+    with pytest.raises(TripNotFound):
+        set_share_token(99999)
+
+
+def test_clear_share_token_clears_field(app, trip):
+    """clear_share_token sets guide_share_token back to None."""
+    set_share_token(trip.id)
+    clear_share_token(trip.id)
+    db.session.expire(trip)
+    assert trip.guide_share_token is None
+
+
+def test_clear_share_token_idempotent_on_already_null(app, trip):
+    """clear_share_token on a trip with no token is a no-op (no error)."""
+    assert trip.guide_share_token is None
+    clear_share_token(trip.id)  # must not raise
+    db.session.expire(trip)
+    assert trip.guide_share_token is None
+
+
+def test_trip_by_share_token_finds_correct_trip(app, owner):
+    """Two trips with two tokens; lookup returns the right Trip by token."""
+    t1 = Trip(owner_id=owner.id, name="Trip A", destination="Paris",
+              start_date=date(2026, 8, 1), end_date=date(2026, 8, 5), status="planning")
+    t2 = Trip(owner_id=owner.id, name="Trip B", destination="Tokyo",
+              start_date=date(2026, 9, 1), end_date=date(2026, 9, 5), status="planning")
+    db.session.add_all([t1, t2])
+    db.session.commit()
+
+    token_a = set_share_token(t1.id)
+    set_share_token(t2.id)
+
+    found = trip_by_share_token(token_a)
+    assert found is not None
+    assert found.id == t1.id
+
+
+def test_trip_by_share_token_returns_none_for_unknown_token(app):
+    """trip_by_share_token returns None when no trip has that token."""
+    result = trip_by_share_token("00000000-0000-0000-0000-000000000000")
+    assert result is None
+
+
+def test_trip_by_share_token_case_sensitive(app, trip):
+    """Uppercase version of a valid token returns None (UUID tokens are lowercase)."""
+    token = set_share_token(trip.id)
+    upper_token = token.upper()
+    assert trip_by_share_token(upper_token) is None

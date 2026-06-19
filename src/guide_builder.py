@@ -278,3 +278,58 @@ def read_guide(trip_id: int) -> bytes:
         raise NotImplementedError("database backend pending hosted-deployment work")
     else:
         raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
+
+
+# ─── share-token helpers ─────────────────────────────────────────────────────
+
+
+def set_share_token(trip_id: int) -> str:
+    """
+    Generate str(uuid.uuid4()), write to Trip.guide_share_token, commit.
+    Idempotent: if Trip already has a token, return the existing one
+    without rotating.
+    Raises TripNotFound if no trip row.
+
+    Token format: hyphenated UUID string, e.g. '9f3c7b1e-4d2a-...' (36 chars).
+    """
+    # Deferred import — top-level would cause a circular import via models → app → src/guide_builder.
+    from models import db, Trip
+
+    trip = Trip.query.get(trip_id)
+    if trip is None:
+        raise TripNotFound(f"Trip {trip_id} not found")
+
+    if trip.guide_share_token:
+        return trip.guide_share_token
+
+    token = str(uuid.uuid4())
+    trip.guide_share_token = token
+    db.session.commit()
+    return token
+
+
+def clear_share_token(trip_id: int) -> None:
+    """
+    Set Trip.guide_share_token = None, commit. Idempotent.
+    Raises TripNotFound if no trip row.
+    """
+    # Deferred import — top-level would cause a circular import via models → app → src/guide_builder.
+    from models import db, Trip
+
+    trip = Trip.query.get(trip_id)
+    if trip is None:
+        raise TripNotFound(f"Trip {trip_id} not found")
+
+    trip.guide_share_token = None
+    db.session.commit()
+
+
+def trip_by_share_token(token: str) -> Optional["Trip"]:
+    """
+    Return the Trip ORM object whose guide_share_token matches, or None.
+    Case-sensitive (uuid str is lowercase).
+    """
+    # Deferred import — top-level would cause a circular import via models → app → src/guide_builder.
+    from models import Trip
+
+    return Trip.query.filter_by(guide_share_token=token).first()
