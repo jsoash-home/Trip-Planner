@@ -103,6 +103,7 @@
                                       trip_id=trip.id,
                                       booking_id=s.booking.id,
                                       auto_kind=s.auto_kind) }}">
+              <input type="hidden" name="day_date" value="{{ s.item_data.day_date.isoformat() }}">
               <button class="btn btn-sm btn-outline-secondary" type="submit">Add</button>
             </form>
           {% endif %}

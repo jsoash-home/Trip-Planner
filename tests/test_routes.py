@@ -856,6 +856,78 @@ def test_add_suggested_is_idempotent(app, trip, owner):
     assert len(arrive_items) == 1
 
 
+def test_add_suggested_lodging_uses_posted_day(app, trip, owner):
+    """Clicking Add on a specific middle day must create the chip for THAT day,
+    not the first middle day. Regression: previously the route matched on
+    auto_kind alone and always picked the earliest lodging would-be."""
+    # 4-night hotel stay (8/17 → 8/21) — middle days are 8/18, 8/19, 8/20.
+    b = Booking(trip_id=trip.id, type="hotel", title="Svalbard", vendor="Svalbard",
+                start_datetime=datetime(2026, 8, 17, 15, 0),
+                end_datetime=datetime(2026, 8, 21, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        resp = client.post(
+            f"/trips/{trip.id}/itinerary/add-suggested/{b.id}/lodging",
+            data={"day_date": "2026-08-19"},
+        )
+    assert resp.status_code == 302
+    lodging = ItineraryItem.query.filter_by(
+        linked_booking_id=b.id, auto_kind="lodging"
+    ).all()
+    assert len(lodging) == 1
+    assert lodging[0].day_date == date(2026, 8, 19)
+
+
+def test_add_suggested_lodging_dedups_by_day(app, trip, owner):
+    """When 8/18 lodging already exists, clicking Add on 8/19 creates 8/19
+    (not a duplicate 8/18) and the 8/18 chip is left alone."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Svalbard", vendor="Svalbard",
+                start_datetime=datetime(2026, 8, 17, 15, 0),
+                end_datetime=datetime(2026, 8, 21, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, linked_booking_id=b.id, auto_kind="lodging",
+        day_date=date(2026, 8, 18), title="Staying at Svalbard", category="other",
+    ))
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(
+            f"/trips/{trip.id}/itinerary/add-suggested/{b.id}/lodging",
+            data={"day_date": "2026-08-19"},
+        )
+    days = sorted(
+        it.day_date for it in ItineraryItem.query.filter_by(
+            linked_booking_id=b.id, auto_kind="lodging"
+        ).all()
+    )
+    assert days == [date(2026, 8, 18), date(2026, 8, 19)]
+
+
+def test_bulk_add_is_idempotent_for_lodging(app, trip, owner):
+    """Re-running bulk-add for a hotel with lodging chips must not duplicate them."""
+    b = Booking(trip_id=trip.id, type="hotel", title="Svalbard", vendor="Svalbard",
+                start_datetime=datetime(2026, 8, 17, 15, 0),
+                end_datetime=datetime(2026, 8, 21, 11, 0))
+    db.session.add(b)
+    db.session.commit()
+
+    with flask_app.test_client() as client:
+        _login(client, owner)
+        client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
+        client.post(f"/trips/{trip.id}/itinerary/add-all-suggested")
+    lodging = ItineraryItem.query.filter_by(
+        linked_booking_id=b.id, auto_kind="lodging"
+    ).all()
+    days = sorted(it.day_date for it in lodging)
+    assert days == [date(2026, 8, 18), date(2026, 8, 19), date(2026, 8, 20)]
+
+
 def test_bulk_add_confirm_lists_all_missing_items(app, trip, owner):
     """GET /add-all-suggested renders the confirmation page with each missing item."""
     b1 = Booking(trip_id=trip.id, type="flight", title="UA101", vendor="United",

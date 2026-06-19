@@ -3076,15 +3076,36 @@ def itinerary_add_suggested(trip_id, booking_id, auto_kind):
         flash("That booking doesn't exist.", "warning")
         return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
 
-    existing_kinds = {
-        it.auto_kind for it in ItineraryItem.query.filter_by(
-            linked_booking_id=booking.id
-        ).all() if it.auto_kind
+    linked_items = ItineraryItem.query.filter_by(
+        linked_booking_id=booking.id
+    ).all()
+    existing_kinds = {it.auto_kind for it in linked_items if it.auto_kind}
+    existing_lodging_days = {
+        it.day_date for it in linked_items if it.auto_kind == "lodging"
     }
     missing = missing_auto_kinds_for_booking(
         booking, existing_kinds, trip.start_date, trip.end_date,
+        existing_lodging_days=existing_lodging_days,
     )
-    match = next((w for w in missing if w["auto_kind"] == auto_kind), None)
+
+    # Multi-instance auto_kinds (lodging) send the day in the form body so
+    # we know which would-be the user clicked.
+    target_day = None
+    day_str = (request.form.get("day_date") or "").strip()
+    if day_str:
+        try:
+            target_day = datetime.strptime(day_str, "%Y-%m-%d").date()
+        except ValueError:
+            target_day = None
+
+    if target_day is not None:
+        match = next(
+            (w for w in missing
+             if w["auto_kind"] == auto_kind and w["day_date"] == target_day),
+            None,
+        )
+    else:
+        match = next((w for w in missing if w["auto_kind"] == auto_kind), None)
     if match is None:
         flash("That item already exists or is no longer suggested.", "info")
         return redirect(url_for("itinerary_drift_review", trip_id=trip.id))
@@ -3146,15 +3167,22 @@ def itinerary_add_all_suggested(trip_id):
         ItineraryItem.linked_booking_id.in_(booking_ids)
     ).all()
     existing_by_booking: dict = {}
+    existing_lodging_days_by_booking: dict = {}
     for it in items:
         if it.auto_kind:
             existing_by_booking.setdefault(it.linked_booking_id, set()).add(it.auto_kind)
+            if it.auto_kind == "lodging":
+                existing_lodging_days_by_booking.setdefault(
+                    it.linked_booking_id, set()
+                ).add(it.day_date)
 
     added = 0
     for b in bookings:
         existing = existing_by_booking.get(b.id, set())
+        lodging_days = existing_lodging_days_by_booking.get(b.id, set())
         for w in missing_auto_kinds_for_booking(
             b, existing, trip.start_date, trip.end_date,
+            existing_lodging_days=lodging_days,
         ):
             w["order_within_day"] = _next_order_within_day(trip.id, w["day_date"])
             db.session.add(ItineraryItem(
