@@ -77,6 +77,12 @@ class Trip(db.Model):
     yearbook_public_show_notes = db.Column(db.Boolean, nullable=False, default=False)
     yearbook_public_show_spend = db.Column(db.Boolean, nullable=False, default=True)
 
+    # ── Trip Guide public-share (Phase 3) ──────────────────────────────
+    # Opaque token that grants read access to /guide/<token>. NULL means
+    # the guide is private. Generated/rotated/revoked from the share UI
+    # on the authenticated guide page.
+    guide_share_token = db.Column(db.String(36), unique=True, nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
