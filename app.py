@@ -1997,7 +1997,11 @@ def bookings_list(trip_id):
     requested_type = (request.args.get("type") or "").strip().lower()
     active_type = requested_type if requested_type in BOOKING_TYPE_CODES else None
 
-    bookings_query = Booking.query.filter_by(trip_id=trip.id)
+    from sqlalchemy.orm import joinedload
+
+    bookings_query = Booking.query.filter_by(trip_id=trip.id).options(
+        joinedload(Booking.itinerary_items)
+    )
     if active_type:
         bookings_query = bookings_query.filter_by(type=active_type)
     bookings = bookings_query.all()
