@@ -982,11 +982,11 @@
 /* Per-booking-type background tint — subtle, so it reads as
    "from this booking family" without competing with the parent
    itin-chip's category color. */
-.itin-chip-booking-link.is-flight     { background: rgba(34, 197, 94, 0.10); }
-.itin-chip-booking-link.is-hotel      { background: rgba(59, 130, 246, 0.10); }
-.itin-chip-booking-link.is-car        { background: rgba(234, 179, 8, 0.10); }
-.itin-chip-booking-link.is-restaurant { background: rgba(244, 114, 182, 0.10); }
-.itin-chip-booking-link.is-activity   { background: rgba(168, 85, 247, 0.10); }
+.itin-chip-booking-link.is-flight     { background: var(--vp-booking-flight-tint); }
+.itin-chip-booking-link.is-hotel      { background: var(--vp-booking-hotel-tint); }
+.itin-chip-booking-link.is-car        { background: var(--vp-booking-car-tint); }
+.itin-chip-booking-link.is-restaurant { background: var(--vp-booking-restaurant-tint); }
+.itin-chip-booking-link.is-activity   { background: var(--vp-booking-activity-tint); }
 .itin-chip-booking-link.is-transport,
 .itin-chip-booking-link.is-other      { background: var(--vp-surface); }
 
