@@ -1,17 +1,40 @@
 {% if guide_exists %}
-<section class="vp-card guide-hero" aria-label="Trip guide">
-  <p class="eyebrow">TRIP GUIDE</p>
-  <div class="guide-hero__actions">
-    <a class="btn btn-primary" href="{{ url_for('trip_guide', trip_id=trip.id) }}">Open guide</a>
-    {% if share_url %}
-    <div class="guide-hero__share">
-      <button type="button" class="btn btn-link" data-share-url="{{ share_url }}" aria-label="Copy share link">Copy share link</button>
-      <code class="mono">{{ share_url }}</code>
+<section class="guide-tile" aria-label="Trip guide">
+  <div class="guide-tile__body">
+    <p class="guide-tile__eyebrow">TRIP GUIDE</p>
+    <h2 class="guide-tile__title">{{ trip.destination or trip.name }}</h2>
+    {% if guide_last_generated_at %}
+    <p class="guide-tile__meta">Updated {{ guide_last_generated_at }}</p>
+    {% endif %}
+    <div class="guide-tile__actions">
+      <a class="guide-tile__open" href="{{ url_for('trip_guide', trip_id=trip.id) }}">
+        Open guide <span aria-hidden="true">→</span>
+      </a>
+      {% if share_url %}
+      <button type="button"
+              class="guide-tile__share"
+              data-share-url="{{ share_url }}"
+              aria-label="Copy share link"
+              title="Copy share link">⋯</button>
+      {% endif %}
+    </div>
+  </div>
+  <div class="guide-tile__preview" aria-hidden="true">
+    {% if has_pins and mapbox_token %}
+    <div id="vp-guide-tile-map"
+         class="guide-tile__preview-map"
+         data-geojson-url="{{ url_for('trip_map_data', trip_id=trip.id) }}"></div>
+    {% else %}
+    <div class="guide-tile__preview-fallback">
+      <svg width="64" height="64" viewBox="0 0 80 80" aria-hidden="true">
+        <circle cx="40" cy="40" r="32" fill="none" stroke="currentColor" stroke-width="1" opacity="0.45"/>
+        <circle cx="40" cy="40" r="20" fill="none" stroke="currentColor" stroke-width="1" opacity="0.45"/>
+        <circle cx="40" cy="40" r="8"  fill="none" stroke="currentColor" stroke-width="1" opacity="0.45"/>
+        <line x1="40" y1="6"  x2="40" y2="74" stroke="currentColor" stroke-width="1" opacity="0.45"/>
+        <line x1="6"  y1="40" x2="74" y2="40" stroke="currentColor" stroke-width="1" opacity="0.45"/>
+      </svg>
     </div>
     {% endif %}
   </div>
-  {% if guide_last_generated_at %}
-  <p class="guide-hero__meta">Last updated · {{ guide_last_generated_at }}</p>
-  {% endif %}
 </section>
 {% endif %}

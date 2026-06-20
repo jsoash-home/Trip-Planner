@@ -95,6 +95,56 @@
     });
   };
 
+  // ───────────────────────────── guide-tile mini-map ────────────
+  //
+  // Renders a tiny non-interactive preview of the trip's pins inside
+  // the trip-guide tile on the trip overview page. Same data source
+  // as the standalone mini-map; smaller pins, tighter padding.
+
+  window.vpInitGuideTileMap = function () {
+    var el = document.getElementById("vp-guide-tile-map");
+    if (!el || typeof mapboxgl === "undefined") return;
+    var token = getMapboxToken();
+    if (!token) return;
+
+    mapboxgl.accessToken = token;
+
+    var map = new mapboxgl.Map({
+      container: el,
+      style: "mapbox://styles/mapbox/streets-v12",
+      center: [0, 20],
+      zoom: 1,
+      interactive: false,
+      attributionControl: false,
+    });
+
+    map.on("load", function () {
+      fetch(el.getAttribute("data-geojson-url"))
+        .then(function (r) { return r.json(); })
+        .then(function (geojson) {
+          if (!geojson.features.length) return;
+          map.addSource("vp-guide-tile-pins", { type: "geojson", data: geojson });
+          map.addLayer({
+            id: "vp-guide-tile-pins-layer",
+            type: "circle",
+            source: "vp-guide-tile-pins",
+            paint: {
+              "circle-radius": 4,
+              "circle-color": ["get", "color"],
+              "circle-stroke-width": 1,
+              "circle-stroke-color": "#ffffff",
+            },
+          });
+          var bounds = new mapboxgl.LngLatBounds();
+          geojson.features.forEach(function (f) {
+            bounds.extend(f.geometry.coordinates);
+          });
+          map.fitBounds(bounds, { padding: 12, maxZoom: 11, duration: 0 });
+        })
+        .catch(function (err) { console.error("Guide-tile map fetch:", err); });
+    });
+  };
+
   // ───────────────────────────── lifetime map ───────────────────────
 
   window.vpInitLifetimeMap = function () {
