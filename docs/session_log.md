@@ -1,6 +1,6 @@
 # Session Log
 
-## 2026-06-20 — Closed out 2026-06-18 follow-ups: bookings_list N+1 + booking-chip CSS vars
+## 2026-06-20 — Closed out 2026-06-18 follow-ups + cleared all carried-over loose ends
 
 **Shipped:**
 - `perf(routes): eager-load itinerary_items in bookings_list` (64b9b83) — joinedload
@@ -11,35 +11,60 @@
   base.html :root; .itin-chip-booking-link.is-{type} rules in app.css now reference
   them. RGBA values byte-identical to the previous literals; no visual change.
   Verified by curling rendered HTML + served CSS.
+- `docs(skill): trip-guide — section additions, DATABASE_URL fix, polish + a11y
+  patterns` (fdfae70) — committed the carried-over 246-line SKILL.md edit. Adds
+  `before_you_go` section, themed bonuses + `life_list`, day-meta badges, voice
+  distinction between field_guide and things_to_do, hero polish, accessibility
+  patterns, HTML/CSS pitfalls. Also fixes the DATABASE_URL gotcha (helper
+  invocation now `os.environ.pop("DATABASE_URL", None)` so the relative path
+  doesn't resolve to instance/vacation.db).
+- Catch-up session_log entry written for the 2026-06-19 trip-guide shipment
+  (added below this entry).
+- Cleanup: deleted stray `instance/vacation.db` (0 rows; empty Flask-default-path
+  file created by the now-fixed DATABASE_URL bug) and removed the empty `instance/`
+  directory.
 
 **Test status:** 854 passing / 0 failing (no change across the session).
 
-**Stopped at:** Both 2026-06-18 loose ends closed. Pushed to origin/main.
+**Stopped at:** Working tree clean, origin/main in sync. All three carried-over
+loose ends closed.
 
-**Pick up next with:** Finish the in-progress edit to `.claude/skills/trip-guide/SKILL.md`
-(246 uncommitted lines, untouched this session). Then write a catch-up session log
-entry for the trip-guide feature (commits bfedcf6..5e13c3f shipped without one).
+**Pick up next with:** Open. Possible next moves include the SQLAlchemy 2.0
+LegacyAPIWarning sweep (deferred since 2026-06-15, ~395 warnings on `.query.get(id)`
+→ `db.session.get(Model, id)`) or a new feature.
 
 **Kickoff prompt for next session:**
 
-> Vacation Planner — finish the in-progress edit to `.claude/skills/trip-guide/SKILL.md`
-> (246 uncommitted lines, no other working-tree changes). Tests green at 854. Both
-> 2026-06-18 follow-ups closed this morning (commits 64b9b83 + 06b4168 on origin/main).
-> After committing the SKILL.md edit, write a catch-up session_log entry for the
-> trip-guide feature itself (commits bfedcf6..5e13c3f) — that whole shipment never
-> got logged. Also worth investigating: `instance/vacation.db` (160 KB, dated
-> 2026-06-19) — a stray Flask-default-path SQLite from some ad-hoc run. Gitignored,
-> not the production DB, but decide keep/delete.
+> Vacation Planner — clean slate. Tests green at 854. Working tree clean, origin/main
+> in sync. No carried-over loose ends. If picking up a deferred item, the
+> SQLAlchemy 2.0 LegacyAPIWarning sweep is queued from 2026-06-15 (~395 warnings
+> on `.query.get(id)` → `db.session.get(Model, id)`). Otherwise open territory.
 
-**Loose ends:**
-- `instance/vacation.db` (160 KB, 2026-06-19) — stray default-path SQLite. Some run
-  of app.py / `from app import …` didn't pick up the configured DB path and Flask
-  created its default instance file. Gitignored. Probably empty fixture data, but
-  given the 2026-06-15 data-loss-near-miss precedent, inspect before deleting.
-- `.claude/skills/trip-guide/SKILL.md` — 246 uncommitted lines carried over from
-  before this session. Mid-edit on the trip-guide skill itself.
-- Trip-guide feature (commits bfedcf6..5e13c3f) never got a session_log entry.
-  Worth a short catch-up note when the SKILL.md edit lands.
+**Loose ends:** None.
+
+---
+
+## 2026-06-19 — Trip guide skill shipped end-to-end (catch-up entry — log was skipped that night)
+
+**Shipped:**
+- Booking-itinerary polish: per-day lodging adds in drift review (b3a2eb2),
+  transport + lodging auto-chips (d279379).
+- Trip-guide feature, end-to-end across ~24 commits (7ad43b5..5e13c3f):
+  spec + plan + `Trip.guide_share_token` migration; new `src/guide_builder.py`
+  module built incrementally (data load, config sidecar, share-token helpers,
+  file IO + storage backend dispatch via `GUIDE_STORAGE` env var, atomic writes);
+  two new routes (`/trips/<id>/guide` gated, `/guides/share/<token>` public);
+  trip-overview hero card + vp-card refactor; copy-to-clipboard JS; the skill
+  itself (`.claude/skills/trip-guide/SKILL.md`) + CLAUDE.md updates.
+
+**Test status:** 854 passing / 0 failing (up from 788 after 2026-06-18 chips).
+
+**Stopped at:** Trip-guide feature fully shipped to origin/main. Session log
+entry skipped that night. The DATABASE_URL gotcha in the helper invocation pattern
+was caught the next morning (2026-06-20) and fixed in SKILL.md follow-up commit
+fdfae70.
+
+**Loose ends:** None — closed in 2026-06-20.
 
 ---
 
