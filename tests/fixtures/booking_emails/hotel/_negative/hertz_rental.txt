@@ -1,0 +1,9 @@
+Hertz — Rental Confirmation
+Confirmation #: HZ-44-219
+
+Vehicle: Toyota Corolla or similar
+Pick-up: Mon, Jun 14 2026 at 10:00 AM
+Drop-off: Fri, Jun 18 2026 at 9:00 AM
+
+Pick-up location: LAX Hertz Counter, 9000 Airport Blvd, Los Angeles
+Total: $385.00

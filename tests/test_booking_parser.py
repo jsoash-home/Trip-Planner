@@ -11,6 +11,7 @@ from src.booking_parser import (
     extract_confirmation_number,
     extract_dates,
     extract_flight,
+    extract_hotel,
     extract_money,
     extract_url,
     score_confidence,
@@ -268,3 +269,70 @@ def test_flight_confidence_low_when_only_iata_pair():
     p = extract_flight("Trip leg: SFO → JFK and that's all we know.")
     assert isinstance(p, ParsedBooking)
     assert p.confidence < 0.6
+
+
+# ─────────────────────────────  extract_hotel  ─────────────────────────────
+
+
+def test_hotel_marriott_style():
+    p = extract_hotel(load_fixture("hotel/marriott.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "hotel"
+    assert p.vendor == "Marriott Times Square"
+    assert p.title == "Marriott Times Square"
+    assert p.start_datetime == datetime(2026, 8, 8, 16, 0)
+    assert p.end_datetime == datetime(2026, 8, 10, 11, 0)
+    assert p.location is not None and "1535 Broadway" in p.location
+    assert p.cost == 682.00
+    assert p.currency == "USD"
+    assert p.confirmation_number == "88842310"
+
+
+def test_hotel_booking_com_style():
+    p = extract_hotel(load_fixture("hotel/booking_dot_com.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "hotel"
+    # Aggregator name stripped; hotel name extracted.
+    assert p.vendor is not None and "Saint-Germain" in p.vendor
+    assert p.start_datetime == datetime(2026, 9, 12, 15, 0)
+    assert p.end_datetime == datetime(2026, 9, 15, 11, 0)
+    assert p.cost == 1245.00
+    assert p.currency == "EUR"
+
+
+def test_hotel_airbnb_style():
+    p = extract_hotel(load_fixture("hotel/airbnb.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "hotel"
+    assert p.vendor is not None and "Loft" in p.vendor
+    # No times in fixture — defaults apply (3pm in, 11am out).
+    assert p.start_datetime == datetime(2026, 10, 17, 15, 0)
+    assert p.end_datetime == datetime(2026, 10, 23, 11, 0)
+    assert p.cost == 2184.00
+
+
+def test_hotel_extracts_nightly_total():
+    # Itemised nightly rates — the Total: line (largest amount) wins.
+    p = extract_hotel(load_fixture("hotel/hampton.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "hotel"
+    assert p.cost == 400.00
+    assert p.currency == "USD"
+
+
+def test_hotel_check_in_time_defaults_3pm():
+    # Date-only check-in / check-out → 15:00 / 11:00 defaults.
+    p = extract_hotel(load_fixture("hotel/airbnb.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.start_datetime is not None
+    assert p.start_datetime.hour == 15
+    assert p.end_datetime is not None
+    assert p.end_datetime.hour == 11
+
+
+def test_hotel_returns_none_for_flight_confirmation():
+    assert extract_hotel(load_fixture("hotel/_negative/united_flight.txt")) is None
+
+
+def test_hotel_returns_none_for_car_rental():
+    assert extract_hotel(load_fixture("hotel/_negative/hertz_rental.txt")) is None

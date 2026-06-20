@@ -1,0 +1,9 @@
+United Airlines — Flight Confirmation
+Confirmation: AB12CD
+
+Flight UA 423
+San Francisco (SFO) → London Heathrow (LHR)
+Depart: Tue, Aug 17 2026 at 10:30 PM
+Arrive: Wed, Aug 18 2026 at 5:15 PM
+
+Total: $1,245.00

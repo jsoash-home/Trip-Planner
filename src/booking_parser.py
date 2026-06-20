@@ -578,3 +578,207 @@ def extract_flight(text: str) -> Optional[Union[ParsedBooking, List[ParsedBookin
     # Multi-segment — sort by start_datetime (None-dated sort last).
     segments.sort(key=lambda s: (s.start_datetime is None, s.start_datetime))
     return segments
+
+
+# ─────────────────────────────  extract_hotel  ─────────────────────────────
+
+
+# Check-in / check-out anchors. \b-anchored and require `:` per Task 2 fix —
+# stops "Departure" inside "Department of Transportation" from triggering.
+# "Arrival" / "Departure" still match here (they're real hotel anchors too)
+# but the negative-anchor _RE_IATA_PAIR check rejects flight emails before
+# we get here, so the overlap is safe.
+_RE_CHECKIN_ANCHOR = re.compile(
+    r"\bCheck[- ]?in\b\s*:\s*(.+)", re.IGNORECASE
+)
+_RE_CHECKOUT_ANCHOR = re.compile(
+    r"\bCheck[- ]?out\b\s*:\s*(.+)", re.IGNORECASE
+)
+_RE_ARRIVAL_ANCHOR = re.compile(
+    r"\bArrival\b\s*:\s*(.+)", re.IGNORECASE
+)
+_RE_DEPARTURE_ANCHOR = re.compile(
+    r"\bDeparture\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Hotel vendor anchors. Capture trailing text up to end-of-line.
+_RE_HOTEL_STAY_AT = re.compile(
+    r"(?:Your\s+)?stay\s+at\s+(.+)", re.IGNORECASE
+)
+_RE_HOTEL_RESERVATION_AT = re.compile(
+    r"(?:Your\s+)?reservation\s+at\s+(.+)", re.IGNORECASE
+)
+_RE_HOTEL_ANCHOR = re.compile(
+    r"\bHotel\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Address block anchor.
+_RE_ADDRESS_ANCHOR = re.compile(
+    r"\bAddress\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Party-size anchors.
+_RE_PARTY_ANCHOR = re.compile(
+    r"\b(?:Party|Guests|Travelers)\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Known hotel chain names — fallback when no anchor phrase matches.
+# Sorted longest-first so the regex alternation prefers specific names.
+_KNOWN_HOTEL_CHAINS: Tuple[str, ...] = tuple(sorted(
+    (
+        "Mandarin Oriental",
+        "Ritz-Carlton",
+        "Four Seasons",
+        "InterContinental",
+        "Holiday Inn",
+        "Best Western",
+        "Premier Inn",
+        "Comfort Inn",
+        "Hampton Inn",
+        "La Quinta",
+        "Travelodge",
+        "Marriott",
+        "Sheraton",
+        "Radisson",
+        "Westin",
+        "Hilton",
+        "Hyatt",
+        "Accor",
+        "Aman",
+        "Ibis",
+    ),
+    key=len,
+    reverse=True,
+))
+_RE_KNOWN_HOTEL_CHAIN = re.compile(
+    r"\b(" + "|".join(re.escape(c) for c in _KNOWN_HOTEL_CHAINS) + r")\b",
+    re.IGNORECASE,
+)
+
+# Aggregator brand names to strip out of subject-line vendor fallback.
+_AGGREGATOR_NAMES = ("Booking.com", "Airbnb", "Expedia", "Hotels.com", "Agoda", "Vrbo")
+
+# Hotel-time defaults when only a date is given.
+_HOTEL_CHECKIN_DEFAULT_HOUR = 15
+_HOTEL_CHECKOUT_DEFAULT_HOUR = 11
+
+
+def _datetime_with_default_hour(line: str, default_hour: int) -> Optional[datetime]:
+    """Parse the first date in `line`; if no time was provided, snap to default_hour."""
+    dates = extract_dates(line)
+    if not dates:
+        return None
+    dt = dates[0]
+    # extract_dates returns hour=0, minute=0 for date-only matches.
+    if dt.hour == 0 and dt.minute == 0 and not _line_has_time(line):
+        return dt.replace(hour=default_hour, minute=0)
+    return dt
+
+
+# Matches a clock time like "3:00 PM" or "15:30" — used to tell apart
+# "date-only" from "datetime with a midnight time".
+_RE_ANY_CLOCK_TIME = re.compile(
+    r"\b\d{1,2}:\d{2}(?:\s*(?:AM|PM))?\b", re.IGNORECASE
+)
+
+
+def _line_has_time(line: str) -> bool:
+    return bool(_RE_ANY_CLOCK_TIME.search(line))
+
+
+def _hotel_vendor(text: str) -> Optional[str]:
+    """Find the hotel name via anchor phrases, then known-chain header scan."""
+    for anchor in (_RE_HOTEL_STAY_AT, _RE_HOTEL_RESERVATION_AT, _RE_HOTEL_ANCHOR):
+        m = anchor.search(text)
+        if m:
+            name = m.group(1).strip()
+            # Strip aggregator brand if it leaked into the capture.
+            for agg in _AGGREGATOR_NAMES:
+                if name.lower().startswith(agg.lower()):
+                    name = name[len(agg):].lstrip(" :—-").strip()
+            if name:
+                return name
+
+    # Fallback: scan first ~6 lines for a known chain name and use the
+    # whole line as the vendor (keeps "Hampton Inn & Suites Tysons Corner"
+    # together rather than just "Hampton Inn").
+    header_lines = text.splitlines()[:6]
+    for line in header_lines:
+        m = _RE_KNOWN_HOTEL_CHAIN.search(line)
+        if m:
+            stripped = line.strip()
+            # Drop leading "Hotel:" / "Hotel " labels.
+            stripped = re.sub(r"^Hotel\s*:?\s*", "", stripped, flags=re.IGNORECASE)
+            return stripped or m.group(1)
+    return None
+
+
+def _hotel_location(text: str, vendor: Optional[str]) -> Optional[str]:
+    """Address from explicit `Address:` anchor, else line immediately after vendor."""
+    m = _RE_ADDRESS_ANCHOR.search(text)
+    if m:
+        return m.group(1).strip() or None
+
+    if vendor:
+        # Find the line that contains the vendor name, return the next non-empty line.
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if vendor in line and i + 1 < len(lines):
+                next_line = lines[i + 1].strip()
+                if next_line:
+                    return next_line
+    return None
+
+
+def _hotel_party(text: str) -> Optional[str]:
+    m = _RE_PARTY_ANCHOR.search(text)
+    return m.group(1).strip() if m else None
+
+
+def extract_hotel(text: str) -> Optional[ParsedBooking]:
+    """Parse a hotel booking out of pasted text.
+
+    Returns None if:
+      - the text looks like a flight (contains an IATA airport-code pair), OR
+      - neither a check-in nor check-out anchor is present.
+    """
+    # Negative anchor: a flight email shouldn't reach the hotel branch.
+    if _RE_IATA_PAIR.search(text):
+        return None
+
+    checkin_match = _RE_CHECKIN_ANCHOR.search(text) or _RE_ARRIVAL_ANCHOR.search(text)
+    checkout_match = _RE_CHECKOUT_ANCHOR.search(text) or _RE_DEPARTURE_ANCHOR.search(text)
+    if not (checkin_match and checkout_match):
+        return None
+
+    vendor = _hotel_vendor(text)
+    title = vendor if vendor else "Hotel stay"
+
+    start_dt = _datetime_with_default_hour(
+        checkin_match.group(1), _HOTEL_CHECKIN_DEFAULT_HOUR
+    )
+    end_dt = _datetime_with_default_hour(
+        checkout_match.group(1), _HOTEL_CHECKOUT_DEFAULT_HOUR
+    )
+
+    location = _hotel_location(text, vendor)
+    conf = extract_confirmation_number(text)
+    cost = extract_money(text)
+    url = extract_url(text)
+    notes = _hotel_party(text)
+
+    p = ParsedBooking(
+        type="hotel",
+        title=title,
+        vendor=vendor,
+        confirmation_number=conf,
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+        location=location,
+        cost=cost[0] if cost else None,
+        currency=cost[1] if cost else None,
+        url=url,
+        notes=notes,
+    )
+    p.confidence = score_confidence(p)
+    return p
