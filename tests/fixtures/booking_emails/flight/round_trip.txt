@@ -1,0 +1,16 @@
+British Airways e-ticket
+Booking reference: BA8M2P
+
+OUTBOUND
+Flight BA 286
+San Francisco (SFO) → London Heathrow (LHR)
+Depart: Mon, Sep 21 2026 at 4:15 PM
+Arrive: Tue, Sep 22 2026 at 10:30 AM
+
+RETURN
+Flight BA 285
+London Heathrow (LHR) → San Francisco (SFO)
+Depart: Mon, Oct 5 2026 at 2:00 PM
+Arrive: Mon, Oct 5 2026 at 5:30 PM
+
+Total: £849.00

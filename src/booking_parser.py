@@ -17,7 +17,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 from src.booking_helpers import BOOKING_TYPE_CODES  # noqa: F401 — exported for parsers
 from src.currency import SUPPORTED_CURRENCY_CODES
@@ -347,3 +347,237 @@ def score_confidence(parsed: ParsedBooking) -> float:
         1 for f in required if getattr(parsed, f, None) not in (None, "")
     )
     return filled / len(required)
+
+
+# ─────────────────────────────  extract_flight  ────────────────────────────
+
+
+# IATA airport-code pair. Forms handled:
+#   SFO → LHR     (unicode arrow)
+#   SFO -> LHR    (ascii arrow)
+#   SFO-LHR / SFO - LHR   (dash, optional spaces)
+#   SFO to LHR
+#   San Francisco (SFO) → London Heathrow (LHR)   (parens + city names between)
+# \b-bounded so we don't grab parts of words like "SFOTAX".
+# We allow up to ~60 chars of "any non-newline" between IATA + separator + IATA
+# so emails that wrap the IATA code in parens after a city name still match.
+# Lazy quantifier + leftmost-first finditer means we get the first IATA of
+# each pair, not a greedy span across multiple pairs.
+_IATA_SEP = r"(?:→|->|\s+to\s+|\s*-\s*)"
+_RE_IATA_PAIR = re.compile(
+    r"\b([A-Z]{3})\b[^\n]{0,60}?" + _IATA_SEP + r"[^\n]{0,60}?\b([A-Z]{3})\b"
+)
+
+# Flight number: 2-letter airline + 1-4 digits, optional space.
+_RE_FLIGHT_NO = re.compile(r"\b([A-Z]{2})\s?(\d{1,4})\b")
+
+# Vendor anchors that point at an explicit airline name.
+_RE_VENDOR_ANCHOR = re.compile(
+    r"(?:Operated\s+by|Airline|Carrier)\s*:\s*([A-Z][A-Za-z &\-]+?)(?:\n|$)",
+    re.IGNORECASE,
+)
+
+# Known airlines for fallback header scan. Longest first to win in regex alt.
+_KNOWN_AIRLINES: Tuple[str, ...] = (
+    "American Airlines",
+    "British Airways",
+    "Singapore Airlines",
+    "Cathay Pacific",
+    "Virgin Atlantic",
+    "Japan Airlines",
+    "Qatar Airways",
+    "Air Canada",
+    "Air France",
+    "Aer Lingus",
+    "United Airlines",
+    "Spirit Airlines",
+    "United",
+    "American",
+    "Delta",
+    "Southwest",
+    "JetBlue",
+    "Alaska",
+    "Lufthansa",
+    "KLM",
+    "Emirates",
+    "ANA",
+    "Iberia",
+)
+_RE_KNOWN_AIRLINE = re.compile(
+    r"\b(" + "|".join(re.escape(a) for a in _KNOWN_AIRLINES) + r")\b"
+)
+
+# Departure / arrival date anchor patterns. The anchor captures everything to
+# end of line so we can hand the tail to extract_dates.
+_RE_DEP_ANCHOR = re.compile(
+    r"(?:Depart(?:ure|ing|s)?)\s*:?\s*(.+)", re.IGNORECASE
+)
+_RE_ARR_ANCHOR = re.compile(
+    r"(?:Arriv(?:e|es|al|ing))\s*:?\s*(.+)", re.IGNORECASE
+)
+
+# Window (in chars) around an IATA pair we scan for segment-local fields.
+_SEGMENT_RADIUS = 400
+
+
+def _vendor_from_anchor_or_header(text: str) -> Optional[str]:
+    """Find an airline name via 'Airline:' anchor or known-airlines header scan."""
+    m = _RE_VENDOR_ANCHOR.search(text)
+    if m:
+        return m.group(1).strip()
+
+    # Scan first ~6 lines for a known airline name.
+    header = "\n".join(text.splitlines()[:6])
+    m = _RE_KNOWN_AIRLINE.search(header)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _nearest_flight_no(text: str, pair_start: int, pair_end: int) -> Optional[str]:
+    """Flight number whose match position is closest to the IATA pair (±200 chars)."""
+    best: Optional[Tuple[int, str]] = None
+    pair_mid = (pair_start + pair_end) // 2
+    for m in _RE_FLIGHT_NO.finditer(text):
+        # Avoid matching the IATA pair itself (3 letters + nothing) — flight no
+        # is 2 letters + digits so the regex won't grab IATA codes anyway.
+        dist = abs(((m.start() + m.end()) // 2) - pair_mid)
+        if dist > 200:
+            continue
+        no = f"{m.group(1)} {m.group(2)}"
+        if best is None or dist < best[0]:
+            best = (dist, no)
+    return best[1] if best else None
+
+
+def _datetime_for_anchor(
+    text: str,
+    anchor_re: "re.Pattern[str]",
+    near_offset: Optional[int] = None,
+) -> Optional[datetime]:
+    """Find the anchor line; return a datetime parsed from its tail.
+
+    If `near_offset` is given, pick the anchor whose start is closest to that
+    offset (used for multi-segment emails where several Depart: lines exist).
+    Otherwise return the first datetime from the first matching anchor.
+    """
+    matches = list(anchor_re.finditer(text))
+    if not matches:
+        return None
+    if near_offset is not None:
+        matches.sort(key=lambda m: abs(m.start() - near_offset))
+    for m in matches:
+        dates = extract_dates(m.group(1))
+        if dates:
+            return dates[0]
+    return None
+
+
+def _build_flight_title(
+    vendor: Optional[str], flight_no: Optional[str], origin: str, dest: str
+) -> str:
+    """`Vendor FN: ORIG → DEST` with graceful degradation if pieces are missing."""
+    arrow = f"{origin} → {dest}"
+    if vendor and flight_no:
+        return f"{vendor} {flight_no}: {arrow}"
+    if flight_no:
+        return f"{flight_no}: {arrow}"
+    if vendor:
+        return f"{vendor}: {arrow}"
+    return arrow
+
+
+def _extract_one_segment(
+    full_text: str,
+    pair_start: int,
+    pair_end: int,
+    origin: str,
+    dest: str,
+    email_vendor: Optional[str],
+    email_conf: Optional[str],
+    email_cost: Optional[Tuple[float, str]],
+) -> ParsedBooking:
+    """Build one ParsedBooking from a single IATA-pair match.
+
+    Looks for vendor/flight-no/dates inside a ±SEGMENT_RADIUS window around
+    the pair. Falls back to email-level vendor/conf/cost when nothing local.
+    """
+    seg_start = max(0, pair_start - _SEGMENT_RADIUS)
+    seg_end = min(len(full_text), pair_end + _SEGMENT_RADIUS)
+    segment = full_text[seg_start:seg_end]
+
+    vendor = _vendor_from_anchor_or_header(segment) or email_vendor
+    flight_no = _nearest_flight_no(full_text, pair_start, pair_end)
+    # Within the segment, choose the anchor line nearest the IATA pair —
+    # round-trip emails contain multiple Depart:/Arrive: lines.
+    near_offset = pair_start - seg_start
+    start_dt = _datetime_for_anchor(segment, _RE_DEP_ANCHOR, near_offset)
+    end_dt = _datetime_for_anchor(segment, _RE_ARR_ANCHOR, near_offset)
+
+    # Segment-local conf / cost win over email-level ones if present.
+    seg_conf = extract_confirmation_number(segment)
+    if seg_conf is None:
+        seg_conf = email_conf
+    seg_cost = extract_money(segment) or email_cost
+
+    title = _build_flight_title(vendor, flight_no, origin, dest)
+
+    # location is used by the auto-itinerary-link to set the "Depart {origin}"
+    # item's location — that only fires when a start_datetime exists, so we
+    # only populate location when there's flight evidence (dep date OR
+    # flight no OR vendor). Bare IATA pairs leave it None.
+    has_flight_evidence = bool(start_dt or flight_no or vendor)
+
+    p = ParsedBooking(
+        type="flight",
+        title=title,
+        vendor=vendor,
+        confirmation_number=seg_conf,
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+        location=origin if has_flight_evidence else None,
+        cost=seg_cost[0] if seg_cost else None,
+        currency=seg_cost[1] if seg_cost else None,
+        url=extract_url(segment),
+    )
+    p.confidence = score_confidence(p)
+    return p
+
+
+def extract_flight(text: str) -> Optional[Union[ParsedBooking, List[ParsedBooking]]]:
+    """Parse one or more flight bookings out of pasted text.
+
+    Returns None if no IATA airport-code pair is found. Returns a single
+    ParsedBooking for one-segment flights, or a list (sorted by start_datetime,
+    None-dated last) for multi-segment confirmations.
+    """
+    pairs = list(_RE_IATA_PAIR.finditer(text))
+    if not pairs:
+        return None
+
+    email_vendor = _vendor_from_anchor_or_header(text)
+    email_conf = extract_confirmation_number(text)
+    email_cost = extract_money(text)
+
+    segments: List[ParsedBooking] = [
+        _extract_one_segment(
+            text,
+            m.start(),
+            m.end(),
+            m.group(1),
+            m.group(2),
+            email_vendor,
+            email_conf,
+            email_cost,
+        )
+        for m in pairs
+    ]
+
+    # Single-segment short-circuit, or all segments share the same dep date.
+    distinct_dates = {s.start_datetime for s in segments if s.start_datetime}
+    if len(segments) == 1 or len(distinct_dates) < 2:
+        return segments[0]
+
+    # Multi-segment: sort by start_datetime; None-dated sort last.
+    segments.sort(key=lambda s: (s.start_datetime is None, s.start_datetime))
+    return segments

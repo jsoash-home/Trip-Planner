@@ -4,15 +4,24 @@ Task 1 of paste-and-parse-booking: pure helpers only, no DB / Flask / network.
 """
 
 from datetime import datetime
+from pathlib import Path
 
 from src.booking_parser import (
     ParsedBooking,
     extract_confirmation_number,
     extract_dates,
+    extract_flight,
     extract_money,
     extract_url,
     score_confidence,
 )
+
+
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "booking_emails"
+
+
+def load_fixture(rel_path: str) -> str:
+    return (FIXTURE_DIR / rel_path).read_text(encoding="utf-8")
 
 
 # ─────────────────────────────  extract_dates  ─────────────────────────────
@@ -124,3 +133,90 @@ def test_score_confidence_partial_flight():
     # Populate type, title, vendor → 3/5 = 0.6.
     p = ParsedBooking(type="flight", title="DL123", vendor="Delta")
     assert score_confidence(p) == 0.6
+
+
+# ─────────────────────────────  extract_flight  ────────────────────────────
+
+
+def test_flight_single_segment_united_style():
+    p = extract_flight(load_fixture("flight/united_single.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "flight"
+    assert p.vendor == "United Airlines"
+    assert "SFO" in p.title and "LHR" in p.title and "→" in p.title
+    assert "UA 423" in p.title or "UA423" in p.title
+    assert p.start_datetime == datetime(2026, 8, 17, 22, 30)
+    assert p.end_datetime == datetime(2026, 8, 18, 17, 15)
+    assert p.location == "SFO"
+    assert p.confirmation_number == "ABC123"
+
+
+def test_flight_single_segment_with_iata_dash_form():
+    p = extract_flight(load_fixture("flight/iata_dash.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "flight"
+    assert p.location == "AMS"
+    assert "AMS" in p.title and "JFK" in p.title
+    assert p.start_datetime == datetime(2026, 9, 4, 13, 45)
+    assert p.end_datetime == datetime(2026, 9, 4, 16, 10)
+    assert p.confirmation_number == "XK9P2T"
+
+
+def test_flight_multi_segment_returns_list():
+    out = extract_flight(load_fixture("flight/round_trip.txt"))
+    assert isinstance(out, list)
+    assert len(out) == 2
+    # Sorted by start_datetime ascending.
+    assert out[0].start_datetime == datetime(2026, 9, 21, 16, 15)
+    assert out[1].start_datetime == datetime(2026, 10, 5, 14, 0)
+    # Outbound + return have opposite origins.
+    assert out[0].location == "SFO"
+    assert out[1].location == "LHR"
+    # Confirmation number is shared (global to the email).
+    assert out[0].confirmation_number == "BA8M2P"
+    assert out[1].confirmation_number == "BA8M2P"
+    # Each segment scored independently — both should be reasonable.
+    assert out[0].confidence >= 0.6
+    assert out[1].confidence >= 0.6
+
+
+def test_flight_extracts_confirmation_number():
+    p = extract_flight(load_fixture("flight/united_single.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.confirmation_number == "ABC123"
+
+
+def test_flight_extracts_cost_and_currency():
+    p = extract_flight(load_fixture("flight/united_single.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.cost == 1245.00
+    assert p.currency == "USD"
+
+
+def test_flight_missing_arrival_time_still_returns_booking():
+    p = extract_flight(load_fixture("flight/only_dep.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.start_datetime == datetime(2026, 10, 12, 6, 0)
+    assert p.end_datetime is None
+    assert p.location == "FLL"
+
+
+def test_flight_returns_none_for_hotel_confirmation():
+    assert extract_flight(load_fixture("flight/_negative/marriott.txt")) is None
+
+
+def test_flight_returns_none_for_restaurant_confirmation():
+    assert extract_flight(load_fixture("flight/_negative/opentable.txt")) is None
+
+
+def test_flight_confidence_high_when_all_fields_present():
+    p = extract_flight(load_fixture("flight/united_single.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.confidence >= 0.8
+
+
+def test_flight_confidence_low_when_only_iata_pair():
+    # Bare IATA pair, no vendor / date / flight number → low score.
+    p = extract_flight("Trip leg: SFO → JFK and that's all we know.")
+    assert isinstance(p, ParsedBooking)
+    assert p.confidence < 0.6

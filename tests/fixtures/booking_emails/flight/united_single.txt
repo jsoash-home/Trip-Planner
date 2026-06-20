@@ -1,0 +1,13 @@
+United Airlines
+Confirmation #: ABC123
+
+Your flight is confirmed.
+
+Flight UA 423
+San Francisco (SFO) → London Heathrow (LHR)
+Depart: Tue, Aug 17 2026 at 10:30 PM
+Arrive: Wed, Aug 18 2026 at 5:15 PM
+
+Seat 14A
+Total: $1,245.00
+Manage your trip at https://united.com/manage/ABC123
