@@ -662,7 +662,7 @@ def google_logged_in(blueprint, token):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -674,7 +674,7 @@ def _trip_with_access_or_404(trip_id: int, role: str = "viewer"):
     Roles, lowest first: viewer, editor, owner. The trip owner is always
     "owner"; collaborators come from TripCollaborator rows.
     """
-    trip = Trip.query.get(trip_id)
+    trip = db.session.get(Trip, trip_id)
     if trip is None:
         abort(404)
     user_role = get_user_role_for_trip(trip, current_user)
@@ -702,7 +702,7 @@ def _booking_with_access_or_404(trip_id: int, booking_id: int, role: str = "edit
     """Return (trip, booking, user_role). Defaults to editor since these
     helpers are mostly called from mutation routes."""
     trip, user_role = _trip_with_access_or_404(trip_id, role=role)
-    booking = Booking.query.get(booking_id)
+    booking = db.session.get(Booking, booking_id)
     if booking is None or booking.trip_id != trip.id:
         abort(404)
     return trip, booking, user_role
@@ -711,7 +711,7 @@ def _booking_with_access_or_404(trip_id: int, booking_id: int, role: str = "edit
 def _itinerary_item_with_access_or_404(trip_id: int, item_id: int, role: str = "editor"):
     """Return (trip, itinerary_item, user_role)."""
     trip, user_role = _trip_with_access_or_404(trip_id, role=role)
-    item = ItineraryItem.query.get(item_id)
+    item = db.session.get(ItineraryItem, item_id)
     if item is None or item.trip_id != trip.id:
         abort(404)
     return trip, item, user_role
@@ -720,7 +720,7 @@ def _itinerary_item_with_access_or_404(trip_id: int, item_id: int, role: str = "
 def _packing_item_with_access_or_404(trip_id: int, item_id: int, role: str = "editor"):
     """Return (trip, packing_item, user_role)."""
     trip, user_role = _trip_with_access_or_404(trip_id, role=role)
-    item = PackingItem.query.get(item_id)
+    item = db.session.get(PackingItem, item_id)
     if item is None or item.trip_id != trip.id:
         abort(404)
     return trip, item, user_role
@@ -974,7 +974,7 @@ def _prep_item_access_or_403(item: TripPrepItem) -> None:
         return
     if item.owner_id == current_user.id:
         return
-    trip = Trip.query.get(item.trip_id)
+    trip = db.session.get(Trip, item.trip_id)
     if trip is None:
         abort(404)
     user_role = get_user_role_for_trip(trip, current_user)
@@ -1074,7 +1074,7 @@ def prep_create():
     # access. Reject (403) rather than silently rewriting to cross-trip
     # — the surfacing of the error is clearer than a quiet downgrade.
     if trip_id is not None:
-        trip = Trip.query.get(trip_id)
+        trip = db.session.get(Trip, trip_id)
         if trip is None:
             abort(403)
         user_role = get_user_role_for_trip(trip, current_user)
@@ -1106,7 +1106,7 @@ def prep_create():
 def prep_toggle(item_id: int):
     """Flip the done flag. Sets/clears done_at. May fire the
     done -> packing-list flash banner (handled in Task 13)."""
-    item = TripPrepItem.query.get(item_id)
+    item = db.session.get(TripPrepItem, item_id)
     if item is None:
         abort(404)
 
@@ -1159,7 +1159,7 @@ def prep_packing_decision(item_id: int):
     re-fire on the next done-toggle. Owner-only; the prompt only fires
     after a successful toggle, so this just guards direct POSTs.
     """
-    item = TripPrepItem.query.get(item_id)
+    item = db.session.get(TripPrepItem, item_id)
     if item is None:
         abort(404)
     if item.owner_id != current_user.id:
@@ -1208,7 +1208,7 @@ def prep_packing_decision(item_id: int):
 @login_required
 def prep_edit(item_id: int):
     """Update title, notes, category, due_offset_days, trip_id."""
-    item = TripPrepItem.query.get(item_id)
+    item = db.session.get(TripPrepItem, item_id)
     if item is None:
         abort(404)
 
@@ -1224,7 +1224,7 @@ def prep_edit(item_id: int):
     # If the user is moving the item to a (different) trip, they must
     # have at least editor access to that destination trip.
     if new_trip_id is not None and new_trip_id != item.trip_id:
-        dest_trip = Trip.query.get(new_trip_id)
+        dest_trip = db.session.get(Trip, new_trip_id)
         if dest_trip is None:
             abort(403)
         user_role = get_user_role_for_trip(dest_trip, current_user)
@@ -1251,7 +1251,7 @@ def prep_edit(item_id: int):
 def prep_delete(item_id: int):
     """Delete the item. Cascade removes its links via the
     cascade='all, delete-orphan' relationship from Task 2."""
-    item = TripPrepItem.query.get(item_id)
+    item = db.session.get(TripPrepItem, item_id)
     if item is None:
         abort(404)
 
@@ -1280,7 +1280,7 @@ def prep_link_create(item_id: int):
     the user (viewer+) so this route can't be used to probe the
     existence of trips they can't see.
     """
-    item = TripPrepItem.query.get(item_id)
+    item = db.session.get(TripPrepItem, item_id)
     if item is None:
         abort(404)
     if item.owner_id != current_user.id:
@@ -1296,7 +1296,7 @@ def prep_link_create(item_id: int):
     except ValueError:
         abort(400)
 
-    target = Trip.query.get(trip_id)
+    target = db.session.get(Trip, trip_id)
     if target is None:
         abort(403)
     user_role = get_user_role_for_trip(target, current_user)
@@ -1344,10 +1344,10 @@ def prep_link_delete(item_id: int, link_id: int):
 
     404 if the link doesn't exist or doesn't belong to the URL's item.
     """
-    link = TripPrepLink.query.get(link_id)
+    link = db.session.get(TripPrepLink, link_id)
     if link is None or link.trip_prep_item_id != item_id:
         abort(404)
-    item = TripPrepItem.query.get(item_id)
+    item = db.session.get(TripPrepItem, item_id)
     if item is None:
         abort(404)
     if item.owner_id != current_user.id:
@@ -3480,7 +3480,7 @@ def trip_share(trip_id):
         .order_by(TripCollaborator.added_at.asc())
         .all()
     )
-    owner = User.query.get(trip.owner_id)
+    owner = db.session.get(User, trip.owner_id)
     return render_template(
         "trip_share.html",
         trip=trip,
@@ -3498,7 +3498,7 @@ def trip_share(trip_id):
 def share_add(trip_id):
     """Owner-only: add a collaborator by email."""
     trip = _owned_trip_or_404(trip_id)
-    owner = User.query.get(trip.owner_id)
+    owner = db.session.get(User, trip.owner_id)
     existing = TripCollaborator.query.filter_by(trip_id=trip.id).all()
     existing_emails = [c.email for c in existing]
 
@@ -3536,7 +3536,7 @@ def share_add(trip_id):
 def share_remove(trip_id, collab_id):
     """Owner-only: remove a collaborator."""
     trip = _owned_trip_or_404(trip_id)
-    collab = TripCollaborator.query.get(collab_id)
+    collab = db.session.get(TripCollaborator, collab_id)
     if collab is None or collab.trip_id != trip.id:
         abort(404)
     email = collab.email

@@ -141,11 +141,11 @@ def load_trip_data(trip_id: int) -> Dict[str, Any]:
     Raises TripNotFound if no row exists.
     """
     # Deferred imports — top-level would cause a circular import via models → app → src/guide_builder.
-    from models import Booking, ItineraryItem, Trip, TripCollaborator
+    from models import Booking, ItineraryItem, Trip, TripCollaborator, db
     from src.itinerary import sort_within_day
     from src.trip_helpers import emoji_theme
 
-    trip = Trip.query.get(trip_id)
+    trip = db.session.get(Trip, trip_id)
     if trip is None:
         raise TripNotFound(f"Trip {trip_id} not found")
 
@@ -295,7 +295,7 @@ def set_share_token(trip_id: int) -> str:
     # Deferred import — top-level would cause a circular import via models → app → src/guide_builder.
     from models import db, Trip
 
-    trip = Trip.query.get(trip_id)
+    trip = db.session.get(Trip, trip_id)
     if trip is None:
         raise TripNotFound(f"Trip {trip_id} not found")
 
@@ -316,7 +316,7 @@ def clear_share_token(trip_id: int) -> None:
     # Deferred import — top-level would cause a circular import via models → app → src/guide_builder.
     from models import db, Trip
 
-    trip = Trip.query.get(trip_id)
+    trip = db.session.get(Trip, trip_id)
     if trip is None:
         raise TripNotFound(f"Trip {trip_id} not found")
 

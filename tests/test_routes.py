@@ -230,7 +230,7 @@ def test_unlink_clears_linked_booking_and_touched_set(app, trip, owner):
     assert item.linked_booking_id is None
     assert item.auto_kind is None
     assert item.auto_fields_touched == ""
-    assert Booking.query.get(b.id) is not None
+    assert db.session.get(Booking, b.id) is not None
 
 
 def test_drift_review_landing_empty(app, trip, owner):
