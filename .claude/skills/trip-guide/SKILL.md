@@ -51,13 +51,20 @@ proceeding:
 
 ```python
 import os
-os.environ.setdefault("DATABASE_URL", "sqlite:///vacation.db")
+os.environ.pop("DATABASE_URL", None)  # let app.py resolve to absolute project-root vacation.db
 from app import app
 from src import guide_builder
 with app.app_context():
     data = guide_builder.load_trip_data(trip_id)
     # data = {"trip": {...}, "bookings": [...], "itinerary": [...], "collaborators": [...]}
 ```
+
+**Why `pop`, not `setdefault`.** Passing `DATABASE_URL=sqlite:///vacation.db` makes
+Flask-SQLAlchemy resolve the relative path to `instance/vacation.db` — an empty
+file the real app doesn't use. `Trip.query.get(...)` then returns `None` and you
+hit `TripNotFound` even though the trip exists. Popping the env var lets `app.py`'s
+own default kick in, which is the absolute path to project-root `vacation.db`
+(the file the running web app reads).
 
 Itinerary is pre-grouped by `day_date` and sorted via `sort_within_day`.
 Bookings include their `linked_booking_id` itinerary children.
@@ -79,11 +86,12 @@ Never auto-regenerate without asking.
 
 ### 4. Section picker
 
-Present a multi-select from the 7-section catalog. The user picks a subset.
+Present a multi-select from the 8-section catalog. The user picks a subset.
 Save their choice immediately via `guide_builder.save_config(trip_id, cfg)`.
 
 | Key | Section |
 |---|---|
+| `before_you_go` | Pre-trip prep card grid + hotel-address quick-copy table |
 | `day_by_day` | Editorial timeline from itinerary + bookings |
 | `field_guide` | Filterable encyclopedia (wildlife / museums / landmarks) |
 | `things_to_do` | Curated picks, distinct from field guide |
@@ -92,8 +100,21 @@ Save their choice immediately via `guide_builder.save_config(trip_id, cfg)`.
 | `fun_facts` | 2-col trivia + practical tips |
 | `food` | "Things to try" cards + "where to eat" by price tier |
 
-All 7 can be included. Any subset is valid. The picker is the source of truth —
+All 8 can be included. Any subset is valid. The picker is the source of truth —
 the skill does NOT auto-detect "nature trip" and skip sections.
+
+**Themed bonus sections.** Listen for user interests volunteered during the
+picker conversation ("I'm a coffee nerd", "we love craft beer", "I bird"). Offer
+to add a themed section tailored to that interest — e.g. a `beer` section with
+country-grouped breweries + bar lists, a `coffee` section with notable roasters,
+a `photography` section with locations and timing. Themed sections sit alongside
+the 8 base sections; they're additive, not replacements. Use the same visual
+language (card grid, mono labels, group headers).
+
+**Optional closing section.** Consider a `life_list` footer for nature- or
+encounter-heavy trips: a checklist grid of "things to keep an eye out for" —
+wildlife, views, foods, small moments — synthesised from the trip's other
+sections. Mirrors the Galapagos Field Log benchmark.
 
 ### 5. Palette proposal
 
@@ -187,6 +208,26 @@ Do not smooth over failures with "probably fine."
 
 ## Section content model
 
+### before_you_go
+
+A 4-card grid of pre-trip prep, sitting between the hero and `day_by_day`.
+Each card has a mono uppercase heading and a tight bulleted list. Suggested cards:
+
+1. **Download before takeoff** — eSIM provider, per-city transit apps, offline
+   maps, offline Translate, weather app
+2. **Documents & entry** — passport validity, Schengen/visa rules, PDF backups,
+   insurance (especially adventure-activity coverage)
+3. **One adapter, one card** — plug type, voltage, currency by country, contactless
+   norm, ATM advice
+4. **Things easy to forget** — destination-specific small items: sleep mask
+   (Arctic perpetual light), closed-toe shoes (zipline), hat + gloves (cold sea
+   wind), reusable water bottle
+
+Follow with a "Hotels at a glance" table: each row has city + dates, hotel name +
+address, copy button. The address strings get a `.copy-btn[data-copy="..."]` that
+fires the shared clipboard JS (with `execCommand` fallback for restricted
+contexts — see HTML pitfalls).
+
 ### day_by_day
 
 Editorial timeline. Per-day section: large day number + date, 1–2 sentence intro,
@@ -195,21 +236,65 @@ optional history / fun-fact tags. Inputs: itinerary items grouped by `day_date`
 via existing `src/itinerary.py:group_items_by_day`, plus bookings overlapping each
 day. ~150–300 words per day. Layout mirrors `Galapagos_Field_Log_Mar27-Apr3_2027.html`.
 
+**Day-meta badge.** Each `.daymark` block gets a small mono badge below the
+place name with the day's weather + light context: e.g.
+`<div class="daymeta"><b>5° / 1°C</b> · ~20h light</div>` or
+`<b>17° → 5°C</b> · midnight sun final week`. Ties the weather section into the
+timeline and surfaces day-by-day climate transitions without forcing the reader
+to flip sections. Wrap critical figures (temps, light hours, transition arrows)
+in `<b>` so they get the accent colour.
+
+**Surface booking notes.** Operational notes in `booking.notes` ("Email host
+arrival time", "Early check-in approved at 13:00", "Bring closed-toe shoes",
+"Ferry serves dinner buffet 18:30–20:00") are gold for the in-trip reader. Lift
+them into the matching site card as a `.opnote` div — accent-coloured italic
+text with a left border. Filter aggressively: skip notes that are pure pricing
+math ("$X × Y nights = $Z") or speculative TODOs.
+
+**Travel-time pills.** Long transits (any drive over 3h, ferries over 4h, train
+journeys over 4h, multi-leg flights) get a `.travelpill` badge in the `.tags`
+row: `Drive · ~7h · 580km · 1 ferry` or `Ferry · 16h30 · overnight`. Short
+transits don't need it — the time stamp already communicates duration.
+
+**Free-day enrichment.** When a day has no bookings (or only check-in/check-out),
+don't fall back to a single generic "Suggested arc" card. Plan 4–6 specific
+site cards with morning/midday/afternoon/evening/late time stamps and concrete
+names. These are the days a reader most needs pre-research.
+
 ### field_guide
 
-Filterable encyclopedia. Sticky search bar + filter chips, card grid. Each card:
-name, optional latin / local-language name, likelihood or quality badge, 1–2 line
-description, "best day to encounter" tags. Vanilla JS for search + chip toggles.
-Adapts by destination: nature trip → species; city → museums + landmarks. Layout
-mirrors `galapagos-wildlife-guide.html`.
+Filterable encyclopedia — the **encyclopedic** half of the discovery pair. Sticky
+search bar + filter chips, card grid. Each card: name, optional latin /
+local-language name, likelihood or quality badge, 1–2 line description, "best
+day to encounter" tags. Vanilla JS for search + chip toggles. Adapts by
+destination: nature trip → species; city → museums + landmarks. Layout mirrors
+`galapagos-wildlife-guide.html`.
+
+Voice: factual and reference-grade. Each card answers "what is it and when do I
+have a shot at seeing it?" Think field guide / Wikipedia, not travel-blog.
+
+**Day-range chip labels.** For multi-region trips, name the geography chips
+with their day range too — e.g. "Arctic · Days 4–7", "Lofoten + Fjords · Days
+8–15", "Baltic + Cities · Days 16–23". Doubles as a trip-day filter without
+adding new JS.
 
 ### things_to_do
 
-Curated picks — distinct from field guide (encyclopedia vs editorial recommendations).
-No search, no chips. Grouped: morning ideas, evening ideas, half-day excursions,
-rainy-day fallbacks. Each entry: name, neighborhood, why it's worth it, what to
-pair with it, optional cost / time-needed note. ~12–25 picks. Exclude items the
-user has already booked — no redundant suggestions.
+Curated picks — the **editorial** half of the discovery pair. Distinct from
+field guide. No search, no chips. Grouped: morning ideas, evening ideas,
+half-day excursions, rainy-day fallbacks. Each entry: name, neighborhood, why
+it's worth it, what to pair with it, optional cost / time-needed note. ~12–25
+picks. Exclude items the user has already booked — no redundant suggestions.
+
+Voice: opinionated and recommendatory. Each entry answers "should I spend a
+half-day on this, and why?" Think tipped friend who lives there, not encyclopedia.
+
+**Test for the distinction:** if you'd write the same entry for both sections,
+one of them is wrong. Field guide entries describe a thing's identity; things-to-do
+entries describe an action and its tradeoff. The Vasa ship is a `field_guide`
+entry ("1628 warship, 98% original wood, raised 1961"). The Vasa Museum visit
+is a `things_to_do` entry ("Don't skip — even non-museum-people love this one;
+budget 90 min").
 
 ### weather
 
@@ -231,6 +316,18 @@ Two-column on desktop, stacked on mobile. Left column: 8–12 short trivia bulle
 Right column: tipping norms, plug type, transit + card tips, money / ATM tips,
 common scams, emergency numbers, SIM / eSIM advice.
 
+**Group multi-location content by location.** If the trip spans multiple places
+and the trivia naturally tags by country / city / region (e.g. one Sweden fact,
+two Estonia facts, three Norway facts), wrap each location's items in a
+`<div class="fact-group">` with an `<h4 class="fg-loc">Location</h4>` header
+above its `<ul>`. A flat list with per-item country labels reads as jumbled even
+when the labels are styled; explicit group headers + a divider rule between
+groups let the eye scan one location at a time.
+
+The same grouping principle applies in `things_to_do` and `food` (where it's
+already per-city). Apply it anywhere the items have a natural location boundary
+and the user would benefit from scanning one location at a time.
+
 ### food
 
 Short prose intro on the food culture, then two subsections:
@@ -244,6 +341,78 @@ Short prose intro on the food culture, then two subsections:
   why, optional logistics tag. **Booked restaurants from the user's trip appear in
   their correct price tier with a "✓ you've booked" tag** — do not filter them out.
 
+### Themed bonus sections (e.g. beer, coffee, photography, books)
+
+If the user volunteered an interest at section-picking time, add a bespoke
+section tailored to it. Use country / city grouping with the same visual
+language as `food`: each location gets a card grid of the things to try +
+a "where to drink/find/visit" list. Example: a `beer` section for a beer-lover's
+trip lists 4–6 breweries per country (with a small style tag like
+"craft" / "pilsner" / "brewpub" / "historic") and a 4–5 entry bar list under a
+mono "Where to drink (Country)" heading.
+
+Themed sections sit between `fun_facts` and `food` in the nav order — close
+enough to `food` that they read as adjacent material but distinct enough to
+stand alone. The user can always opt out at section-pick time; never assume.
+
+### life_list
+
+Optional closing section, best for nature- or encounter-heavy trips. A grid of
+~15–25 short "things to keep an eye out for" — wildlife you might spot, views
+worth the detour, foods to try, small moments. Each entry is one sentence,
+prefixed with a checkmark via `::before`. Synthesised from the trip's other
+sections (especially `field_guide`, `food`, key day intros) — readers use it as
+a pre-trip mental priming list and a during-trip checklist.
+
+Layout mirrors the Galapagos Field Log's life-list footer. Sits between the
+last content section and the page footer.
+
+---
+
+## Hero details
+
+The hero is the first thing the reader sees — earn its weight.
+
+**Required:** mono eyebrow ("Trip guide · {Palette name}"), display title in
+serif, 1–2 sentence subtitle that names the arc of the trip (not the destination
+in isolation), mono meta row with When / Length / Countries / Bookings count.
+
+**Recommended polish:**
+
+- **Radial accent gradient** in the upper-left corner using the palette's
+  primary accent at 8–12% opacity. Subtle; you should barely notice it but it
+  warms the dark background.
+- **Accent bottom border** in the primary accent, 2px solid, plus a secondary
+  accent fade-out line via `::after` for a two-tone separation from the nav.
+- **Inline route SVG** for multi-stop trips. Don't use real geography — use an
+  abstract dot-and-arc visualization keyed to trip rhythm. Use vertical
+  position to suggest latitude (north = up); use a marked stop (`stop-dot.major`)
+  for the trip's furthest extreme. Add an `aria-label` describing the route in
+  prose. The SVG should be `viewBox` based with no fixed dimensions, so it
+  scales cleanly on mobile.
+
+The route arc is a single biggest single-piece-of-polish for multi-destination
+trips. Skip it for single-city trips where it would feel inflated.
+
+---
+
+## Accessibility patterns
+
+These are not optional. A souvenir-grade guide is also a keyboard- and
+screen-reader-friendly guide.
+
+- **Skip link** as the first body element: `<a class="skip-link" href="#main">
+  Skip to content</a>`. Hidden off-screen by default (`left:-9999px`); becomes
+  visible on `:focus` (`left:0`). The `<main>` element must have `id="main"`.
+- **Visible focus styles** for keyboard navigation:
+  `*:focus-visible{outline:2.5px solid var(--accent);outline-offset:3px}`.
+  Don't use just hover styles — keyboard users see no hover state.
+- **Aria-labels on interactive SVG.** The route arc should describe its route
+  in `aria-label` prose so screen readers can read it. Decorative SVGs (palette
+  swatches in the footer) use `aria-hidden="true"`.
+- **Semantic landmarks.** Nav is `<nav>`, main content is `<main id="main">`,
+  the footer is `<footer>`. Section headings step down properly (h1 → h2 → h3 → h4).
+
 ---
 
 ## Helper invocation pattern
@@ -252,7 +421,7 @@ Always push a Flask app context before any helper call. Template:
 
 ```python
 import os
-os.environ.setdefault("DATABASE_URL", "sqlite:///vacation.db")
+os.environ.pop("DATABASE_URL", None)  # see step 2 — relative sqlite path resolves to instance/, not project root
 from app import app
 from src import guide_builder
 
@@ -305,6 +474,69 @@ Available helpers:
 - Auto-regenerate without asking (step 3). Existing guides represent real work.
 - Bypass the storage abstraction. Always call `save_guide` / `read_guide`. Never
   open `data/guides/<id>.html` directly in the skill.
+
+---
+
+## HTML / CSS pitfalls
+
+Real bugs hit during prior generations. Avoid in future composition.
+
+### Don't put `display:grid` on a `<li>` that has trailing text after a child
+
+If a bullet item looks like `<li><b>Label</b>Body text after the bold.</li>` and
+its CSS sets `display:grid; grid-template-columns: <narrow> 1fr` on the `<li>`
+(intending the narrow column for a `::before` bullet), the trailing anonymous
+text node falls onto a second row in the narrow column and wraps one character
+per line. Use the position/pseudo pattern instead:
+
+```css
+.facts-grid li{position:relative;padding:12px 0 12px 22px;border-bottom:1px solid var(--hairline)}
+.facts-grid li::before{content:"\002022";color:var(--accent);position:absolute;left:0;top:10px}
+```
+
+This keeps the `<li>` as a normal block, lets prose flow naturally, and floats
+the bullet in the left gutter. The original buggy form rendered as a vertical
+column of single characters in the fun_facts section before being caught at
+verification.
+
+### Clipboard copy: always include a `document.execCommand` fallback
+
+`navigator.clipboard.writeText` requires a secure context AND a focused page,
+and headless Chromium on `file://` URLs often denies it silently. If the copy
+button JS early-returns when `navigator.clipboard` is missing, the buttons do
+nothing and verification fails.
+
+Pattern: try `navigator.clipboard` first, catch any rejection, fall back to the
+legacy textarea + `document.execCommand('copy')` path. This makes copy buttons
+work in restricted browser contexts AND lets verification scripts assert the
+copied-state class applies on click.
+
+```js
+function legacyCopy(text){
+  try{
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch(e){ return false; }
+}
+btn.addEventListener('click', function(){
+  var text = btn.getAttribute('data-copy') || '';
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(flash).catch(function(){
+      if(legacyCopy(text)) flash();
+    });
+  } else if(legacyCopy(text)){ flash(); }
+});
+```
+
+Same principle applies anywhere you'd reach for a modern web API that may not
+be available in every context. Always offer a graceful path.
 
 ---
 
