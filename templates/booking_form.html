@@ -173,3 +173,23 @@
   </div>
 </form>
 {% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var start = document.getElementById("b-start");
+    var end = document.getElementById("b-end");
+    if (!start || !end) { return; }
+    function sync() {
+      if (start.value) {
+        end.min = start.value;
+        if (!end.value) { end.value = start.value; }
+      } else {
+        end.removeAttribute("min");
+      }
+    }
+    start.addEventListener("change", sync);
+    sync();
+  })();
+</script>
+{% endblock %}
