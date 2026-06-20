@@ -1,0 +1,349 @@
+"""
+src/booking_parser.py
+
+Pure helpers for parsing pasted booking text into ParsedBooking records.
+
+Task 1 ships:
+  - module-level constants (confidence cutoff, paste size cap, LLM gating)
+  - ParsedBooking + ParseResult dataclasses
+  - shared extractors: dates, money, confirmation number, URL
+  - score_confidence() over a per-type required-fields map
+
+Per-type extractors (flight / hotel / car / …) and the orchestrator land in
+later tasks. No DB, no Flask, no network here.
+"""
+
+import logging
+import re
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Literal, Optional, Tuple
+
+from src.booking_helpers import BOOKING_TYPE_CODES  # noqa: F401 — exported for parsers
+from src.currency import SUPPORTED_CURRENCY_CODES
+
+logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────  constants  ─────────────────────────────────
+
+MIN_CONFIDENCE = 0.4
+MAX_BOOKINGS_PER_PARSE = 5
+MAX_PASTE_BYTES = 50_000
+LLM_MODEL = "claude-opus-4-8"
+LLM_MAX_TOKENS = 4096
+LLM_GATE_ENV_FLAG = "PASTE_PARSER_LLM_ENABLED"
+
+
+# ─────────────────────────────  dataclasses  ───────────────────────────────
+
+
+@dataclass
+class ParsedBooking:
+    """One booking pulled out of a pasted string. Mirrors Booking model fields."""
+
+    type: str
+    title: str
+    vendor: Optional[str] = None
+    confirmation_number: Optional[str] = None
+    start_datetime: Optional[datetime] = None
+    end_datetime: Optional[datetime] = None
+    location: Optional[str] = None
+    cost: Optional[float] = None
+    currency: Optional[str] = None
+    url: Optional[str] = None
+    notes: Optional[str] = None
+    confidence: float = 0.0
+    source: Literal["rules", "llm"] = "rules"
+
+
+@dataclass
+class ParseResult:
+    """All bookings recovered from one paste, plus where they came from."""
+
+    bookings: List[ParsedBooking]
+    source: Literal["rules", "llm", "none"]
+    notes: str = ""
+
+
+# ─────────────────────────────  extract_dates  ─────────────────────────────
+
+
+# Month name → number, for human-format date matchers below.
+_MONTHS: Dict[str, int] = {
+    "jan": 1, "january": 1,
+    "feb": 2, "february": 2,
+    "mar": 3, "march": 3,
+    "apr": 4, "april": 4,
+    "may": 5,
+    "jun": 6, "june": 6,
+    "jul": 7, "july": 7,
+    "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10,
+    "nov": 11, "november": 11,
+    "dec": 12, "december": 12,
+}
+
+# ISO 8601 datetime: 2026-08-17T14:30 or 2026-08-17 14:30 (optional seconds).
+_RE_ISO_DT = re.compile(
+    r"\b(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2})?\b"
+)
+
+# ISO 8601 date only: 2026-08-17.
+_RE_ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+
+# Human "Aug 17, 2026 [at] 3:45 PM" / "August 17, 2026 3:45 PM" /
+# "Mon, Aug 17 2026 3:45 PM". The leading weekday is optional.
+_MONTH_NAMES = r"(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)"
+_RE_HUMAN_DT = re.compile(
+    rf"(?:[A-Za-z]+,\s+)?({_MONTH_NAMES})\s+(\d{{1,2}}),?\s+(\d{{4}})(?:\s+(?:at\s+)?(\d{{1,2}}):(\d{{2}})\s*(AM|PM))?",
+    re.IGNORECASE,
+)
+
+# US slash form: 08/17/2026 [3:45 PM] or 8/17/26.
+_RE_US_SLASH_DT = re.compile(
+    r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM))?",
+    re.IGNORECASE,
+)
+
+
+def _to_24h(hour: int, ampm: Optional[str]) -> int:
+    """Convert 12h + AM/PM to 24h. AM/PM None means hour is already 24h."""
+    if ampm is None:
+        return hour
+    ap = ampm.upper()
+    if ap == "AM":
+        return 0 if hour == 12 else hour
+    # PM
+    return 12 if hour == 12 else hour + 12
+
+
+def extract_dates(text: str) -> List[datetime]:
+    """Find every recognisable date/datetime in text.
+
+    Returns naive datetimes (no tzinfo) sorted ascending, deduplicated.
+    Date-only matches become datetime(y, m, d, 0, 0).
+    Supports ISO, human ("Aug 17, 2026 3:45 PM"), and US slash forms.
+    """
+    found: List[datetime] = []
+    matched_spans: List[Tuple[int, int]] = []  # to avoid date-only re-matching a datetime
+
+    # 1. ISO datetimes first (most specific).
+    for m in _RE_ISO_DT.finditer(text):
+        y, mo, d, h, mi = (int(x) for x in m.groups()[:5])
+        try:
+            found.append(datetime(y, mo, d, h, mi))
+            matched_spans.append(m.span())
+        except ValueError as e:
+            logger.debug("extract_dates: bad ISO datetime %s: %s", m.group(0), e)
+
+    # 2. ISO date-only — skip ranges already covered by an ISO datetime match.
+    for m in _RE_ISO_DATE.finditer(text):
+        if any(s <= m.start() < e for s, e in matched_spans):
+            continue
+        y, mo, d = (int(x) for x in m.groups())
+        try:
+            found.append(datetime(y, mo, d, 0, 0))
+        except ValueError as e:
+            logger.debug("extract_dates: bad ISO date %s: %s", m.group(0), e)
+
+    # 3. Human form ("Aug 17, 2026 [at] 3:45 PM"), with or without time.
+    for m in _RE_HUMAN_DT.finditer(text):
+        month_str, day_str, year_str, h_str, mi_str, ampm = m.groups()
+        month = _MONTHS.get(month_str.lower())
+        if month is None:
+            continue
+        try:
+            day = int(day_str)
+            year = int(year_str)
+            if h_str is not None:
+                hour = _to_24h(int(h_str), ampm)
+                minute = int(mi_str)
+                found.append(datetime(year, month, day, hour, minute))
+            else:
+                found.append(datetime(year, month, day, 0, 0))
+        except ValueError as e:
+            logger.debug("extract_dates: bad human date %s: %s", m.group(0), e)
+
+    # 4. US slash form. 2-digit years assume 20YY.
+    for m in _RE_US_SLASH_DT.finditer(text):
+        mo_str, d_str, y_str, h_str, mi_str, ampm = m.groups()
+        try:
+            month = int(mo_str)
+            day = int(d_str)
+            year = int(y_str)
+            if year < 100:
+                year += 2000
+            if h_str is not None:
+                hour = _to_24h(int(h_str), ampm)
+                minute = int(mi_str)
+                found.append(datetime(year, month, day, hour, minute))
+            else:
+                found.append(datetime(year, month, day, 0, 0))
+        except ValueError as e:
+            logger.debug("extract_dates: bad US slash date %s: %s", m.group(0), e)
+
+    # Dedup + sort.
+    return sorted(set(found))
+
+
+# ─────────────────────────────  extract_money  ─────────────────────────────
+
+
+# Symbol → ISO code lookup for the symbol-form matcher.
+_SYMBOL_TO_CODE: Dict[str, str] = {
+    "$": "USD",
+    "€": "EUR",
+    "£": "GBP",
+    "¥": "JPY",  # ambiguous with CNY; JPY is the more common paste-context
+    "₹": "INR",
+    "₩": "KRW",
+    "฿": "THB",
+}
+
+
+def _parse_amount(raw: str) -> Optional[float]:
+    """Parse a numeric token that may use comma-as-decimal (European) form."""
+    raw = raw.strip()
+    # European "45,00" or "1.234,56" → "45.00" / "1234.56".
+    # US "1,234.56" → "1234.56".
+    has_dot = "." in raw
+    has_comma = "," in raw
+    if has_dot and has_comma:
+        # Whichever appears last is the decimal separator.
+        if raw.rfind(",") > raw.rfind("."):
+            raw = raw.replace(".", "").replace(",", ".")
+        else:
+            raw = raw.replace(",", "")
+    elif has_comma and not has_dot:
+        # Comma alone — treat as decimal if it has exactly 2 trailing digits,
+        # otherwise as a thousands separator.
+        last_comma = raw.rfind(",")
+        if len(raw) - last_comma - 1 == 2:
+            raw = raw.replace(",", ".")
+        else:
+            raw = raw.replace(",", "")
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def extract_money(text: str) -> Optional[Tuple[float, str]]:
+    """Find the largest currency amount in text.
+
+    Returns (amount, ISO_code) for the biggest detected total (heuristic:
+    "Total" lines tend to be the largest number). Supports $/€/£/¥/₹/₩/฿
+    symbols and ISO-code prefixes (USD, EUR, …) from currency.SUPPORTED_CURRENCIES.
+    Returns None if no amount is found.
+    """
+    candidates: List[Tuple[float, str]] = []
+
+    # ISO-code prefix form: "USD 123.45", "EUR 45,00".
+    code_alt = "|".join(re.escape(c) for c in sorted(SUPPORTED_CURRENCY_CODES))
+    re_iso = re.compile(
+        rf"\b({code_alt})\s+([\d.,]+)",
+        re.IGNORECASE,
+    )
+    for m in re_iso.finditer(text):
+        code = m.group(1).upper()
+        amount = _parse_amount(m.group(2))
+        if amount is not None:
+            candidates.append((amount, code))
+
+    # Symbol form: "$123.45", "€45,00".
+    symbol_class = "".join(re.escape(s) for s in _SYMBOL_TO_CODE.keys())
+    re_sym = re.compile(rf"([{symbol_class}])\s*([\d.,]+)")
+    for m in re_sym.finditer(text):
+        symbol = m.group(1)
+        code = _SYMBOL_TO_CODE.get(symbol)
+        if code is None:
+            continue
+        amount = _parse_amount(m.group(2))
+        if amount is not None:
+            candidates.append((amount, code))
+
+    if not candidates:
+        return None
+    # Largest amount wins — "Total" is usually the biggest number.
+    return max(candidates, key=lambda c: c[0])
+
+
+# ──────────────────────  extract_confirmation_number  ──────────────────────
+
+
+_CONFIRMATION_ANCHORS = (
+    r"confirmation\s*(?:number|code|#)?\s*:",
+    r"booking\s*(?:reference|ref|code|number)\s*:",
+    r"record\s*locator\s*:",
+    r"reservation\s*(?:number|code)\s*:",
+)
+_RE_CONFIRMATION_ANCHOR = re.compile(
+    r"(?:" + "|".join(_CONFIRMATION_ANCHORS) + r")\s*([A-Za-z0-9]{5,15})",
+    re.IGNORECASE,
+)
+
+# Fallback: standalone 6–10 alphanumeric token with at least one letter AND digit.
+_RE_CONFIRMATION_FALLBACK = re.compile(r"\b([A-Za-z0-9]{6,10})\b")
+
+
+def extract_confirmation_number(text: str) -> Optional[str]:
+    """Find a booking confirmation number.
+
+    Prefers an anchor phrase ("Confirmation #:", "Booking reference:",
+    "Record locator:", "Reservation number:"). Falls back to any 6–10
+    char alphanumeric token containing at least one letter AND one digit
+    (so plain words and pure numbers don't match).
+    """
+    m = _RE_CONFIRMATION_ANCHOR.search(text)
+    if m:
+        return m.group(1)
+
+    for m in _RE_CONFIRMATION_FALLBACK.finditer(text):
+        token = m.group(1)
+        if any(c.isalpha() for c in token) and any(c.isdigit() for c in token):
+            return token
+    return None
+
+
+# ─────────────────────────────  extract_url  ───────────────────────────────
+
+
+_RE_URL = re.compile(r"https?://\S+")
+
+
+def extract_url(text: str) -> Optional[str]:
+    """First http(s) URL in text, terminated by whitespace."""
+    m = _RE_URL.search(text)
+    return m.group(0) if m else None
+
+
+# ─────────────────────────────  score_confidence  ──────────────────────────
+
+
+# Fields a ParsedBooking of each type *should* have populated to count as a
+# confident extraction. The score is (filled / total) of these fields.
+_REQUIRED_FIELDS_PER_TYPE: Dict[str, Tuple[str, ...]] = {
+    "flight":     ("type", "title", "vendor", "start_datetime", "location"),
+    "hotel":      ("type", "title", "vendor", "start_datetime", "end_datetime"),
+    "car":        ("type", "title", "vendor", "start_datetime", "end_datetime"),
+    "restaurant": ("type", "title", "vendor", "start_datetime"),
+    "activity":   ("type", "title", "start_datetime"),
+    "transport":  ("type", "title", "vendor", "start_datetime"),
+    "other":      ("type", "title"),
+}
+
+
+def score_confidence(parsed: ParsedBooking) -> float:
+    """Fraction of required-for-type fields that are populated (0.0 to 1.0).
+
+    Unknown booking types score 0.0 — we don't know what to require.
+    """
+    required = _REQUIRED_FIELDS_PER_TYPE.get(parsed.type)
+    if not required:
+        return 0.0
+    filled = sum(
+        1 for f in required if getattr(parsed, f, None) not in (None, "")
+    )
+    return filled / len(required)
