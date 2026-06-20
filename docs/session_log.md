@@ -1,5 +1,48 @@
 # Session Log
 
+## 2026-06-20 — Closed out 2026-06-18 follow-ups: bookings_list N+1 + booking-chip CSS vars
+
+**Shipped:**
+- `perf(routes): eager-load itinerary_items in bookings_list` (64b9b83) — joinedload
+  added to bookings_query so `b.itinerary_items` access in the first_linked_item_id
+  loop no longer fires per-row queries.
+- `refactor(css): extract booking-link chip tints to --vp-booking-<type>-tint vars`
+  (06b4168) — 5 new tokens (flight / hotel / car / restaurant / activity) in
+  base.html :root; .itin-chip-booking-link.is-{type} rules in app.css now reference
+  them. RGBA values byte-identical to the previous literals; no visual change.
+  Verified by curling rendered HTML + served CSS.
+
+**Test status:** 854 passing / 0 failing (no change across the session).
+
+**Stopped at:** Both 2026-06-18 loose ends closed. Pushed to origin/main.
+
+**Pick up next with:** Finish the in-progress edit to `.claude/skills/trip-guide/SKILL.md`
+(246 uncommitted lines, untouched this session). Then write a catch-up session log
+entry for the trip-guide feature (commits bfedcf6..5e13c3f shipped without one).
+
+**Kickoff prompt for next session:**
+
+> Vacation Planner — finish the in-progress edit to `.claude/skills/trip-guide/SKILL.md`
+> (246 uncommitted lines, no other working-tree changes). Tests green at 854. Both
+> 2026-06-18 follow-ups closed this morning (commits 64b9b83 + 06b4168 on origin/main).
+> After committing the SKILL.md edit, write a catch-up session_log entry for the
+> trip-guide feature itself (commits bfedcf6..5e13c3f) — that whole shipment never
+> got logged. Also worth investigating: `instance/vacation.db` (160 KB, dated
+> 2026-06-19) — a stray Flask-default-path SQLite from some ad-hoc run. Gitignored,
+> not the production DB, but decide keep/delete.
+
+**Loose ends:**
+- `instance/vacation.db` (160 KB, 2026-06-19) — stray default-path SQLite. Some run
+  of app.py / `from app import …` didn't pick up the configured DB path and Flask
+  created its default instance file. Gitignored. Probably empty fixture data, but
+  given the 2026-06-15 data-loss-near-miss precedent, inspect before deleting.
+- `.claude/skills/trip-guide/SKILL.md` — 246 uncommitted lines carried over from
+  before this session. Mid-edit on the trip-guide skill itself.
+- Trip-guide feature (commits bfedcf6..5e13c3f) never got a session_log entry.
+  Worth a short catch-up note when the SKILL.md edit lands.
+
+---
+
 ## 2026-06-18 — Booking ↔ itinerary chips shipped
 
 **Shipped:**
