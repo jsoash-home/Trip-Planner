@@ -178,6 +178,54 @@ def test_flight_multi_segment_returns_list():
     # Each segment scored independently — both should be reasonable.
     assert out[0].confidence >= 0.6
     assert out[1].confidence >= 0.6
+    # Per-segment flight-no + vendor (guards segment-local search).
+    assert "BA 286" in out[0].title
+    assert "BA 285" in out[1].title
+    assert out[0].vendor == "British Airways"
+    assert out[1].vendor == "British Airways"
+
+
+def test_flight_multi_segment_same_date_returns_list():
+    # Two-leg same-day connection JFK → ATL → LAX. Both legs share Sep 17.
+    text = """Delta — itinerary
+
+Flight DL 100
+JFK → ATL
+Depart: Thu, Sep 17 2026 at 8:00 AM
+Arrive: Thu, Sep 17 2026 at 10:45 AM
+
+Flight DL 200
+ATL → LAX
+Depart: Thu, Sep 17 2026 at 12:15 PM
+Arrive: Thu, Sep 17 2026 at 2:30 PM
+
+Confirmation: DL77AB
+"""
+    out = extract_flight(text)
+    assert isinstance(out, list)
+    assert len(out) == 2
+    assert out[0].location == "JFK"
+    assert out[1].location == "ATL"
+    assert "DL 100" in out[0].title
+    assert "DL 200" in out[1].title
+
+
+def test_flight_anchor_does_not_match_department():
+    # "Department of Transportation" must NOT pollute the start_datetime;
+    # the real "Depart: Sep 17 2026" line is what should win.
+    text = """American Airlines
+
+Flight AA 100
+JFK → LAX
+Department of Transportation notice: see https://transportation.gov for details.
+Depart: Sep 17 2026 at 9:00 AM
+Arrive: Sep 17 2026 at 12:30 PM
+
+Confirmation: AA99XY
+"""
+    p = extract_flight(text)
+    assert isinstance(p, ParsedBooking)
+    assert p.start_datetime == datetime(2026, 9, 17, 9, 0)
 
 
 def test_flight_extracts_confirmation_number():

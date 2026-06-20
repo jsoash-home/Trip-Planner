@@ -410,10 +410,10 @@ _RE_KNOWN_AIRLINE = re.compile(
 # Departure / arrival date anchor patterns. The anchor captures everything to
 # end of line so we can hand the tail to extract_dates.
 _RE_DEP_ANCHOR = re.compile(
-    r"(?:Depart(?:ure|ing|s)?)\s*:?\s*(.+)", re.IGNORECASE
+    r"\bDepart(?:ure|ing|s)?\b\s*:\s*(.+)", re.IGNORECASE
 )
 _RE_ARR_ANCHOR = re.compile(
-    r"(?:Arriv(?:e|es|al|ing))\s*:?\s*(.+)", re.IGNORECASE
+    r"\bArriv(?:e|es|al|ing)\b\s*:\s*(.+)", re.IGNORECASE
 )
 
 # Window (in chars) around an IATA pair we scan for segment-local fields.
@@ -434,19 +434,19 @@ def _vendor_from_anchor_or_header(text: str) -> Optional[str]:
     return None
 
 
-def _nearest_flight_no(text: str, pair_start: int, pair_end: int) -> Optional[str]:
-    """Flight number whose match position is closest to the IATA pair (±200 chars)."""
-    best: Optional[Tuple[int, str]] = None
-    pair_mid = (pair_start + pair_end) // 2
-    for m in _RE_FLIGHT_NO.finditer(text):
-        # Avoid matching the IATA pair itself (3 letters + nothing) — flight no
-        # is 2 letters + digits so the regex won't grab IATA codes anyway.
-        dist = abs(((m.start() + m.end()) // 2) - pair_mid)
-        if dist > 200:
-            continue
-        no = f"{m.group(1)} {m.group(2)}"
+def _nearest_flight_no(segment: str, pair_offset_in_segment: int) -> Optional[str]:
+    """Find the flight number closest to the IATA pair within `segment`.
+
+    Ties broken by smallest distance, then by lowest position (first wins).
+    Segment slicing already constrains the search radius.
+    """
+    best: Optional[Tuple[int, str]] = None  # (distance, value)
+    for m in _RE_FLIGHT_NO.finditer(segment):
+        mid = (m.start() + m.end()) // 2
+        dist = abs(mid - pair_offset_in_segment)
+        candidate = f"{m.group(1)} {m.group(2)}"
         if best is None or dist < best[0]:
-            best = (dist, no)
+            best = (dist, candidate)
     return best[1] if best else None
 
 
@@ -507,10 +507,10 @@ def _extract_one_segment(
     segment = full_text[seg_start:seg_end]
 
     vendor = _vendor_from_anchor_or_header(segment) or email_vendor
-    flight_no = _nearest_flight_no(full_text, pair_start, pair_end)
-    # Within the segment, choose the anchor line nearest the IATA pair —
+    # Within the segment, choose anchors/flight-no nearest the IATA pair —
     # round-trip emails contain multiple Depart:/Arrive: lines.
     near_offset = pair_start - seg_start
+    flight_no = _nearest_flight_no(segment, near_offset)
     start_dt = _datetime_for_anchor(segment, _RE_DEP_ANCHOR, near_offset)
     end_dt = _datetime_for_anchor(segment, _RE_ARR_ANCHOR, near_offset)
 
@@ -573,11 +573,8 @@ def extract_flight(text: str) -> Optional[Union[ParsedBooking, List[ParsedBookin
         for m in pairs
     ]
 
-    # Single-segment short-circuit, or all segments share the same dep date.
-    distinct_dates = {s.start_datetime for s in segments if s.start_datetime}
-    if len(segments) == 1 or len(distinct_dates) < 2:
+    if len(segments) == 1:
         return segments[0]
-
-    # Multi-segment: sort by start_datetime; None-dated sort last.
+    # Multi-segment — sort by start_datetime (None-dated sort last).
     segments.sort(key=lambda s: (s.start_datetime is None, s.start_datetime))
     return segments
