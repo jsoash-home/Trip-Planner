@@ -15,6 +15,7 @@ from src.booking_parser import (
     extract_flight,
     extract_hotel,
     extract_money,
+    extract_other,
     extract_restaurant,
     extract_transport,
     extract_url,
@@ -590,3 +591,28 @@ def test_transport_returns_none_for_flight_with_iata():
 
 def test_transport_returns_none_for_hotel_confirmation():
     assert extract_transport(load_fixture("transport/_negative/hotel.txt")) is None
+
+
+# ──────────────────────────  extract_other  ──────────────────────────────────
+
+
+def test_other_generic_confirmation_captures_title_and_date():
+    p = extract_other(load_fixture("other/generic.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "other"
+    assert p.title == "Your booking is confirmed!"
+    assert p.start_datetime == datetime(2026, 8, 19, 0, 0)
+    assert p.confirmation_number == "BK-99214"
+    assert p.cost == 125.00
+    assert p.currency == "USD"
+    assert p.url == "https://example.com/booking/BK-99214"
+
+
+def test_other_returns_none_for_truly_empty_text():
+    assert extract_other("\n\n   \n") is None
+
+
+def test_other_confidence_capped_at_half():
+    p = extract_other(load_fixture("other/spa.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.confidence <= 0.5

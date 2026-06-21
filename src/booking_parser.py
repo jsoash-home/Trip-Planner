@@ -1546,3 +1546,60 @@ def extract_transport(text: str) -> Optional[ParsedBooking]:
     )
     p.confidence = score_confidence(p)
     return p
+
+
+# ─────────────────────────────  extract_other  ─────────────────────────────
+
+
+# Aggregator-like prefixes to strip from a title pulled from an email's first
+# line (e.g. forwarded or replied threads land with `Re:` / `Fwd:` headers).
+_RE_TITLE_PREFIX = re.compile(r"^(re|fwd|fw):\s*", re.IGNORECASE)
+
+# Cap applied to the score so the catch-all rarely outranks a real extractor.
+_OTHER_CONFIDENCE_CAP = 0.5
+
+
+def _first_nonempty_line(text: str) -> Optional[str]:
+    """First line in text that isn't empty/whitespace-only."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return None
+
+
+def extract_other(text: str) -> Optional[ParsedBooking]:
+    """Catch-all extractor — runs after every typed extractor returns None.
+
+    Returns None only when the text is genuinely empty: no dates, no money,
+    and no confirmation number. Otherwise builds a low-confidence
+    ParsedBooking from whatever the shared helpers can find, capped at 0.5
+    confidence so a real-type extractor always wins.
+    """
+    dates = extract_dates(text)
+    money = extract_money(text)
+    conf = extract_confirmation_number(text)
+
+    if not dates and money is None and conf is None:
+        return None
+
+    title_line = _first_nonempty_line(text)
+    if not title_line:
+        return None
+    title = _RE_TITLE_PREFIX.sub("", title_line)
+
+    p = ParsedBooking(
+        type="other",
+        title=title,
+        vendor=None,
+        confirmation_number=conf,
+        start_datetime=dates[0] if dates else None,
+        end_datetime=None,
+        location=None,
+        cost=money[0] if money else None,
+        currency=money[1] if money else None,
+        url=extract_url(text),
+        notes=None,
+    )
+    p.confidence = min(score_confidence(p), _OTHER_CONFIDENCE_CAP)
+    return p

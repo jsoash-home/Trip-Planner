@@ -1,0 +1,9 @@
+Your booking is confirmed!
+
+Confirmation: BK-99214
+
+Date: Wednesday, August 19 2026
+
+Total: $125.00
+
+Visit https://example.com/booking/BK-99214 for details.
