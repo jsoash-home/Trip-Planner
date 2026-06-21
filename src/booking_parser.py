@@ -966,3 +966,151 @@ def extract_car(text: str) -> Optional[ParsedBooking]:
     )
     p.confidence = score_confidence(p)
     return p
+
+
+# ─────────────────────────────  extract_restaurant  ────────────────────────
+
+
+# Required-anchor regexes. \b-bounded; the colon-form anchors require `:` so
+# casual mentions of "reservation" inside hotel prose don't false-match.
+# The "<anchor> at" forms (no colon) need the "at" itself as the disambiguator.
+_RESTAURANT_REQUIRED_ANCHORS = (
+    r"\bReservation\b\s*:",
+    r"\bTable\s+for\b\s*:",
+    r"\bBooking\s+confirmed\b\s*:",
+    r"\breservation\s+at\b",
+    r"\btable\s+at\b",
+    r"\bbooking\s+confirmed\s+at\b",
+)
+_RE_RESTAURANT_REQUIRED_ANCHOR = re.compile(
+    "|".join(_RESTAURANT_REQUIRED_ANCHORS), re.IGNORECASE
+)
+
+# Vendor anchors — `at <name>` forms. Lazy capture bounded by sentence
+# terminators / control words so it doesn't swallow trailing prose.
+_RE_RESTAURANT_AT_VENDOR = re.compile(
+    r"(?:Your\s+)?(?:reservation|table|booking\s+confirmed)\s+at\s+([^\n]+?)"
+    r"(?:\s+is\b|\s+for\b|\s+on\b|[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Restaurant aggregator brand names — stripped from subject-line vendor
+# fallback the same way hotel aggregators are. Sorted longest-first for
+# greedy regex alt safety.
+_RESTAURANT_AGGREGATOR_NAMES: Tuple[str, ...] = tuple(sorted(
+    ("OpenTable", "SevenRooms", "TheFork", "Resy", "Yelp", "Tock"),
+    key=len,
+    reverse=True,
+))
+
+# Party-size anchor for the notes field.
+_RE_RESTAURANT_PARTY = re.compile(
+    r"\b(?:Party\s+of|Table\s+for|Guests?:)\s*(\d+)\b", re.IGNORECASE
+)
+
+
+def _restaurant_vendor(text: str) -> Optional[str]:
+    """Find the restaurant name via `at <X>` anchors, stripping aggregator prefixes."""
+    m = _RE_RESTAURANT_AT_VENDOR.search(text)
+    if m:
+        name = m.group(1).strip()
+        # Strip aggregator brand if it leaked into the capture.
+        for agg in _RESTAURANT_AGGREGATOR_NAMES:
+            if name.lower().startswith(agg.lower()):
+                name = name[len(agg):].lstrip(" :—-").strip()
+        if name:
+            return name
+    return None
+
+
+# Address-like line: starts with a street number, has a comma, and looks like
+# a postal address. Used as the restaurant-location heuristic when there's no
+# `Address:` anchor — restaurant emails rarely use one.
+_RE_ADDRESS_LIKE_LINE = re.compile(
+    r"^\s*\d+\s+[^,\n]+,[^,\n]+(?:,[^\n]+)?\s*$"
+)
+
+
+def _restaurant_location(text: str, vendor: Optional[str]) -> Optional[str]:
+    """Address from explicit `Address:` anchor, else first address-like line.
+
+    Address-like = starts with a street number, has at least one comma. This
+    is the same heuristic used for "real" addresses in postal contexts; it
+    won't false-match on date lines or party-size lines.
+    """
+    m = _RE_ADDRESS_ANCHOR.search(text)
+    if m:
+        return m.group(1).strip() or None
+
+    for line in text.splitlines():
+        if _RE_ADDRESS_LIKE_LINE.match(line):
+            return line.strip()
+    return None
+
+
+def _restaurant_party_notes(text: str) -> Optional[str]:
+    """Extract a 'Party of N' summary if any party-size anchor is present."""
+    m = _RE_RESTAURANT_PARTY.search(text)
+    if not m:
+        return None
+    try:
+        n = int(m.group(1))
+    except ValueError:
+        return None
+    return f"Party of {n}"
+
+
+def extract_restaurant(text: str) -> Optional[ParsedBooking]:
+    """Parse a restaurant reservation out of pasted text.
+
+    Returns None if:
+      - the text looks like a flight (IATA airport-code pair), OR
+      - the text looks like a hotel (check-in anchor), OR
+      - the text looks like a car rental (pick-up anchor), OR
+      - none of the restaurant required-anchors are present.
+    """
+    # Triple-negative anchors: a flight, hotel, or car email should never
+    # reach the restaurant branch even if the word "reservation" appears.
+    if _RE_IATA_PAIR.search(text):
+        return None
+    if _RE_HOTEL_CHECKIN_ANCHOR.search(text):
+        return None
+    if _RE_CAR_PICKUP_ANCHOR.search(text):
+        return None
+
+    if not _RE_RESTAURANT_REQUIRED_ANCHOR.search(text):
+        return None
+
+    vendor = _restaurant_vendor(text)
+    title = f"Reservation at {vendor}" if vendor else "Restaurant reservation"
+
+    dates = extract_dates(text)
+    # Use the time as found — don't guess a 7pm default; the spec says
+    # missing time means the slot isn't clearly stated and None is honest.
+    start_dt: Optional[datetime] = None
+    for d in dates:
+        if d.hour != 0 or d.minute != 0:
+            start_dt = d
+            break
+
+    location = _restaurant_location(text, vendor)
+    conf = extract_confirmation_number(text)
+    cost = extract_money(text)
+    url = extract_url(text)
+    notes = _restaurant_party_notes(text)
+
+    p = ParsedBooking(
+        type="restaurant",
+        title=title,
+        vendor=vendor,
+        confirmation_number=conf,
+        start_datetime=start_dt,
+        end_datetime=None,
+        location=location,
+        cost=cost[0] if cost else None,
+        currency=cost[1] if cost else None,
+        url=url,
+        notes=notes,
+    )
+    p.confidence = score_confidence(p)
+    return p

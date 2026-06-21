@@ -14,6 +14,7 @@ from src.booking_parser import (
     extract_flight,
     extract_hotel,
     extract_money,
+    extract_restaurant,
     extract_url,
     score_confidence,
 )
@@ -404,3 +405,41 @@ def test_car_returns_none_for_taxi_receipt():
 def test_car_returns_none_for_hotel_confirmation():
     text = load_fixture("car/_negative/hotel.txt")
     assert extract_car(text) is None
+
+
+# ──────────────────────────  extract_restaurant  ──────────────────────────
+
+
+def test_restaurant_opentable_style():
+    p = extract_restaurant(load_fixture("restaurant/opentable.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "restaurant"
+    assert p.vendor == "Eleven Madison Park"
+    assert p.title == "Reservation at Eleven Madison Park"
+    assert p.start_datetime == datetime(2026, 7, 4, 20, 0)
+    assert p.end_datetime is None
+    assert p.location is not None and "11 Madison Ave" in p.location
+    # 4 required fields all present → confidence 1.0.
+    assert p.confidence == 1.0
+
+
+def test_restaurant_resy_style():
+    p = extract_restaurant(load_fixture("restaurant/resy.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "restaurant"
+    assert p.vendor == "Le Bernardin"
+    assert p.title == "Reservation at Le Bernardin"
+    assert p.start_datetime == datetime(2026, 9, 18, 19, 30)
+    assert p.end_datetime is None
+    assert p.location is not None and "155 W 51st St" in p.location
+
+
+def test_restaurant_captures_party_size_in_notes():
+    p = extract_restaurant(load_fixture("restaurant/opentable.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.notes is not None
+    assert "Party of 4" in p.notes
+
+
+def test_restaurant_returns_none_for_hotel():
+    assert extract_restaurant(load_fixture("restaurant/_negative/hotel.txt")) is None
