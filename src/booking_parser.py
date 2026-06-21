@@ -1603,3 +1603,58 @@ def extract_other(text: str) -> Optional[ParsedBooking]:
     )
     p.confidence = min(score_confidence(p), _OTHER_CONFIDENCE_CAP)
     return p
+
+
+# ─────────────────────────────  parse_rules  ───────────────────────────────
+
+
+# All per-type extractors, run in declaration order. extract_other is the
+# weak catch-all and runs last so high-confidence typed matches win the
+# top spot after sorting.
+_EXTRACTORS = (
+    extract_flight,
+    extract_hotel,
+    extract_car,
+    extract_restaurant,
+    extract_activity,
+    extract_transport,
+    extract_other,
+)
+
+
+def parse_rules(text: str) -> List[ParsedBooking]:
+    """Run all 7 extractors, filter by confidence, cap at MAX_BOOKINGS_PER_PARSE.
+
+    Each extractor returns:
+      - None — no match
+      - ParsedBooking — single segment
+      - list[ParsedBooking] — multiple segments (currently only flight does this)
+
+    Returns: list of ParsedBooking sorted by confidence descending, then by
+    start_datetime ascending (None-dated bookings sort last).
+    """
+    results: List[ParsedBooking] = []
+    for extractor in _EXTRACTORS:
+        out = extractor(text)
+        if out is None:
+            continue
+        if isinstance(out, list):
+            results.extend(out)
+        else:
+            results.append(out)
+
+    # Drop anything below the confidence floor.
+    kept = [r for r in results if r.confidence >= MIN_CONFIDENCE]
+
+    # Sort: highest confidence first; ties broken by earliest start_datetime;
+    # None-dated bookings sort last (tuple `(is_none, value)` keeps Python
+    # 3.9 happy without mixing None with datetime in a comparison).
+    kept.sort(
+        key=lambda b: (
+            -b.confidence,
+            b.start_datetime is None,
+            b.start_datetime or datetime.min,
+        )
+    )
+
+    return kept[:MAX_BOOKINGS_PER_PARSE]

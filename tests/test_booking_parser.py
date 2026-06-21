@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 
 from src.booking_parser import (
+    MAX_BOOKINGS_PER_PARSE,
+    MIN_CONFIDENCE,
     ParsedBooking,
     extract_activity,
     extract_car,
@@ -19,6 +21,7 @@ from src.booking_parser import (
     extract_restaurant,
     extract_transport,
     extract_url,
+    parse_rules,
     score_confidence,
 )
 
@@ -616,3 +619,59 @@ def test_other_confidence_capped_at_half():
     p = extract_other(load_fixture("other/spa.txt"))
     assert isinstance(p, ParsedBooking)
     assert p.confidence <= 0.5
+
+
+# ──────────────────────────  parse_rules  ───────────────────────────────────
+
+
+def test_parse_rules_one_flight_returns_one_booking():
+    # The united_single fixture is unambiguously a flight email. The flight
+    # extractor must produce exactly one segment for it, and that segment
+    # must rank first (a low-confidence `other` may co-exist — the spec
+    # says "always run all 7" — but flight takes the top spot).
+    bookings = parse_rules(load_fixture("flight/united_single.txt"))
+    flights = [b for b in bookings if b.type == "flight"]
+    assert len(flights) == 1
+    assert bookings[0].type == "flight"
+
+
+def test_parse_rules_round_trip_returns_two_bookings():
+    bookings = parse_rules(load_fixture("flight/round_trip.txt"))
+    flights = [b for b in bookings if b.type == "flight"]
+    assert len(flights) == 2
+    # Sorted by start_datetime ascending (within equal confidence).
+    assert flights[0].start_datetime == datetime(2026, 9, 21, 16, 15)
+    assert flights[1].start_datetime == datetime(2026, 10, 5, 14, 0)
+
+
+def test_parse_rules_garbage_text_returns_empty():
+    assert parse_rules("hello world this is not a booking") == []
+
+
+def test_parse_rules_drops_low_confidence_results():
+    # Every returned booking must clear the MIN_CONFIDENCE threshold. Use a
+    # flight fixture (high-confidence path) and assert the filter contract
+    # holds for every entry returned.
+    bookings = parse_rules(load_fixture("flight/united_single.txt"))
+    assert bookings, "expected at least one booking"
+    for b in bookings:
+        assert b.confidence >= MIN_CONFIDENCE
+
+
+def test_parse_rules_caps_at_max_bookings():
+    # Synthetic text with many IATA pairs — the flight extractor will fan
+    # them out into many segments. parse_rules must cap the returned list.
+    text = "\n".join(
+        f"Flight UA {100 + i}\nSFO → JFK\n" for i in range(8)
+    )
+    bookings = parse_rules(text)
+    assert len(bookings) <= MAX_BOOKINGS_PER_PARSE
+
+
+def test_parse_rules_flight_and_other_both_match_returns_flight_first():
+    # The united_single.txt fixture has flight + dates + money, so
+    # extract_other ALSO fires. parse_rules should rank flight (higher
+    # confidence) ahead of the catch-all other result.
+    bookings = parse_rules(load_fixture("flight/united_single.txt"))
+    assert bookings, "expected at least one booking"
+    assert bookings[0].type == "flight"
