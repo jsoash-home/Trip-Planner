@@ -679,15 +679,50 @@ def _line_has_time(line: str) -> bool:
 
 
 def _datetime_with_default_hour(line: str, default_hour: int) -> Optional[datetime]:
-    """Parse the first date in `line`; if no time was provided, snap to default_hour."""
+    """Parse the first date in `line`; if no time was provided, snap to default_hour.
+
+    Handles the "ISO date + separate time" form that extract_dates' ISO regex
+    misses ("2026-07-22 at 2:00 PM" — the ISO datetime regex requires a 2-digit
+    hour and a T or space, not " at "). In that case we parse the time
+    portion of the line separately and merge it into the date.
+    """
     dates = extract_dates(line)
     if not dates:
         return None
     dt = dates[0]
-    # extract_dates returns hour=0, minute=0 for date-only matches.
-    if dt.hour == 0 and dt.minute == 0 and not _line_has_time(line):
-        return dt.replace(hour=default_hour, minute=0)
+    if dt.hour == 0 and dt.minute == 0:
+        if _line_has_time(line):
+            time_match = _RE_ANY_CLOCK_TIME.search(line)
+            if time_match:
+                parsed_time = _parse_clock_time(time_match.group(0))
+                if parsed_time is not None:
+                    h, mi = parsed_time
+                    return dt.replace(hour=h, minute=mi)
+        else:
+            return dt.replace(hour=default_hour, minute=0)
     return dt
+
+
+# Matches a clock time with its hour/minute/optional AM/PM as groups —
+# companion to _RE_ANY_CLOCK_TIME (which just detects presence).
+_RE_CLOCK_TIME_PARTS = re.compile(
+    r"\b(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\b", re.IGNORECASE
+)
+
+
+def _parse_clock_time(s: str) -> Optional[Tuple[int, int]]:
+    """Parse '2:00 PM' / '14:30' → (14, 0) / (14, 30). None on bad input."""
+    m = _RE_CLOCK_TIME_PARTS.search(s)
+    if not m:
+        return None
+    try:
+        hour = _to_24h(int(m.group(1)), m.group(3))
+        minute = int(m.group(2))
+    except ValueError:
+        return None
+    if not (0 <= hour < 24 and 0 <= minute < 60):
+        return None
+    return hour, minute
 
 
 def _hotel_vendor(text: str) -> Optional[str]:
@@ -794,6 +829,149 @@ def extract_hotel(text: str) -> Optional[ParsedBooking]:
         currency=cost[1] if cost else None,
         url=url,
         notes=notes,
+    )
+    p.confidence = score_confidence(p)
+    return p
+
+
+# ─────────────────────────────  extract_car  ───────────────────────────────
+
+
+# Pick-up / drop-off anchors. \b-bounded with required `:` per Task 3 fix —
+# stops words like "Returning" or "Pickup line" from triggering when the
+# anchor is unrelated prose. Capture the tail of the line for date parsing.
+_RE_CAR_PICKUP_ANCHOR = re.compile(
+    r"\b(?:Pick[- ]?up|Collect)\b\s*:\s*(.+)", re.IGNORECASE
+)
+_RE_CAR_DROPOFF_ANCHOR = re.compile(
+    r"\b(?:Drop[- ]?off|Return)\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Pick-up location anchor — distinct from the datetime anchor.
+_RE_CAR_PICKUP_LOCATION = re.compile(
+    r"\b(?:Pick[- ]?up|Pickup)\s+location\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Rental-company vendor anchors.
+_RE_CAR_VENDOR_ANCHOR = re.compile(
+    r"\b(?:Rental\s+company|Rented\s+from|Vendor)\b\s*:\s*([^\n]+?)(?:[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Known rental companies — fallback when no anchor phrase matches.
+# Sorted longest-first so the alternation prefers specific multi-word names
+# ("Fox Rent A Car" over "Fox").
+_KNOWN_RENTAL_COMPANIES: Tuple[str, ...] = tuple(sorted(
+    (
+        "Fox Rent A Car",
+        "Ace Rent A Car",
+        "Europcar",
+        "National",
+        "Thrifty",
+        "Payless",
+        "Hertz",
+        "Avis",
+        "Sixt",
+        "Budget",
+        "Alamo",
+        "Dollar",
+        "Turo",
+        "Enterprise",
+    ),
+    key=len,
+    reverse=True,
+))
+_RE_KNOWN_RENTAL_COMPANY = re.compile(
+    r"\b(" + "|".join(re.escape(c) for c in _KNOWN_RENTAL_COMPANIES) + r")\b",
+    re.IGNORECASE,
+)
+
+# Car-time default when only a date is given.
+_CAR_DEFAULT_HOUR = 10
+
+
+def _car_vendor(text: str) -> Optional[str]:
+    """Find the rental company via anchor phrase, then known-list header scan."""
+    m = _RE_CAR_VENDOR_ANCHOR.search(text)
+    if m:
+        name = m.group(1).strip()
+        if name:
+            return name
+
+    # Fallback: scan first ~6 lines for a known rental company.
+    header = "\n".join(text.splitlines()[:6])
+    m = _RE_KNOWN_RENTAL_COMPANY.search(header)
+    if m:
+        # Return the canonical-case form from our list (case-insensitive match
+        # → match group is in input case; look up the canonical spelling).
+        matched_lower = m.group(1).lower()
+        for canonical in _KNOWN_RENTAL_COMPANIES:
+            if canonical.lower() == matched_lower:
+                return canonical
+        return m.group(1)
+    return None
+
+
+def _car_pickup_location(text: str, pickup_line: str) -> Optional[str]:
+    """Pickup location from explicit `Pick-up location:` anchor, else
+    the same-line text after the pickup datetime (split on em-dash)."""
+    m = _RE_CAR_PICKUP_LOCATION.search(text)
+    if m:
+        loc = m.group(1).strip()
+        if loc:
+            return loc
+
+    # Same-line fallback: "Pick-up: Mon, Jun 14 2026 at 10:00 AM — LAX Hertz Counter"
+    # Try em-dash first, then ascii hyphen surrounded by spaces.
+    for sep in (" — ", " - "):
+        if sep in pickup_line:
+            tail = pickup_line.split(sep, 1)[1].strip()
+            if tail:
+                return tail
+    return None
+
+
+def extract_car(text: str) -> Optional[ParsedBooking]:
+    """Parse a car rental booking out of pasted text.
+
+    Returns None if:
+      - the text looks like a flight (contains an IATA airport-code pair), OR
+      - the text looks like a hotel (has a check-in anchor), OR
+      - either a pickup or drop-off anchor is missing.
+    """
+    # Negative anchors: car emails shouldn't bleed across to flight or hotel.
+    if _RE_IATA_PAIR.search(text):
+        return None
+    if _RE_HOTEL_CHECKIN_ANCHOR.search(text):
+        return None
+
+    pickup_match = _RE_CAR_PICKUP_ANCHOR.search(text)
+    dropoff_match = _RE_CAR_DROPOFF_ANCHOR.search(text)
+    if not (pickup_match and dropoff_match):
+        return None
+
+    vendor = _car_vendor(text)
+    title = f"{vendor} car rental" if vendor else "Car rental"
+
+    start_dt = _datetime_with_default_hour(pickup_match.group(1), _CAR_DEFAULT_HOUR)
+    end_dt = _datetime_with_default_hour(dropoff_match.group(1), _CAR_DEFAULT_HOUR)
+
+    location = _car_pickup_location(text, pickup_match.group(1))
+    conf = extract_confirmation_number(text)
+    cost = extract_money(text)
+    url = extract_url(text)
+
+    p = ParsedBooking(
+        type="car",
+        title=title,
+        vendor=vendor,
+        confirmation_number=conf,
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+        location=location,
+        cost=cost[0] if cost else None,
+        currency=cost[1] if cost else None,
+        url=url,
     )
     p.confidence = score_confidence(p)
     return p

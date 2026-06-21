@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.booking_parser import (
     ParsedBooking,
+    extract_car,
     extract_confirmation_number,
     extract_dates,
     extract_flight,
@@ -357,3 +358,44 @@ def test_hotel_unknown_vendor_title_falls_back_to_hotel_stay():
     assert p.title == "Hotel stay"
     assert p.vendor is None
     assert p.confidence <= 0.8  # missing vendor → lower than full (4/5 = 0.8)
+
+
+# ─────────────────────────────  extract_car  ───────────────────────────────
+
+
+def test_car_hertz_style():
+    p = extract_car(load_fixture("car/hertz.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "car"
+    assert p.vendor == "Hertz"
+    assert p.title == "Hertz car rental"
+    assert p.start_datetime == datetime(2026, 6, 14, 10, 0)
+    assert p.end_datetime == datetime(2026, 6, 18, 9, 0)
+    assert p.location is not None and "LAX Hertz Counter" in p.location
+    assert p.cost == 385.00
+    assert p.currency == "USD"
+
+
+def test_car_enterprise_style():
+    p = extract_car(load_fixture("car/enterprise.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "car"
+    assert p.vendor == "Enterprise"
+    assert p.start_datetime == datetime(2026, 7, 22, 14, 0)
+    assert p.end_datetime == datetime(2026, 7, 25, 11, 0)
+    assert p.location is not None and "Enterprise Downtown San Francisco" in p.location
+    assert p.cost == 245.00
+
+
+def test_car_extracts_pickup_dropoff_times():
+    # Hertz fixture has explicit non-default hours (10:00 AM pickup, 9:00 AM return).
+    p = extract_car(load_fixture("car/hertz.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.start_datetime is not None
+    assert p.end_datetime is not None
+    assert p.start_datetime.hour == 10
+    assert p.end_datetime.hour == 9
+
+
+def test_car_returns_none_for_taxi_receipt():
+    assert extract_car(load_fixture("car/_negative/taxi.txt")) is None

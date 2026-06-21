@@ -1,0 +1,10 @@
+Enterprise Rent-A-Car
+Reservation Confirmation: ENT-58-3321
+
+Pick-up: 2026-07-22 at 2:00 PM
+Return: 2026-07-25 at 11:00 AM
+
+Pick-up location: Enterprise Downtown San Francisco, 222 Mason St
+
+Vehicle class: Compact (Nissan Versa or similar)
+Total estimated charges: $245.00

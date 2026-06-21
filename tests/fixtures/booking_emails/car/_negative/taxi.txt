@@ -1,0 +1,11 @@
+Uber Receipt — Thanks for riding!
+
+Tuesday, June 16 2026, 8:42 PM
+
+From: 123 Main St
+To: 456 Elm Ave
+
+Trip charges
+Subtotal: $14.50
+Tip: $2.00
+Total: $16.50

@@ -1,0 +1,10 @@
+SIXT Rent a Car
+Reservation Number: 3398472
+
+Vehicle: VW Golf or similar
+Pickup: 2026-08-30
+Dropoff: 2026-09-04
+
+Pickup location: Berlin Brandenburg Airport (BER)
+
+Total: EUR 188.50
