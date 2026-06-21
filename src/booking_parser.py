@@ -667,15 +667,30 @@ _HOTEL_CHECKIN_DEFAULT_HOUR = 15
 _HOTEL_CHECKOUT_DEFAULT_HOUR = 11
 
 
-# Matches a clock time like "3:00 PM" or "15:30" — used to tell apart
-# "date-only" from "datetime with a midnight time".
-_RE_ANY_CLOCK_TIME = re.compile(
-    r"\b\d{1,2}:\d{2}(?:\s*(?:AM|PM))?\b", re.IGNORECASE
+# Matches a clock time like "3:00 PM" or "15:30". Used for both presence
+# checks (_line_has_time) and to extract hour/minute/ampm (_parse_clock_time).
+_RE_CLOCK_TIME = re.compile(
+    r"\b(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\b", re.IGNORECASE
 )
 
 
 def _line_has_time(line: str) -> bool:
-    return bool(_RE_ANY_CLOCK_TIME.search(line))
+    return bool(_RE_CLOCK_TIME.search(line))
+
+
+def _parse_clock_time(s: str) -> Optional[Tuple[int, int]]:
+    """Parse '2:00 PM' / '14:30' → (14, 0) / (14, 30). None on bad input."""
+    m = _RE_CLOCK_TIME.search(s)
+    if not m:
+        return None
+    try:
+        hour = _to_24h(int(m.group(1)), m.group(3))
+        minute = int(m.group(2))
+    except ValueError:
+        return None
+    if not (0 <= hour < 24 and 0 <= minute < 60):
+        return None
+    return hour, minute
 
 
 def _datetime_with_default_hour(line: str, default_hour: int) -> Optional[datetime]:
@@ -692,37 +707,13 @@ def _datetime_with_default_hour(line: str, default_hour: int) -> Optional[dateti
     dt = dates[0]
     if dt.hour == 0 and dt.minute == 0:
         if _line_has_time(line):
-            time_match = _RE_ANY_CLOCK_TIME.search(line)
-            if time_match:
-                parsed_time = _parse_clock_time(time_match.group(0))
-                if parsed_time is not None:
-                    h, mi = parsed_time
-                    return dt.replace(hour=h, minute=mi)
+            parsed_time = _parse_clock_time(line)
+            if parsed_time is not None:
+                h, mi = parsed_time
+                return dt.replace(hour=h, minute=mi)
         else:
             return dt.replace(hour=default_hour, minute=0)
     return dt
-
-
-# Matches a clock time with its hour/minute/optional AM/PM as groups —
-# companion to _RE_ANY_CLOCK_TIME (which just detects presence).
-_RE_CLOCK_TIME_PARTS = re.compile(
-    r"\b(\d{1,2}):(\d{2})(?:\s*(AM|PM))?\b", re.IGNORECASE
-)
-
-
-def _parse_clock_time(s: str) -> Optional[Tuple[int, int]]:
-    """Parse '2:00 PM' / '14:30' → (14, 0) / (14, 30). None on bad input."""
-    m = _RE_CLOCK_TIME_PARTS.search(s)
-    if not m:
-        return None
-    try:
-        hour = _to_24h(int(m.group(1)), m.group(3))
-        minute = int(m.group(2))
-    except ValueError:
-        return None
-    if not (0 <= hour < 24 and 0 <= minute < 60):
-        return None
-    return hour, minute
 
 
 def _hotel_vendor(text: str) -> Optional[str]:
@@ -849,7 +840,7 @@ _RE_CAR_DROPOFF_ANCHOR = re.compile(
 
 # Pick-up location anchor — distinct from the datetime anchor.
 _RE_CAR_PICKUP_LOCATION = re.compile(
-    r"\b(?:Pick[- ]?up|Pickup)\s+location\b\s*:\s*(.+)", re.IGNORECASE
+    r"\bPick[- ]?up\s+location\b\s*:\s*(.+)", re.IGNORECASE
 )
 
 # Rental-company vendor anchors.

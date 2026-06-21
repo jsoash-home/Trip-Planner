@@ -399,3 +399,8 @@ def test_car_extracts_pickup_dropoff_times():
 
 def test_car_returns_none_for_taxi_receipt():
     assert extract_car(load_fixture("car/_negative/taxi.txt")) is None
+
+
+def test_car_returns_none_for_hotel_confirmation():
+    text = load_fixture("car/_negative/hotel.txt")
+    assert extract_car(text) is None
