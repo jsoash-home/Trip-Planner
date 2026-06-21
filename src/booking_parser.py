@@ -1349,8 +1349,10 @@ _RE_TRANSPORT_TYPE_KEYWORD = re.compile(
     r"\b(?:Train|Rail|Ferry|Bus|Coach)\b", re.IGNORECASE
 )
 
-# Origin → Destination pair on a single line. Line-anchored (MULTILINE) so
-# we don't accidentally span multiple lines via the \s in the character class.
+# Origin → Destination pair on a single line. Line-anchored (MULTILINE) and
+# the inner character classes use a literal space (not \s) so the capture
+# can't accidentally span newlines — the MULTILINE line anchors only enforce
+# line boundaries at the outer edges, not within the inner captures.
 # Origin/dest must start with a letter (so date/price lines like
 # "Total: $89.00" can't pose as a station name) and may include letters,
 # digits, spaces, apostrophes, periods, and hyphens (covers "St Pancras",
@@ -1358,10 +1360,10 @@ _RE_TRANSPORT_TYPE_KEYWORD = re.compile(
 #
 # Known limitation: French station names with apostrophes like "Gare
 # d'Austerlitz" are matched (apostrophe is in the class) but anything past
-# a non-`[\w\s'.\-]` character will be truncated. Acceptable for v1.
+# a non-`[\w '.\-]` character will be truncated. Acceptable for v1.
 _RE_TRANSPORT_OD_PAIR = re.compile(
-    r"^[ \t]*([A-Za-z][\w\s'.\-]*?)\s*(?:→|->|—|\s-\s|\sto\s)\s*"
-    r"([A-Za-z][\w\s'.\-]+?)[ \t]*$",
+    r"^[ \t]*([A-Za-z][\w '.\-]*?)[ \t]*(?:→|->|—|\s-\s|\sto\s)[ \t]*"
+    r"([A-Za-z][\w '.\-]+?)[ \t]*$",
     re.MULTILINE,
 )
 

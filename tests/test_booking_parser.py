@@ -548,12 +548,10 @@ def test_transport_amtrak_style():
     assert isinstance(p, ParsedBooking)
     assert p.type == "transport"
     assert p.vendor == "Amtrak"
-    assert "New York Penn Station" in p.title
-    assert "Washington Union Station" in p.title
-    assert "→" in p.title
+    assert p.title == "Amtrak: New York Penn Station → Washington Union Station"
     assert p.start_datetime == datetime(2026, 6, 11, 7, 0)
     assert p.end_datetime == datetime(2026, 6, 11, 10, 25)
-    assert p.location is not None and "New York Penn Station" in p.location
+    assert p.location == "New York Penn Station"
     assert p.cost == 89.00
     assert p.currency == "USD"
     assert p.confirmation_number == "AMT-7721-NER"
@@ -565,11 +563,10 @@ def test_transport_eurostar_style():
     assert isinstance(p, ParsedBooking)
     assert p.type == "transport"
     assert p.vendor == "Eurostar"
-    assert "London St Pancras" in p.title
-    assert "Paris Gare du Nord" in p.title
+    assert p.title == "Eurostar: London St Pancras → Paris Gare du Nord"
     assert p.start_datetime == datetime(2026, 8, 15, 11, 31)
     assert p.end_datetime == datetime(2026, 8, 15, 14, 47)
-    assert p.location is not None and "London St Pancras" in p.location
+    assert p.location == "London St Pancras"
     assert p.cost == 320.00
     assert p.currency == "GBP"
 
@@ -579,14 +576,17 @@ def test_transport_ferry_style():
     assert isinstance(p, ParsedBooking)
     assert p.type == "transport"
     assert p.vendor == "Stena Line"
-    assert "Harwich" in p.title
-    assert "Hook of Holland" in p.title
+    assert p.title == "Stena Line: Harwich → Hook of Holland"
     assert p.start_datetime == datetime(2026, 7, 5, 21, 0)
     assert p.end_datetime == datetime(2026, 7, 6, 7, 45)
-    assert p.location is not None and "Harwich" in p.location
+    assert p.location == "Harwich"
     assert p.cost == 285.00
     assert p.currency == "EUR"
 
 
 def test_transport_returns_none_for_flight_with_iata():
     assert extract_transport(load_fixture("transport/_negative/united_flight.txt")) is None
+
+
+def test_transport_returns_none_for_hotel_confirmation():
+    assert extract_transport(load_fixture("transport/_negative/hotel.txt")) is None
