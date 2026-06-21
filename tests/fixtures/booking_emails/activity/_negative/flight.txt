@@ -1,0 +1,6 @@
+United Airlines — Flight Confirmation
+Flight UA 423
+SFO → LHR
+Depart: Tue, Aug 17 2026 at 10:30 PM
+Arrive: Wed, Aug 18 2026 at 5:15 PM
+Confirmation: AB12CD

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.booking_parser import (
     ParsedBooking,
+    extract_activity,
     extract_car,
     extract_confirmation_number,
     extract_dates,
@@ -443,3 +444,59 @@ def test_restaurant_captures_party_size_in_notes():
 
 def test_restaurant_returns_none_for_hotel():
     assert extract_restaurant(load_fixture("restaurant/_negative/hotel.txt")) is None
+
+
+def test_restaurant_unknown_vendor_title_falls_back():
+    """A reservation paste with `Reservation:` anchor but no recognizable
+    `at <X>` should still parse, with title='Restaurant reservation'."""
+    text = """Reservation: confirmed for Saturday, March 7 2026 at 7:30 PM
+Party of 2
+
+Confirmation: RSV-99001
+"""
+    p = extract_restaurant(text)
+    assert p is not None
+    assert p.type == "restaurant"
+    assert p.title == "Restaurant reservation"
+    assert p.vendor is None
+
+
+# ──────────────────────────  extract_activity  ──────────────────────────────
+
+
+def test_activity_viator_tour():
+    p = extract_activity(load_fixture("activity/viator.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "activity"
+    assert "Louvre" in p.title
+    assert p.start_datetime == datetime(2026, 8, 14, 10, 30)
+    assert p.end_datetime is None
+    assert p.cost == 89.00
+    assert p.currency == "EUR"
+
+
+def test_activity_eventbrite_concert():
+    p = extract_activity(load_fixture("activity/eventbrite.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "activity"
+    assert "Beyoncé" in p.title or "Renaissance" in p.title
+    assert p.start_datetime == datetime(2026, 7, 19, 20, 0)
+    assert p.location is not None and "Madison Square Garden" in p.location
+    assert p.cost == 549.00
+    assert p.currency == "USD"
+
+
+def test_activity_museum_tickets():
+    # Date-only fixture — exercises "no default hour" rule.
+    p = extract_activity(load_fixture("activity/museum.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "activity"
+    # Title should fall back to first-line "The Metropolitan Museum of Art".
+    assert "Metropolitan" in p.title
+    assert p.start_datetime == datetime(2026, 10, 8, 0, 0)
+    assert p.location is not None and "1000 Fifth Ave" in p.location
+    assert p.cost == 60.00
+
+
+def test_activity_returns_none_for_flight():
+    assert extract_activity(load_fixture("activity/_negative/flight.txt")) is None

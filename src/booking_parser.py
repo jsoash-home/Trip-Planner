@@ -1031,7 +1031,7 @@ _RE_ADDRESS_LIKE_LINE = re.compile(
 )
 
 
-def _restaurant_location(text: str, vendor: Optional[str]) -> Optional[str]:
+def _restaurant_location(text: str) -> Optional[str]:
     """Address from explicit `Address:` anchor, else first address-like line.
 
     Address-like = starts with a street number, has at least one comma. This
@@ -1093,7 +1093,7 @@ def extract_restaurant(text: str) -> Optional[ParsedBooking]:
             start_dt = d
             break
 
-    location = _restaurant_location(text, vendor)
+    location = _restaurant_location(text)
     conf = extract_confirmation_number(text)
     cost = extract_money(text)
     url = extract_url(text)
@@ -1111,6 +1111,221 @@ def extract_restaurant(text: str) -> Optional[ParsedBooking]:
         currency=cost[1] if cost else None,
         url=url,
         notes=notes,
+    )
+    p.confidence = score_confidence(p)
+    return p
+
+
+# ─────────────────────────────  extract_activity  ──────────────────────────
+
+
+# Required-anchor regexes. \b-bounded; the colon-form anchors require `:` so
+# casual mentions of "ticket" or "event" inside other-type prose don't
+# false-match. Ordered roughly by specificity — alternation is non-greedy
+# enough that order rarely matters but we keep the "(s)" forms grouped.
+_ACTIVITY_REQUIRED_ANCHORS = (
+    r"\bTickets?\s+for\b\s*:",
+    r"\bTicket\(s\)\s+for\b\s*:?",
+    r"\bYour\s+tickets?\s+for\b",
+    r"\bTour\b\s*:",
+    r"\bAdmission\b\s*:",
+    r"\bEvent\b\s*:",
+    r"\bBooking\s+for\b\s*:",
+)
+_RE_ACTIVITY_REQUIRED_ANCHOR = re.compile(
+    "|".join(_ACTIVITY_REQUIRED_ANCHORS), re.IGNORECASE
+)
+
+# Title-capturing anchors: `Tickets for: <name>`, `Your tickets for: <name>`,
+# `Booking for: <name>`. Lazy capture bounded by newline / sentence terminator.
+_RE_ACTIVITY_TICKETS_FOR = re.compile(
+    r"(?:Your\s+)?Tickets?\s+for\s*:\s*([^\n]+?)(?:[.!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_ACTIVITY_BOOKING_FOR = re.compile(
+    r"\bBooking\s+for\s*:\s*([^\n]+?)(?:[.!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Vendor anchors — `at <X>`, `Hosted by <X>`, `Your visit to <X>`. Lazy
+# capture bounded by sentence terminators / control words, mirroring hotel /
+# restaurant patterns.
+_RE_ACTIVITY_HOSTED_BY = re.compile(
+    r"\bHosted\s+by\s+([^\n]+?)(?:\s+is\b|\s+on\b|[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_ACTIVITY_YOUR_VISIT_TO = re.compile(
+    r"\bYour\s+visit\s+to\s+([^\n]+?)(?:\s+is\b|\s+on\b|[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_ACTIVITY_TICKETS_AT = re.compile(
+    r"\bTickets?\s+for\s+[^\n]+?\s+at\s+([^\n]+?)(?:\s+is\b|\s+on\b|[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Venue / location anchors.
+_RE_ACTIVITY_VENUE = re.compile(
+    r"\bVenue\b\s*:\s*(.+)", re.IGNORECASE
+)
+_RE_ACTIVITY_LOCATION = re.compile(
+    r"\bLocation\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# End-time anchors — most activities are single-point so end_datetime stays
+# None. These let us pick up the rare explicit case.
+_RE_ACTIVITY_ENDS_AT = re.compile(
+    r"\bEnds\s+at\b\s*:?\s*(.+)", re.IGNORECASE
+)
+_RE_ACTIVITY_UNTIL = re.compile(
+    r"\buntil\s+(.+)", re.IGNORECASE
+)
+
+# Activity aggregator brand names — stripped from subject-line / title
+# vendor fallback the same way hotel + restaurant aggregators are. Sorted
+# longest-first for greedy regex alt safety.
+_ACTIVITY_AGGREGATOR_NAMES: Tuple[str, ...] = tuple(sorted(
+    (
+        "Atlas Obscura",
+        "GetYourGuide",
+        "TripAdvisor",
+        "Ticketmaster",
+        "Eventbrite",
+        "StubHub",
+        "Viator",
+        "Klook",
+    ),
+    key=len,
+    reverse=True,
+))
+
+
+def _strip_aggregator_prefix(name: str) -> str:
+    """Strip a leading aggregator brand (case-insensitive) + common separators."""
+    for agg in _ACTIVITY_AGGREGATOR_NAMES:
+        if name.lower().startswith(agg.lower()):
+            return name[len(agg):].lstrip(" :—-").strip()
+    return name
+
+
+def _activity_vendor(text: str) -> Optional[str]:
+    """Find the activity provider via `at <X>` / `Hosted by <X>` / `Your visit to <X>` anchors."""
+    for anchor in (
+        _RE_ACTIVITY_TICKETS_AT,
+        _RE_ACTIVITY_HOSTED_BY,
+        _RE_ACTIVITY_YOUR_VISIT_TO,
+    ):
+        m = anchor.search(text)
+        if m:
+            name = _strip_aggregator_prefix(m.group(1).strip())
+            if name:
+                return name
+    return None
+
+
+def _activity_title(text: str, vendor: Optional[str]) -> str:
+    """Pick the best title: anchor capture, first-line subject, or a fallback.
+
+    Order:
+      1. `Tickets for: <Event>` / `Your tickets for: <Event>` / `Booking for: <Event>`.
+      2. First non-blank line, stripped of aggregator prefix — if what
+         remains isn't empty AND isn't just an aggregator name on its own.
+      3. `f"{vendor} event"` if vendor is known.
+      4. `"Activity booking"`.
+    """
+    for anchor in (_RE_ACTIVITY_TICKETS_FOR, _RE_ACTIVITY_BOOKING_FOR):
+        m = anchor.search(text)
+        if m:
+            name = m.group(1).strip()
+            if name:
+                return name
+
+    # First-line subject fallback.
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Skip if the line IS just an aggregator name (e.g. "Eventbrite").
+        if stripped.lower() in {a.lower() for a in _ACTIVITY_AGGREGATOR_NAMES}:
+            continue
+        candidate = _strip_aggregator_prefix(stripped)
+        if candidate:
+            return candidate
+        # else: keep looking
+        break
+
+    if vendor:
+        return f"{vendor} event"
+    return "Activity booking"
+
+
+def _activity_location(text: str) -> Optional[str]:
+    """Venue address from `Venue:`, `Location:`, or `Address:` anchor."""
+    for anchor in (_RE_ACTIVITY_VENUE, _RE_ACTIVITY_LOCATION, _RE_ADDRESS_ANCHOR):
+        m = anchor.search(text)
+        if m:
+            value = m.group(1).strip()
+            if value:
+                return value
+    return None
+
+
+def _activity_end_datetime(text: str) -> Optional[datetime]:
+    """Look for an explicit end time — `Ends at:` or `until <time>`."""
+    for anchor in (_RE_ACTIVITY_ENDS_AT, _RE_ACTIVITY_UNTIL):
+        m = anchor.search(text)
+        if m:
+            dates = extract_dates(m.group(1))
+            if dates:
+                return dates[0]
+    return None
+
+
+def extract_activity(text: str) -> Optional[ParsedBooking]:
+    """Parse a single activity / event ticket out of pasted text.
+
+    Returns None if:
+      - the text looks like a flight (IATA airport-code pair), OR
+      - the text looks like a hotel (check-in anchor), OR
+      - the text looks like a car rental (pick-up anchor), OR
+      - none of the activity required-anchors are present.
+    """
+    # Triple-negative anchors: a flight, hotel, or car email should never
+    # reach the activity branch even if the word "ticket" appears.
+    if _RE_IATA_PAIR.search(text):
+        return None
+    if _RE_HOTEL_CHECKIN_ANCHOR.search(text):
+        return None
+    if _RE_CAR_PICKUP_ANCHOR.search(text):
+        return None
+
+    if not _RE_ACTIVITY_REQUIRED_ANCHOR.search(text):
+        return None
+
+    vendor = _activity_vendor(text)
+    title = _activity_title(text, vendor)
+
+    # start_datetime: first datetime in text. No default hour — None when
+    # the paste is date-only (per spec).
+    dates = extract_dates(text)
+    start_dt: Optional[datetime] = dates[0] if dates else None
+    end_dt = _activity_end_datetime(text)
+
+    location = _activity_location(text)
+    conf = extract_confirmation_number(text)
+    cost = extract_money(text)
+    url = extract_url(text)
+
+    p = ParsedBooking(
+        type="activity",
+        title=title,
+        vendor=vendor,
+        confirmation_number=conf,
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+        location=location,
+        cost=cost[0] if cost else None,
+        currency=cost[1] if cost else None,
+        url=url,
     )
     p.confidence = score_confidence(p)
     return p
