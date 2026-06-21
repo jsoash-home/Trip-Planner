@@ -1643,6 +1643,15 @@ def parse_rules(text: str) -> List[ParsedBooking]:
         else:
             results.append(out)
 
+    # Suppress the catch-all "other" extractor when any typed extractor matched.
+    # extract_other fires whenever dates + money + a confirmation number are
+    # present (i.e. every real booking email), so without this filter a single
+    # flight paste would produce 2 results and route the UI to the multi-
+    # booking review screen instead of the single-form pre-fill.
+    typed_results = [b for b in results if b.type != "other"]
+    if typed_results:
+        results = typed_results
+
     # Drop anything below the confidence floor.
     kept = [r for r in results if r.confidence >= MIN_CONFIDENCE]
 

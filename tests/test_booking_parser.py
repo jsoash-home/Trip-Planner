@@ -626,13 +626,31 @@ def test_other_confidence_capped_at_half():
 
 def test_parse_rules_one_flight_returns_one_booking():
     # The united_single fixture is unambiguously a flight email. The flight
-    # extractor must produce exactly one segment for it, and that segment
-    # must rank first (a low-confidence `other` may co-exist — the spec
-    # says "always run all 7" — but flight takes the top spot).
-    bookings = parse_rules(load_fixture("flight/united_single.txt"))
-    flights = [b for b in bookings if b.type == "flight"]
-    assert len(flights) == 1
-    assert bookings[0].type == "flight"
+    # extractor must produce exactly one segment for it, and the catch-all
+    # `other` result must be suppressed when a typed extractor matched —
+    # otherwise the UI flow routes to the multi-booking review screen.
+    result = parse_rules(load_fixture("flight/united_single.txt"))
+    assert len(result) == 1
+    assert result[0].type == "flight"
+
+
+def test_parse_rules_other_only_when_no_typed_extractor_matches():
+    """The catch-all extractor should not pollute results when a real
+    type extractor (flight/hotel/etc.) already matched."""
+    text = load_fixture("flight/united_single.txt")
+    result = parse_rules(text)
+    types = {b.type for b in result}
+    assert "flight" in types
+    assert "other" not in types
+
+
+def test_parse_rules_returns_other_when_only_generic_signals_present():
+    """When nothing typed matches but dates/money/conf are present,
+    parse_rules should still return the other-extractor result."""
+    text = load_fixture("other/generic.txt")
+    result = parse_rules(text)
+    assert len(result) == 1
+    assert result[0].type == "other"
 
 
 def test_parse_rules_round_trip_returns_two_bookings():
@@ -668,10 +686,11 @@ def test_parse_rules_caps_at_max_bookings():
     assert len(bookings) <= MAX_BOOKINGS_PER_PARSE
 
 
-def test_parse_rules_flight_and_other_both_match_returns_flight_first():
+def test_parse_rules_flight_wins_over_other_fallback():
     # The united_single.txt fixture has flight + dates + money, so
-    # extract_other ALSO fires. parse_rules should rank flight (higher
-    # confidence) ahead of the catch-all other result.
+    # extract_other ALSO fires internally. parse_rules suppresses the
+    # catch-all `other` whenever any typed extractor matched, so the
+    # returned list should lead with flight (and not contain other).
     bookings = parse_rules(load_fixture("flight/united_single.txt"))
     assert bookings, "expected at least one booking"
     assert bookings[0].type == "flight"
