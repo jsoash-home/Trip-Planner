@@ -1,0 +1,5 @@
+Marriott — Reservation Confirmation
+Confirmation #: 88842310
+Check-in: Friday, Aug 8 2026
+Check-out: Sunday, Aug 10 2026
+Total: $682.00

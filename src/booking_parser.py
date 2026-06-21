@@ -277,10 +277,13 @@ _CONFIRMATION_ANCHORS = (
     r"confirmation\s*(?:number|code|#)?\s*:",
     r"booking\s*(?:reference|ref|code|number)\s*:",
     r"record\s*locator\s*:",
-    r"reservation\s*(?:number|code)\s*:",
+    r"reservation\s*(?:number|code|#)?\s*:",
 )
+# Capture allows hyphens in the middle (e.g. Amtrak's "AMT-7721-NER")
+# but not at either end. 5-15 chars total.
 _RE_CONFIRMATION_ANCHOR = re.compile(
-    r"(?:" + "|".join(_CONFIRMATION_ANCHORS) + r")\s*([A-Za-z0-9]{5,15})",
+    r"(?:" + "|".join(_CONFIRMATION_ANCHORS) + r")\s*"
+    r"([A-Za-z0-9][A-Za-z0-9\-]{3,13}[A-Za-z0-9])",
     re.IGNORECASE,
 )
 
@@ -1138,8 +1141,10 @@ _RE_ACTIVITY_REQUIRED_ANCHOR = re.compile(
 
 # Title-capturing anchors: `Tickets for: <name>`, `Your tickets for: <name>`,
 # `Booking for: <name>`. Lazy capture bounded by newline / sentence terminator.
+# The `\s+at\s+` boundary keeps the venue ("...at Madison Square Garden")
+# out of the title — venue belongs in `location`.
 _RE_ACTIVITY_TICKETS_FOR = re.compile(
-    r"(?:Your\s+)?Tickets?\s+for\s*:\s*([^\n]+?)(?:[.!]|$)",
+    r"(?:Your\s+)?Tickets?\s+for\s*:\s*([^\n]+?)(?:\s+at\s+|[.!]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
 _RE_ACTIVITY_BOOKING_FOR = re.compile(
@@ -1172,12 +1177,11 @@ _RE_ACTIVITY_LOCATION = re.compile(
 )
 
 # End-time anchors — most activities are single-point so end_datetime stays
-# None. These let us pick up the rare explicit case.
+# None. These let us pick up the rare explicit case. `Ends at` is the only
+# anchor we trust; a bare `until <date>` false-matches refund-policy lines
+# like "Refundable until July 17 2026 at 11:59 PM" so we don't accept it.
 _RE_ACTIVITY_ENDS_AT = re.compile(
     r"\bEnds\s+at\b\s*:?\s*(.+)", re.IGNORECASE
-)
-_RE_ACTIVITY_UNTIL = re.compile(
-    r"\buntil\s+(.+)", re.IGNORECASE
 )
 
 # Activity aggregator brand names — stripped from subject-line / title
@@ -1270,13 +1274,12 @@ def _activity_location(text: str) -> Optional[str]:
 
 
 def _activity_end_datetime(text: str) -> Optional[datetime]:
-    """Look for an explicit end time — `Ends at:` or `until <time>`."""
-    for anchor in (_RE_ACTIVITY_ENDS_AT, _RE_ACTIVITY_UNTIL):
-        m = anchor.search(text)
-        if m:
-            dates = extract_dates(m.group(1))
-            if dates:
-                return dates[0]
+    """Look for an explicit end time — only the `Ends at:` anchor is trusted."""
+    m = _RE_ACTIVITY_ENDS_AT.search(text)
+    if m:
+        dates = extract_dates(m.group(1))
+        if dates:
+            return dates[0]
     return None
 
 
@@ -1304,9 +1307,14 @@ def extract_activity(text: str) -> Optional[ParsedBooking]:
     vendor = _activity_vendor(text)
     title = _activity_title(text, vendor)
 
-    # start_datetime: first datetime in text. No default hour — None when
-    # the paste is date-only (per spec).
-    dates = extract_dates(text)
+    # start_datetime: first datetime in text, excluding refund-policy lines
+    # ("Refundable until <date>" must not pose as the event time). No
+    # default hour — None when the paste is date-only (per spec).
+    event_text = "\n".join(
+        line for line in text.splitlines()
+        if "refund" not in line.lower()
+    )
+    dates = extract_dates(event_text)
     start_dt: Optional[datetime] = dates[0] if dates else None
     end_dt = _activity_end_datetime(text)
 
@@ -1323,6 +1331,213 @@ def extract_activity(text: str) -> Optional[ParsedBooking]:
         start_datetime=start_dt,
         end_datetime=end_dt,
         location=location,
+        cost=cost[0] if cost else None,
+        currency=cost[1] if cost else None,
+        url=url,
+    )
+    p.confidence = score_confidence(p)
+    return p
+
+
+# ─────────────────────────────  extract_transport  ─────────────────────────
+
+
+# Transport-type keyword anchor. The keyword itself doesn't need a colon —
+# it just needs to appear somewhere in the email. Case-insensitive, \b-bounded
+# so "Coachman" doesn't trip the "Coach" anchor.
+_RE_TRANSPORT_TYPE_KEYWORD = re.compile(
+    r"\b(?:Train|Rail|Ferry|Bus|Coach)\b", re.IGNORECASE
+)
+
+# Origin → Destination pair on a single line. Line-anchored (MULTILINE) so
+# we don't accidentally span multiple lines via the \s in the character class.
+# Origin/dest must start with a letter (so date/price lines like
+# "Total: $89.00" can't pose as a station name) and may include letters,
+# digits, spaces, apostrophes, periods, and hyphens (covers "St Pancras",
+# "Hook of Holland", "Gare d'Austerlitz" modulo the apostrophe limitation).
+#
+# Known limitation: French station names with apostrophes like "Gare
+# d'Austerlitz" are matched (apostrophe is in the class) but anything past
+# a non-`[\w\s'.\-]` character will be truncated. Acceptable for v1.
+_RE_TRANSPORT_OD_PAIR = re.compile(
+    r"^[ \t]*([A-Za-z][\w\s'.\-]*?)\s*(?:→|->|—|\s-\s|\sto\s)\s*"
+    r"([A-Za-z][\w\s'.\-]+?)[ \t]*$",
+    re.MULTILINE,
+)
+
+# Carrier vendor anchors.
+_RE_TRANSPORT_VENDOR_ANCHOR = re.compile(
+    r"\b(?:Train\s+operator|Operator|Carrier)\s*:\s*([^\n]+?)(?:[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Departure / arrival anchors. The plain-flight `_RE_DEP_ANCHOR` already
+# matches `Depart:` / `Departure:`; we also want `Leaving:`.
+_RE_TRANSPORT_DEP_ANCHOR = re.compile(
+    r"\b(?:Depart(?:ure|ing|s)?|Leaving)\b\s*:\s*(.+)", re.IGNORECASE
+)
+_RE_TRANSPORT_ARR_ANCHOR = re.compile(
+    r"\bArriv(?:e|es|al|ing)\b\s*:\s*(.+)", re.IGNORECASE
+)
+
+# Known transport carriers — fallback when no anchor matches. Sorted
+# longest-first so multi-word names ("Deutsche Bahn") beat shorter ones
+# ("DB") in the alternation.
+_KNOWN_TRANSPORT_CARRIERS: Tuple[str, ...] = tuple(sorted(
+    (
+        "Amtrak",
+        "Eurostar",
+        "Greyhound",
+        "FlixBus",
+        "Megabus",
+        "OUIGO",
+        "SNCF",
+        "DB",
+        "Deutsche Bahn",
+        "Trenitalia",
+        "Italo",
+        "Renfe",
+        "AVE",
+        "ÖBB",
+        "NS",
+        "Eurail",
+        "ScotRail",
+        "LNER",
+        "GWR",
+        "Northern",
+        "Avanti",
+        "JR",
+        "Japan Rail",
+        "Shinkansen",
+        "Stena Line",
+        "Brittany Ferries",
+        "P&O",
+        "DFDS",
+        "MSC",
+    ),
+    key=len,
+    reverse=True,
+))
+_RE_KNOWN_TRANSPORT_CARRIER = re.compile(
+    r"\b(" + "|".join(re.escape(c) for c in _KNOWN_TRANSPORT_CARRIERS) + r")\b",
+    re.IGNORECASE,
+)
+
+# Transport-type keyword words to reject if they pose as the origin or
+# destination of an O→D pair (e.g. a stray "Train to airport" sentence).
+_TRANSPORT_TYPE_WORDS = {"train", "rail", "ferry", "bus", "coach"}
+
+
+def _transport_vendor(text: str) -> Optional[str]:
+    """Find the carrier via anchor phrase, then known-carrier header scan."""
+    m = _RE_TRANSPORT_VENDOR_ANCHOR.search(text)
+    if m:
+        name = m.group(1).strip()
+        if name:
+            return name
+
+    # Fallback: scan first ~6 lines for a known carrier name.
+    header = "\n".join(text.splitlines()[:6])
+    m = _RE_KNOWN_TRANSPORT_CARRIER.search(header)
+    if m:
+        # Canonical-case lookup so "amtrak" → "Amtrak".
+        matched_lower = m.group(1).lower()
+        for canonical in _KNOWN_TRANSPORT_CARRIERS:
+            if canonical.lower() == matched_lower:
+                return canonical
+        return m.group(1)
+    return None
+
+
+def _transport_od_pair(text: str) -> Optional[Tuple[str, str]]:
+    """Find the first valid origin → destination pair.
+
+    Rejects matches where either end is a transport-type keyword
+    (e.g. "Train to airport") or a known carrier name (e.g. the email
+    subject line "Amtrak — Trip Confirmation" which falsely looks like
+    an O→D pair because em-dash is also a separator).
+    """
+    carrier_names_lower = {c.lower() for c in _KNOWN_TRANSPORT_CARRIERS}
+    for m in _RE_TRANSPORT_OD_PAIR.finditer(text):
+        origin = m.group(1).strip()
+        destination = m.group(2).strip()
+        o_lower = origin.lower()
+        d_lower = destination.lower()
+        if o_lower in _TRANSPORT_TYPE_WORDS or d_lower in _TRANSPORT_TYPE_WORDS:
+            continue
+        if o_lower in carrier_names_lower or d_lower in carrier_names_lower:
+            continue
+        return origin, destination
+    return None
+
+
+def _looks_like_real_flight(text: str) -> bool:
+    """True if the text has an IATA airport-code pair that isn't a
+    confirmation-number artefact like 'AMT-7721-NER'.
+
+    The bare `_RE_IATA_PAIR` regex is permissive — it spans up to 60
+    non-newline chars between the two 3-letter groups, so a confirmation
+    number `XXX-DIGITS-YYY` looks like a pair. We additionally require
+    that the matched span between the two codes is not purely numeric
+    (with hyphens), which is what those confirmation tokens look like.
+    """
+    for m in _RE_IATA_PAIR.finditer(text):
+        between = text[m.start(1) + len(m.group(1)) : m.start(2)]
+        # If everything between the two codes is digits/hyphens, it's a
+        # confirmation number, not a flight pair. Real flight pairs have
+        # an arrow, the word "to", or city names with letters.
+        if re.fullmatch(r"[\d\-\s]+", between):
+            continue
+        return True
+    return False
+
+
+def extract_transport(text: str) -> Optional[ParsedBooking]:
+    """Parse a train / ferry / bus / coach booking out of pasted text.
+
+    Returns None if:
+      - the text looks like a flight (real IATA airport-code pair, not a
+        confirmation-number artefact) — that's a flight, not transport, OR
+      - no transport-type keyword (Train / Rail / Ferry / Bus / Coach) is
+        present, OR
+      - no origin → destination pair is found.
+
+    v1 is single-segment per email. Multi-leg trains would warrant a
+    multi-segment shape later.
+    """
+    # Negative anchor: a flight email shouldn't reach the transport branch.
+    if _looks_like_real_flight(text):
+        return None
+
+    if not _RE_TRANSPORT_TYPE_KEYWORD.search(text):
+        return None
+
+    od = _transport_od_pair(text)
+    if od is None:
+        return None
+    origin, destination = od
+
+    vendor = _transport_vendor(text)
+    if vendor:
+        title = f"{vendor}: {origin} → {destination}"
+    else:
+        title = f"{origin} → {destination}"
+
+    start_dt = _datetime_for_anchor(text, _RE_TRANSPORT_DEP_ANCHOR)
+    end_dt = _datetime_for_anchor(text, _RE_TRANSPORT_ARR_ANCHOR)
+
+    conf = extract_confirmation_number(text)
+    cost = extract_money(text)
+    url = extract_url(text)
+
+    p = ParsedBooking(
+        type="transport",
+        title=title,
+        vendor=vendor,
+        confirmation_number=conf,
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+        location=origin,
         cost=cost[0] if cost else None,
         currency=cost[1] if cost else None,
         url=url,

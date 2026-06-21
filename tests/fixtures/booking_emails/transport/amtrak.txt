@@ -1,0 +1,10 @@
+Amtrak — Trip Confirmation
+Reservation #: AMT-7721-NER
+
+Train: Northeast Regional 174
+New York Penn Station → Washington Union Station
+Depart: Thursday, June 11 2026 at 7:00 AM
+Arrive: Thursday, June 11 2026 at 10:25 AM
+
+Coach Class, 1 passenger
+Total: $89.00

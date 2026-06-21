@@ -1,0 +1,10 @@
+Eurostar — Booking Confirmation
+Booking reference: EUR-9921-LP
+
+Train 9023
+London St Pancras → Paris Gare du Nord
+Departure: Saturday, August 15 2026 at 11:31 AM
+Arrival: Saturday, August 15 2026 at 2:47 PM
+
+Standard Premier, 2 passengers
+Total: GBP 320.00

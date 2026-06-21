@@ -16,6 +16,7 @@ from src.booking_parser import (
     extract_hotel,
     extract_money,
     extract_restaurant,
+    extract_transport,
     extract_url,
     score_confidence,
 )
@@ -500,3 +501,92 @@ def test_activity_museum_tickets():
 
 def test_activity_returns_none_for_flight():
     assert extract_activity(load_fixture("activity/_negative/flight.txt")) is None
+
+
+def test_activity_refundable_until_does_not_set_end_datetime():
+    """Task 6 cleanup: 'Refundable until <date>' is refund policy, not end time."""
+    text = """Eventbrite
+
+Your tickets for: Beyoncé — Renaissance World Tour
+Sunday, July 19 2026 at 8:00 PM
+
+Venue: Madison Square Garden, 4 Pennsylvania Plaza, New York, NY 10001
+Refundable until July 17 2026 at 11:59 PM
+
+Order #: EB-7172-RWT
+Total: $549.00
+"""
+    p = extract_activity(text)
+    assert isinstance(p, ParsedBooking)
+    assert p.start_datetime == datetime(2026, 7, 19, 20, 0)
+    assert p.end_datetime is None
+
+
+def test_activity_tickets_for_title_stops_at_venue():
+    """Task 6 cleanup: 'Tickets for: <Event> at <Venue>' — title is just the event,
+    venue stays in location."""
+    text = """Ticketmaster
+
+Tickets for: Beyoncé at Madison Square Garden
+Sunday, July 19 2026 at 8:00 PM
+Venue: Madison Square Garden, 4 Pennsylvania Plaza, New York, NY 10001
+
+Order #: TM-9000
+Total: $300.00
+"""
+    p = extract_activity(text)
+    assert isinstance(p, ParsedBooking)
+    assert p.title == "Beyoncé"
+    assert p.location is not None and "Madison Square Garden" in p.location
+
+
+# ──────────────────────────  extract_transport  ──────────────────────────────
+
+
+def test_transport_amtrak_style():
+    p = extract_transport(load_fixture("transport/amtrak.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "transport"
+    assert p.vendor == "Amtrak"
+    assert "New York Penn Station" in p.title
+    assert "Washington Union Station" in p.title
+    assert "→" in p.title
+    assert p.start_datetime == datetime(2026, 6, 11, 7, 0)
+    assert p.end_datetime == datetime(2026, 6, 11, 10, 25)
+    assert p.location is not None and "New York Penn Station" in p.location
+    assert p.cost == 89.00
+    assert p.currency == "USD"
+    assert p.confirmation_number == "AMT-7721-NER"
+    assert p.confidence >= 0.8
+
+
+def test_transport_eurostar_style():
+    p = extract_transport(load_fixture("transport/eurostar.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "transport"
+    assert p.vendor == "Eurostar"
+    assert "London St Pancras" in p.title
+    assert "Paris Gare du Nord" in p.title
+    assert p.start_datetime == datetime(2026, 8, 15, 11, 31)
+    assert p.end_datetime == datetime(2026, 8, 15, 14, 47)
+    assert p.location is not None and "London St Pancras" in p.location
+    assert p.cost == 320.00
+    assert p.currency == "GBP"
+
+
+def test_transport_ferry_style():
+    p = extract_transport(load_fixture("transport/ferry.txt"))
+    assert isinstance(p, ParsedBooking)
+    assert p.type == "transport"
+    assert p.vendor == "Stena Line"
+    assert "Harwich" in p.title
+    assert "Hook of Holland" in p.title
+    assert p.start_datetime == datetime(2026, 7, 5, 21, 0)
+    assert p.end_datetime == datetime(2026, 7, 6, 7, 45)
+    assert p.location is not None and "Harwich" in p.location
+    assert p.cost == 285.00
+    assert p.currency == "EUR"
+
+
+def test_transport_returns_none_for_flight_with_iata():
+    assert extract_transport(load_fixture("transport/_negative/united_flight.txt")) is None
