@@ -588,25 +588,29 @@ def extract_flight(text: str) -> Optional[Union[ParsedBooking, List[ParsedBookin
 # "Arrival" / "Departure" still match here (they're real hotel anchors too)
 # but the negative-anchor _RE_IATA_PAIR check rejects flight emails before
 # we get here, so the overlap is safe.
-_RE_CHECKIN_ANCHOR = re.compile(
+_RE_HOTEL_CHECKIN_ANCHOR = re.compile(
     r"\bCheck[- ]?in\b\s*:\s*(.+)", re.IGNORECASE
 )
-_RE_CHECKOUT_ANCHOR = re.compile(
+_RE_HOTEL_CHECKOUT_ANCHOR = re.compile(
     r"\bCheck[- ]?out\b\s*:\s*(.+)", re.IGNORECASE
 )
-_RE_ARRIVAL_ANCHOR = re.compile(
+_RE_HOTEL_ARRIVAL_ANCHOR = re.compile(
     r"\bArrival\b\s*:\s*(.+)", re.IGNORECASE
 )
-_RE_DEPARTURE_ANCHOR = re.compile(
+_RE_HOTEL_DEPARTURE_ANCHOR = re.compile(
     r"\bDeparture\b\s*:\s*(.+)", re.IGNORECASE
 )
 
-# Hotel vendor anchors. Capture trailing text up to end-of-line.
+# Hotel vendor anchors. Lazy capture bounded by sentence terminators or
+# end-of-line so prose like "Your stay at Marriott Times Square is
+# confirmed…" stops at "is" instead of swallowing the rest of the line.
 _RE_HOTEL_STAY_AT = re.compile(
-    r"(?:Your\s+)?stay\s+at\s+(.+)", re.IGNORECASE
+    r"(?:Your\s+)?stay\s+at\s+([^\n]+?)(?:\s+is\b|\s+for\b|\s+on\b|[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
 )
 _RE_HOTEL_RESERVATION_AT = re.compile(
-    r"(?:Your\s+)?reservation\s+at\s+(.+)", re.IGNORECASE
+    r"\breservation\s+at\s+([^\n]+?)(?:\s+is\b|\s+for\b|\s+on\b|[.,!]|$)",
+    re.IGNORECASE | re.MULTILINE,
 )
 _RE_HOTEL_ANCHOR = re.compile(
     r"\bHotel\b\s*:\s*(.+)", re.IGNORECASE
@@ -656,11 +660,22 @@ _RE_KNOWN_HOTEL_CHAIN = re.compile(
 )
 
 # Aggregator brand names to strip out of subject-line vendor fallback.
-_AGGREGATOR_NAMES = ("Booking.com", "Airbnb", "Expedia", "Hotels.com", "Agoda", "Vrbo")
+_HOTEL_AGGREGATOR_NAMES = ("Booking.com", "Airbnb", "Expedia", "Hotels.com", "Agoda", "Vrbo")
 
 # Hotel-time defaults when only a date is given.
 _HOTEL_CHECKIN_DEFAULT_HOUR = 15
 _HOTEL_CHECKOUT_DEFAULT_HOUR = 11
+
+
+# Matches a clock time like "3:00 PM" or "15:30" — used to tell apart
+# "date-only" from "datetime with a midnight time".
+_RE_ANY_CLOCK_TIME = re.compile(
+    r"\b\d{1,2}:\d{2}(?:\s*(?:AM|PM))?\b", re.IGNORECASE
+)
+
+
+def _line_has_time(line: str) -> bool:
+    return bool(_RE_ANY_CLOCK_TIME.search(line))
 
 
 def _datetime_with_default_hour(line: str, default_hour: int) -> Optional[datetime]:
@@ -675,17 +690,6 @@ def _datetime_with_default_hour(line: str, default_hour: int) -> Optional[dateti
     return dt
 
 
-# Matches a clock time like "3:00 PM" or "15:30" — used to tell apart
-# "date-only" from "datetime with a midnight time".
-_RE_ANY_CLOCK_TIME = re.compile(
-    r"\b\d{1,2}:\d{2}(?:\s*(?:AM|PM))?\b", re.IGNORECASE
-)
-
-
-def _line_has_time(line: str) -> bool:
-    return bool(_RE_ANY_CLOCK_TIME.search(line))
-
-
 def _hotel_vendor(text: str) -> Optional[str]:
     """Find the hotel name via anchor phrases, then known-chain header scan."""
     for anchor in (_RE_HOTEL_STAY_AT, _RE_HOTEL_RESERVATION_AT, _RE_HOTEL_ANCHOR):
@@ -693,7 +697,7 @@ def _hotel_vendor(text: str) -> Optional[str]:
         if m:
             name = m.group(1).strip()
             # Strip aggregator brand if it leaked into the capture.
-            for agg in _AGGREGATOR_NAMES:
+            for agg in _HOTEL_AGGREGATOR_NAMES:
                 if name.lower().startswith(agg.lower()):
                     name = name[len(agg):].lstrip(" :—-").strip()
             if name:
@@ -714,16 +718,23 @@ def _hotel_vendor(text: str) -> Optional[str]:
 
 
 def _hotel_location(text: str, vendor: Optional[str]) -> Optional[str]:
-    """Address from explicit `Address:` anchor, else line immediately after vendor."""
+    """Address from explicit `Address:` anchor, else line immediately after vendor.
+
+    The vendor-line match requires the line to BE the vendor name (modulo
+    surrounding whitespace) or to END with it — that way a line containing
+    the vendor as part of a longer sentence (e.g. "Manage your reservation
+    at Marriott.com") does not false-match.
+    """
     m = _RE_ADDRESS_ANCHOR.search(text)
     if m:
         return m.group(1).strip() or None
 
     if vendor:
-        # Find the line that contains the vendor name, return the next non-empty line.
+        target = vendor.strip().lower()
         lines = text.splitlines()
         for i, line in enumerate(lines):
-            if vendor in line and i + 1 < len(lines):
+            stripped = line.strip().lower()
+            if (stripped == target or stripped.endswith(target)) and i + 1 < len(lines):
                 next_line = lines[i + 1].strip()
                 if next_line:
                     return next_line
@@ -746,8 +757,12 @@ def extract_hotel(text: str) -> Optional[ParsedBooking]:
     if _RE_IATA_PAIR.search(text):
         return None
 
-    checkin_match = _RE_CHECKIN_ANCHOR.search(text) or _RE_ARRIVAL_ANCHOR.search(text)
-    checkout_match = _RE_CHECKOUT_ANCHOR.search(text) or _RE_DEPARTURE_ANCHOR.search(text)
+    checkin_match = (
+        _RE_HOTEL_CHECKIN_ANCHOR.search(text) or _RE_HOTEL_ARRIVAL_ANCHOR.search(text)
+    )
+    checkout_match = (
+        _RE_HOTEL_CHECKOUT_ANCHOR.search(text) or _RE_HOTEL_DEPARTURE_ANCHOR.search(text)
+    )
     if not (checkin_match and checkout_match):
         return None
 

@@ -286,6 +286,8 @@ def test_hotel_marriott_style():
     assert p.cost == 682.00
     assert p.currency == "USD"
     assert p.confirmation_number == "88842310"
+    # All 5 required fields populated → confidence should be near 1.0.
+    assert p.confidence >= 0.8
 
 
 def test_hotel_booking_com_style():
@@ -336,3 +338,22 @@ def test_hotel_returns_none_for_flight_confirmation():
 
 def test_hotel_returns_none_for_car_rental():
     assert extract_hotel(load_fixture("hotel/_negative/hertz_rental.txt")) is None
+
+
+def test_hotel_unknown_vendor_title_falls_back_to_hotel_stay():
+    """Hotel with check-in/check-out anchors but no recognizable vendor name
+    should still parse, with title='Hotel stay'."""
+    text = """
+    Booking Confirmation #12345
+
+    Check-in: Saturday, March 7 2026
+    Check-out: Sunday, March 8 2026
+
+    Total: $250.00
+    """
+    p = extract_hotel(text)
+    assert p is not None
+    assert p.type == "hotel"
+    assert p.title == "Hotel stay"
+    assert p.vendor is None
+    assert p.confidence <= 0.8  # missing vendor → lower than full (4/5 = 0.8)
