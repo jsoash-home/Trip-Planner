@@ -5005,3 +5005,138 @@ def test_booking_form_shows_paste_failed_alert(app, trip, owner):
     assert "Couldn&#39;t extract anything" in html or "Couldn't extract anything" in html
     # Textarea retains the user's pasted body so they can retry.
     assert "some pasted text" in html
+
+
+# ─── Task 13: POST /bookings/parse route ──────────────────────────
+
+
+def test_booking_paste_403_for_viewer(app, trip, viewer):
+    """Viewers can't trigger a parse — _trip_with_access_or_404 blocks them
+    (returns 404, not 403, to avoid leaking trip existence)."""
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/parse",
+        data={"paste_body": "anything"},
+    )
+    assert resp.status_code in (403, 404)
+
+
+def test_booking_paste_redirects_when_body_empty(app, trip, owner):
+    """Empty paste_body → flash + 302 back to booking_new."""
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/parse",
+        data={"paste_body": "   "},  # whitespace-only also counts as empty
+    )
+    assert resp.status_code == 302
+    assert f"/trips/{trip.id}/bookings/new" in resp.headers["Location"]
+
+
+def test_booking_paste_renders_form_with_no_matches_section_open(
+    app, trip, owner, monkeypatch
+):
+    """Zero parsed bookings → re-render booking_form.html with the warning
+    alert visible, the textarea retaining the user's paste, and the
+    <details> element open."""
+    from src.booking_parser import ParseResult
+
+    monkeypatch.setattr(
+        "app.parse_booking_email",
+        lambda text: ParseResult(
+            bookings=[], source="none", notes="Some parsing problem."
+        ),
+    )
+
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/parse",
+        data={"paste_body": "garbage"},
+    )
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    # The paste-from-email details block is rendered open after a failed parse.
+    assert 'class="paste-from-email"' in body
+    assert "<details" in body and "open" in body
+    # The parser's notes string surfaces inside the warning alert.
+    assert "Some parsing problem." in body
+    # User's typing is preserved so they can retry.
+    assert "garbage" in body
+
+
+def test_booking_paste_prefills_form_for_single_match(
+    app, trip, owner, monkeypatch
+):
+    """Exactly one parsed booking → form fields are pre-filled and the type
+    dropdown has the matching option selected."""
+    from src.booking_parser import ParsedBooking, ParseResult
+
+    parsed = ParsedBooking(
+        type="flight",
+        title="United UA 423: SFO -> LHR",
+        vendor="United Airlines",
+        confirmation_number="ABC123",
+        start_datetime=datetime(2026, 8, 17, 22, 30),
+        end_datetime=datetime(2026, 8, 18, 17, 15),
+        location="SFO",
+        cost=1245.00,
+        currency="USD",
+        confidence=1.0,
+    )
+    monkeypatch.setattr(
+        "app.parse_booking_email",
+        lambda text: ParseResult(bookings=[parsed], source="rules"),
+    )
+
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/parse",
+        data={"paste_body": "any text the parser will ignore"},
+    )
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    # Prefilled values appear as input values.
+    assert "United UA 423" in body
+    assert "United Airlines" in body
+    assert "ABC123" in body
+    assert "2026-08-17T22:30" in body
+    # Flight type is the selected dropdown option.
+    assert '<option value="flight" selected' in body
+
+
+def test_booking_paste_renders_review_screen_for_multi_match(
+    app, trip, owner, monkeypatch
+):
+    """Two or more parsed bookings → render the multi-booking review
+    template (currently a stub from Task 13; real UI in Task 14)."""
+    from src.booking_parser import ParsedBooking, ParseResult
+
+    parsed_list = [
+        ParsedBooking(type="flight", title="UA 100"),
+        ParsedBooking(type="flight", title="UA 200"),
+    ]
+    monkeypatch.setattr(
+        "app.parse_booking_email",
+        lambda text: ParseResult(bookings=parsed_list, source="rules"),
+    )
+
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/parse",
+        data={"paste_body": "two flights worth of text"},
+    )
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    # Stub template marker — Task 14 will replace this assertion with
+    # real per-booking row checks.
+    assert "review screen coming in Task 14" in body

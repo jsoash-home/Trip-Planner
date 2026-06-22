@@ -79,6 +79,7 @@ from src.booking_helpers import (
     serialize_touched,
     total_cost_by_currency,
 )
+from src.booking_parser import parse_booking_email
 from src.budget import (
     convert_totals,
     format_money_totals,
@@ -2113,13 +2114,66 @@ def booking_new(trip_id):
 @app.route("/trips/<int:trip_id>/bookings/parse", methods=["POST"])
 @login_required
 def booking_paste(trip_id: int):
-    """Placeholder for paste-and-parse — wired in Task 13.
+    """Parse a pasted confirmation email and dispatch to the booking form.
 
-    Exists today so that booking_form.html's `url_for('booking_paste', ...)`
-    resolves and the form can be rendered. Returns 404 until Task 13
-    replaces the body with the real parse-and-prefill flow.
+    Three branches based on what the parser found:
+
+    - zero bookings → re-render booking_form.html with paste_failed=True
+      so the user sees the warning + their textarea is preserved.
+    - one booking → re-render booking_form.html with `prefilled` set, so
+      the form's inputs carry the extracted values for review + save.
+    - two or more bookings → render bookings_paste_review.html (the
+      multi-booking selection screen — fleshed out in Task 14).
+
+    Editor+ only. Body is read from the `paste_body` form field.
     """
-    abort(404)
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+    text = (request.form.get("paste_body") or "").strip()
+
+    if not text:
+        flash("Paste the email body first.", "warning")
+        return redirect(url_for("booking_new", trip_id=trip_id))
+
+    result = parse_booking_email(text)
+
+    # Context the booking_form.html template needs alongside our paste flags.
+    # Note: template variable names are LOWERCASE (booking_types,
+    # supported_currencies) — see booking_new / booking_edit.
+    common_ctx = {
+        "trip": trip,
+        "booking": None,
+        "form": {},
+        "field_errors": {},
+        "booking_types": BOOKING_TYPES,
+        "supported_currencies": SUPPORTED_CURRENCIES,
+    }
+
+    if not result.bookings:
+        return render_template(
+            "booking_form.html",
+            prefilled=None,
+            paste_body=text,
+            paste_failed=True,
+            paste_failed_message=result.notes,
+            **common_ctx,
+        )
+
+    if len(result.bookings) == 1:
+        return render_template(
+            "booking_form.html",
+            prefilled=result.bookings[0],
+            paste_body=None,
+            paste_failed=False,
+            **common_ctx,
+        )
+
+    return render_template(
+        "bookings_paste_review.html",
+        trip=trip,
+        bookings=result.bookings,
+        booking_types=BOOKING_TYPES,
+        supported_currencies=SUPPORTED_CURRENCIES,
+    )
 
 
 @app.route("/trips/<int:trip_id>/bookings/<int:booking_id>/edit", methods=["GET", "POST"])

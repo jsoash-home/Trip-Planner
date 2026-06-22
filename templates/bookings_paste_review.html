@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Review parsed bookings — {{ trip.name }} — Vacation Planner{% endblock %}
+
+{#
+  STUB — Task 13 placeholder. Task 14 replaces this with the real
+  multi-booking review screen where the user picks which parsed
+  bookings to import. For now this just confirms the route reached
+  the multi-booking branch so the dispatch logic in app.py can be
+  tested before the UI lands.
+#}
+{% block content %}
+<h1 class="h3 mb-3">Review parsed bookings</h1>
+<p>{{ bookings|length }} bookings found — review screen coming in Task 14.</p>
+{% endblock %}
