@@ -4911,3 +4911,97 @@ def test_trip_overview_editor_does_not_see_share_url(app, owner, trip, editor, p
     assert resp.status_code == 200
     assert b"TRIP GUIDE" in resp.data
     assert b"test-token-uuid" not in resp.data
+
+
+# ─── Task 12: booking_form paste section + prefilled context ───────
+
+
+def test_booking_form_renders_without_prefilled(app, trip, owner):
+    """The form renders cleanly when prefilled is absent (current new-booking flow)."""
+    from flask import render_template
+    from src.booking_helpers import BOOKING_TYPES
+    from src.currency import SUPPORTED_CURRENCIES
+
+    with flask_app.test_request_context():
+        html = render_template(
+            "booking_form.html",
+            trip=trip,
+            booking=None,
+            form={"type": "flight", "currency": trip.primary_currency},
+            field_errors={},
+            booking_types=BOOKING_TYPES,
+            supported_currencies=SUPPORTED_CURRENCIES,
+        )
+    assert "Paste from email" in html
+    assert 'name="title"' in html
+    # Field-error block absent when no errors.
+    assert "Please fix:" not in html
+
+
+def test_booking_form_prefills_from_parsed_booking(app, trip, owner):
+    """When prefilled is provided, the form's inputs carry the parsed values."""
+    from flask import render_template
+    from src.booking_helpers import BOOKING_TYPES
+    from src.booking_parser import ParsedBooking
+    from src.currency import SUPPORTED_CURRENCIES
+
+    parsed = ParsedBooking(
+        type="flight",
+        title="United UA 423: SFO -> LHR",
+        vendor="United Airlines",
+        confirmation_number="ABC123",
+        start_datetime=datetime(2026, 8, 17, 22, 30),
+        end_datetime=datetime(2026, 8, 18, 17, 15),
+        location="SFO",
+        cost=1245.00,
+        currency="USD",
+        confidence=1.0,
+    )
+    with flask_app.test_request_context():
+        html = render_template(
+            "booking_form.html",
+            trip=trip,
+            booking=None,
+            prefilled=parsed,
+            form={},
+            field_errors={},
+            booking_types=BOOKING_TYPES,
+            supported_currencies=SUPPORTED_CURRENCIES,
+        )
+    assert "ABC123" in html
+    assert "United Airlines" in html
+    assert "United UA 423" in html
+    assert "2026-08-17T22:30" in html
+    assert "2026-08-18T17:15" in html
+    # Flight selected in the type dropdown.
+    assert '<option value="flight" selected' in html
+    # Cost field carries the value (formatting may vary slightly).
+    assert "1245" in html
+
+
+def test_booking_form_shows_paste_failed_alert(app, trip, owner):
+    """When paste_failed=True with a message, the alert is shown and the
+    paste section is expanded."""
+    from flask import render_template
+    from src.booking_helpers import BOOKING_TYPES
+    from src.currency import SUPPORTED_CURRENCIES
+
+    with flask_app.test_request_context():
+        html = render_template(
+            "booking_form.html",
+            trip=trip,
+            booking=None,
+            form={"type": "flight", "currency": trip.primary_currency},
+            field_errors={},
+            paste_body="some pasted text",
+            paste_failed=True,
+            paste_failed_message="Couldn't extract anything — try typing it in.",
+            booking_types=BOOKING_TYPES,
+            supported_currencies=SUPPORTED_CURRENCIES,
+        )
+    assert 'class="paste-from-email"' in html
+    # <details> element rendered open.
+    assert "<details" in html and "open" in html
+    assert "Couldn&#39;t extract anything" in html or "Couldn't extract anything" in html
+    # Textarea retains the user's pasted body so they can retry.
+    assert "some pasted text" in html

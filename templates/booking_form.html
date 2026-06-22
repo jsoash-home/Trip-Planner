@@ -3,6 +3,26 @@
 {% from "_field_error.html" import field_error, invalid_class %}
 {% block title %}{{ "Edit booking" if booking else "Add booking" }} — {{ trip.name }} — Vacation Planner{% endblock %}
 
+{#
+  Effective field values: the user's typed `form` value wins (so re-submits
+  after a validation error keep edits), then anything carried in from a
+  paste-and-parse via `prefilled`, then the empty string. `prefilled` is a
+  ParsedBooking dataclass (see src/booking_parser.py) and is only set by
+  the POST /bookings/parse route added in Task 13.
+#}
+{% set p = prefilled if prefilled is defined else None %}
+{% set v_type = form.get('type') or (p.type if p and p.type else 'flight') %}
+{% set v_title = form.get('title') or (p.title if p and p.title else '') %}
+{% set v_vendor = form.get('vendor') or (p.vendor if p and p.vendor else '') %}
+{% set v_conf = form.get('confirmation_number') or (p.confirmation_number if p and p.confirmation_number else '') %}
+{% set v_start = form.get('start_datetime') or (p.start_datetime.strftime('%Y-%m-%dT%H:%M') if p and p.start_datetime else '') %}
+{% set v_end = form.get('end_datetime') or (p.end_datetime.strftime('%Y-%m-%dT%H:%M') if p and p.end_datetime else '') %}
+{% set v_location = form.get('location') or (p.location if p and p.location else '') %}
+{% set v_cost = form.get('cost') or (p.cost if p and p.cost is not none else '') %}
+{% set v_currency = form.get('currency') or (p.currency if p and p.currency else trip.primary_currency) %}
+{% set v_url = form.get('url') or (p.url if p and p.url else '') %}
+{% set v_notes = form.get('notes') or (p.notes if p and p.notes else '') %}
+
 {% block content %}
 <div class="text-muted small mb-2">
   <a class="text-muted text-decoration-none" href="{{ url_for('trips_list') }}">My trips</a>
@@ -25,6 +45,30 @@
 {% endif %}
 
 {% if not booking %}
+  {# Paste-from-email collapsible section. Opens automatically when the
+     last parse attempt failed (so the user sees the warning + can retry)
+     or when paste_body was carried over but no prefilled data arrived. #}
+  <details class="paste-from-email"
+           {% if paste_failed or (paste_body and not p) %}open{% endif %}>
+    <summary>📨 Paste from email</summary>
+    <form method="post"
+          action="{{ url_for('booking_paste', trip_id=trip.id) }}"
+          class="vp-paste-form mt-2">
+      <textarea name="paste_body"
+                rows="10"
+                placeholder="Paste your confirmation email here…"
+                required>{{ paste_body or '' }}</textarea>
+      <div class="d-flex justify-content-end mt-2">
+        <button type="submit" class="btn btn-secondary btn-sm">Parse email</button>
+      </div>
+    </form>
+    {% if paste_failed %}
+      <div class="alert alert-warning mt-2 mb-0">
+        {{ paste_failed_message or "Couldn't extract a booking — try filling the form in by hand." }}
+      </div>
+    {% endif %}
+  </details>
+
   <div class="vp-flash vp-flash--info">
     {{ icon('info-circle', class='me-1') }}
     Saving this booking will auto-create matching entries in your itinerary
@@ -44,12 +88,11 @@
   <div class="row g-3">
     <div class="col-md-4">
       <label for="b-type" class="form-label">Type</label>
-      {% set current_type = form.get('type', 'flight') %}
       <select id="b-type" name="type"
               class="form-select{{ invalid_class(field_errors, 'type') }}"
               {% if field_errors and field_errors.get('type') %}aria-invalid="true"{% endif %}>
         {% for code, label, emoji in booking_types %}
-          <option value="{{ code }}" {% if code == current_type %}selected{% endif %}>
+          <option value="{{ code }}" {% if code == v_type %}selected{% endif %}>
             {{ emoji }} {{ label }}
           </option>
         {% endfor %}
@@ -61,7 +104,7 @@
       <label for="b-title" class="form-label">Title</label>
       <input id="b-title" name="title" type="text"
              class="form-control{{ invalid_class(field_errors, 'title') }}"
-             value="{{ form.get('title', '') }}"
+             value="{{ v_title }}"
              {% if field_errors and field_errors.get('title') %}aria-invalid="true"{% endif %}
              placeholder="e.g. Delta DL104 JFK → FCO" required maxlength="300" autofocus>
       {{ field_error(field_errors, 'title') }}
@@ -71,7 +114,7 @@
       <label for="b-vendor" class="form-label">Vendor <span class="text-muted small">— optional</span></label>
       <input id="b-vendor" name="vendor" type="text"
              class="form-control{{ invalid_class(field_errors, 'vendor') }}"
-             value="{{ form.get('vendor', '') }}"
+             value="{{ v_vendor }}"
              {% if field_errors and field_errors.get('vendor') %}aria-invalid="true"{% endif %}
              placeholder="Delta, Marriott, Hertz…" maxlength="200">
       {{ field_error(field_errors, 'vendor') }}
@@ -81,7 +124,7 @@
       <label for="b-conf" class="form-label">Confirmation number <span class="text-muted small">— optional</span></label>
       <input id="b-conf" name="confirmation_number" type="text"
              class="form-control font-monospace{{ invalid_class(field_errors, 'confirmation_number') }}"
-             value="{{ form.get('confirmation_number', '') }}"
+             value="{{ v_conf }}"
              {% if field_errors and field_errors.get('confirmation_number') %}aria-invalid="true"{% endif %}
              placeholder="ABC123" maxlength="120">
       {{ field_error(field_errors, 'confirmation_number') }}
@@ -91,7 +134,7 @@
       <label for="b-start" class="form-label">Start <span class="text-muted small">— optional</span></label>
       <input id="b-start" name="start_datetime" type="datetime-local"
              class="form-control{{ invalid_class(field_errors, 'start_datetime') }}"
-             value="{{ form.get('start_datetime', '') }}"
+             value="{{ v_start }}"
              {% if field_errors and field_errors.get('start_datetime') %}aria-invalid="true"{% endif %}>
       {{ field_error(field_errors, 'start_datetime') }}
       <div class="form-text">Departure / check-in / reservation time.</div>
@@ -101,7 +144,7 @@
       <label for="b-end" class="form-label">End <span class="text-muted small">— optional</span></label>
       <input id="b-end" name="end_datetime" type="datetime-local"
              class="form-control{{ invalid_class(field_errors, 'end_datetime') }}"
-             value="{{ form.get('end_datetime', '') }}"
+             value="{{ v_end }}"
              {% if field_errors and field_errors.get('end_datetime') %}aria-invalid="true"{% endif %}>
       {{ field_error(field_errors, 'end_datetime') }}
       <div class="form-text">Arrival / check-out time.</div>
@@ -111,7 +154,7 @@
       <label for="b-location" class="form-label">Location <span class="text-muted small">— optional</span></label>
       <input id="b-location" name="location" type="text"
              class="form-control{{ invalid_class(field_errors, 'location') }}"
-             value="{{ form.get('location', '') }}"
+             value="{{ v_location }}"
              {% if field_errors and field_errors.get('location') %}aria-invalid="true"{% endif %}
              placeholder="JFK Terminal 4, or 1234 Via del Corso, Rome" maxlength="300">
       {{ field_error(field_errors, 'location') }}
@@ -121,7 +164,7 @@
       <label for="b-cost" class="form-label">Cost <span class="text-muted small">— optional</span></label>
       <input id="b-cost" name="cost" type="number" step="0.01" min="0"
              class="form-control{{ invalid_class(field_errors, 'cost') }}"
-             value="{{ form.get('cost', '') }}"
+             value="{{ v_cost }}"
              {% if field_errors and field_errors.get('cost') %}aria-invalid="true"{% endif %}
              placeholder="0.00">
       {{ field_error(field_errors, 'cost') }}
@@ -129,12 +172,11 @@
 
     <div class="col-md-4">
       <label for="b-currency" class="form-label">Currency</label>
-      {% set current_cur = form.get('currency', trip.primary_currency) %}
       <select id="b-currency" name="currency"
               class="form-select{{ invalid_class(field_errors, 'currency') }}"
               {% if field_errors and field_errors.get('currency') %}aria-invalid="true"{% endif %}>
         {% for code, label in supported_currencies %}
-          <option value="{{ code }}" {% if code == current_cur %}selected{% endif %}>
+          <option value="{{ code }}" {% if code == v_currency %}selected{% endif %}>
             {{ code }} — {{ label }}
           </option>
         {% endfor %}
@@ -146,7 +188,7 @@
       <label for="b-url" class="form-label">Link <span class="text-muted small">— optional</span></label>
       <input id="b-url" name="url" type="url"
              class="form-control{{ invalid_class(field_errors, 'url') }}"
-             value="{{ form.get('url', '') }}"
+             value="{{ v_url }}"
              {% if field_errors and field_errors.get('url') %}aria-invalid="true"{% endif %}
              placeholder="https://…" maxlength="500">
       {{ field_error(field_errors, 'url') }}
@@ -157,7 +199,7 @@
       <textarea id="b-notes" name="notes" rows="3"
                 class="form-control{{ invalid_class(field_errors, 'notes') }}"
                 {% if field_errors and field_errors.get('notes') %}aria-invalid="true"{% endif %}
-                placeholder="Seat number, room preference, dress code…">{{ form.get('notes', '') }}</textarea>
+                placeholder="Seat number, room preference, dress code…">{{ v_notes }}</textarea>
       {{ field_error(field_errors, 'notes') }}
     </div>
   </div>

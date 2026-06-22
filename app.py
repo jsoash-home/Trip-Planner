@@ -2110,6 +2110,18 @@ def booking_new(trip_id):
     )
 
 
+@app.route("/trips/<int:trip_id>/bookings/parse", methods=["POST"])
+@login_required
+def booking_paste(trip_id: int):
+    """Placeholder for paste-and-parse — wired in Task 13.
+
+    Exists today so that booking_form.html's `url_for('booking_paste', ...)`
+    resolves and the form can be rendered. Returns 404 until Task 13
+    replaces the body with the real parse-and-prefill flow.
+    """
+    abort(404)
+
+
 @app.route("/trips/<int:trip_id>/bookings/<int:booking_id>/edit", methods=["GET", "POST"])
 @login_required
 def booking_edit(trip_id, booking_id):

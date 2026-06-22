@@ -2287,3 +2287,53 @@ body.vp-public main { padding-top: 2rem; }
 @media print {
   .guide-tile { display: none; }
 }
+
+/* ─── Paste-from-email collapsible section ──────────────────
+   Sits above the manual booking form so users can drop in a
+   confirmation email and have the fields prefilled. */
+.paste-from-email {
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--vp-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--vp-surface);
+}
+.paste-from-email[open] {
+  padding-bottom: 0.75rem;
+}
+.paste-from-email > summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--vp-text);
+  padding: 0.25rem 0;
+  list-style: none;
+  user-select: none;
+}
+.paste-from-email > summary::-webkit-details-marker {
+  display: none;
+}
+.paste-from-email > summary::before {
+  content: "▸ ";
+  color: var(--vp-text-muted);
+  font-size: 0.875rem;
+  display: inline-block;
+}
+.paste-from-email[open] > summary::before {
+  content: "▾ ";
+}
+.paste-from-email .vp-paste-form textarea {
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+  border: 1px solid var(--vp-border);
+  border-radius: 0.375rem;
+  background: var(--vp-surface);
+  color: var(--vp-text);
+  resize: vertical;
+}
+.paste-from-email .vp-paste-form textarea:focus {
+  outline: none;
+  border-color: var(--vp-accent);
+  box-shadow: 0 0 0 0.2rem rgba(232, 116, 79, 0.15);
+}
