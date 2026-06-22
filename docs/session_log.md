@@ -1,5 +1,80 @@
 # Session Log
 
+## 2026-06-20 → 2026-06-22 — Paste-and-parse booking (D2) shipped end-to-end
+
+**Shipped (in this order):**
+- Two carried-over UI follow-ups committed: `feat(ui): trip-guide hero →
+  compact tile with map preview` (124b9e5) and `feat(ui): booking form
+  auto-fills end date when start picked` (a785dc6).
+- SQLAlchemy 2.0 LegacyAPIWarning sweep: `refactor: Model.query.get(id)
+  → db.session.get(Model, id)` (2d53839). 23 call sites swapped across
+  app.py, src/guide_builder.py, tests/test_routes.py. LegacyAPIWarning
+  count: 19 → 0. The 2026-06-15 "~395 warnings" estimate was off by
+  20× — actual count was 19 unique source-line dedupes.
+- D2 paste-and-parse booking, spec + plan + 15-task implementation:
+  - Spec `0036487` (`docs/superpowers/specs/2026-06-20-paste-and-parse-
+    booking-design.md`).
+  - 15-task plan `ea38f09` (`docs/superpowers/plans/2026-06-20-paste-
+    and-parse-booking.md` — 753 lines, under both the 1000-line and
+    17-task project caps).
+  - **20 implementation commits `24a5227..2b89a7f`** building
+    `src/booking_parser.py` (~2100 lines) with: ParsedBooking /
+    ParseResult dataclasses + 5 shared helpers; 7 universal-by-type
+    extractors (flight with multi-segment, hotel, car, restaurant,
+    activity, transport, other); `parse_rules` orchestrator with
+    cross-type confidence ranking (suppresses `other` when any typed
+    extractor matched); 3-gated LLM fallback (`ANTHROPIC_API_KEY` +
+    `PASTE_PARSER_LLM_ENABLED=1` + importable `anthropic`); public
+    `parse_booking_email` entry point with 50KB input truncation. Plus
+    the two new Flask routes (`POST /bookings/parse`, `POST /bookings/
+    paste-confirm`) and the two new templates (paste section on
+    `booking_form.html`, multi-card `bookings_paste_review.html`).
+  - Subagent-driven development: per-task spec + code-quality reviews.
+    7 of the 15 tasks took follow-up fix commits caught by reviewers
+    (multi-segment collapse on same date, regex word-boundary bugs,
+    `nearest_flight_no` scope, hotel anchor namespacing, dup clock-time
+    regex, orphan negative test, transport newline-in-title, `other`
+    suppression). Cumulative ~96 new tests added (854 → 950).
+
+**Test status:** 950 passing / 0 failing (up from 854).
+
+**Stopped at:** Feature shipped; all 15 plan tasks complete. Final
+implementation review verdict: ready to ship. Working tree clean apart
+from the unrelated `.claude/launch.json` story-telling-preview addition
+that's been sitting in the tree since before this session.
+
+**Phase 3 roadmap status:** Phase 4 table updated with paste-and-parse
+(D2) ✓ and the trip-guide skill ✓ catch-up; paste-and-parse v2
+(enable the LLM fallback) added to Parked list; D1 email-in moved to
+Parked with explicit note that D2 is the smaller half.
+
+**Pick up next with:** Open territory. Possible next moves:
+1. Real-world test of paste-and-parse — paste your own flight/hotel
+   confirmation emails into `/trips/<id>/bookings/new` and see how the
+   rules path performs. Surface false positives / false negatives as
+   fixture-test additions.
+2. Enable the LLM fallback (`pip install anthropic`, set
+   `ANTHROPIC_API_KEY` + `PASTE_PARSER_LLM_ENABLED=1`).
+3. Pick a parked item — trip themes / iCal feed / daily journal /
+   achievements / photo attachments / PWA.
+
+**Kickoff prompt for next session:**
+
+> Vacation Planner — paste-and-parse (D2) shipped, 950 tests green,
+> working tree clean. Optional follow-ups: (a) real-world test by
+> pasting your own confirmation emails into /trips/<id>/bookings/new
+> and adding any misparses as new fixture tests; (b) enable the LLM
+> fallback by pip-installing anthropic and setting both env vars; (c)
+> a parked feature from PHASE_3_ROADMAP.md Phase 4.
+
+**Loose ends:**
+- `.claude/launch.json` has a pre-existing untracked addition for a
+  `story-telling-preview` entry that's been in the tree since before
+  this session. Decide: keep, commit, or revert (`git checkout --
+  .claude/launch.json`).
+
+---
+
 ## 2026-06-20 — Closed out 2026-06-18 follow-ups + cleared all carried-over loose ends
 
 **Shipped:**

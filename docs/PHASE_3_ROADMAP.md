@@ -422,6 +422,8 @@ parked) post-phase-3.
 | Feature                  | Status      | Spec                                                          | Plan                                                       |
 |--------------------------|-------------|---------------------------------------------------------------|------------------------------------------------------------|
 | Trip-prep to-dos (v1)    | ✓ shipped   | [docs/superpowers/specs/2026-06-14-trip-prep-todos-design.md](superpowers/specs/2026-06-14-trip-prep-todos-design.md) | [docs/superpowers/plans/2026-06-14-trip-prep-todos.md](superpowers/plans/2026-06-14-trip-prep-todos.md) |
+| Trip guide skill         | ✓ shipped   | [docs/superpowers/specs/2026-06-19-trip-guide-skill-design.md](superpowers/specs/2026-06-19-trip-guide-skill-design.md) | (shipped without a tracked plan file)                       |
+| Paste-and-parse (D2)     | ✓ shipped   | [docs/superpowers/specs/2026-06-20-paste-and-parse-booking-design.md](superpowers/specs/2026-06-20-paste-and-parse-booking-design.md) | [docs/superpowers/plans/2026-06-20-paste-and-parse-booking.md](superpowers/plans/2026-06-20-paste-and-parse-booking.md) |
 
 ### Parked
 
@@ -430,3 +432,13 @@ parked) post-phase-3.
   to-dos (e.g. "Check passport expiry — Japan requires 6 months
   validity", "Order JR Pass before departure"). Builds on the v1
   to-do surface; needs a prompt template and a one-shot LLM call.
+- **Paste-and-parse v2: enable the LLM fallback.** v1 built the LLM
+  path but gated it off behind 3 env-var checks. When the user adds
+  `ANTHROPIC_API_KEY` and `PASTE_PARSER_LLM_ENABLED=1` (plus
+  `pip install anthropic`), the fallback kicks in for any email the
+  universal-by-type rules don't parse. ~$0.005 per parse with
+  Opus 4.8 + Haiku-tier fallback as a cost option.
+- **Email-in booking parser (D1).** Forward `trips+<token>@…` →
+  booking auto-created. Strictly bigger than D2 — needs inbound-email
+  infra (Postmark / Cloudflare Email Workers). D2 was the smaller
+  half; revisit only if the paste flow proves too tedious.
