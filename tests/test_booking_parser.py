@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 from src.booking_parser import (
     MAX_BOOKINGS_PER_PARSE,
+    MAX_PASTE_BYTES,
     MIN_CONFIDENCE,
     ParsedBooking,
     _llm_gates_pass,
@@ -25,6 +26,7 @@ from src.booking_parser import (
     extract_restaurant,
     extract_transport,
     extract_url,
+    parse_booking_email,
     parse_rules,
     parse_with_llm,
     score_confidence,
@@ -822,3 +824,69 @@ def test_parse_with_llm_handles_invalid_datetime(monkeypatch):
     result = parse_with_llm("anything")
     assert len(result) == 1
     assert result[0].start_datetime is None
+
+
+# ─────────────────────────  parse_booking_email  ──────────────────────────
+
+
+def test_parse_booking_email_rules_path():
+    # Real flight fixture — rules path matches and short-circuits before LLM.
+    result = parse_booking_email(load_fixture("flight/united_single.txt"))
+    assert result.source == "rules"
+    assert len(result.bookings) == 1
+    assert result.bookings[0].type == "flight"
+
+
+def test_parse_booking_email_llm_path(monkeypatch):
+    # Force rules to return nothing, gates to pass, LLM to return one booking.
+    monkeypatch.setattr("src.booking_parser.parse_rules", lambda text: [])
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: True)
+    fake_booking = ParsedBooking(
+        type="flight",
+        title="Test flight",
+        confidence=1.0,
+        source="llm",
+    )
+    monkeypatch.setattr(
+        "src.booking_parser.parse_with_llm", lambda text: [fake_booking]
+    )
+
+    result = parse_booking_email("anything")
+    assert result.source == "llm"
+    assert len(result.bookings) == 1
+
+
+def test_parse_booking_email_none_path(monkeypatch):
+    # Gates off → no LLM. Garbage input → rules also returns []. Notes set.
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: False)
+    result = parse_booking_email("hello this is not a booking")
+    assert result.source == "none"
+    assert result.bookings == []
+    assert result.notes.startswith("Couldn't extract")
+
+
+def test_parse_booking_email_truncates_huge_input(monkeypatch):
+    # Stuff > MAX_PASTE_BYTES into the front so the real fixture is past the
+    # cap. parse_rules should receive a string whose UTF-8 byte length is
+    # ≤ MAX_PASTE_BYTES.
+    seen_lengths = []
+
+    def fake_parse_rules(text):
+        seen_lengths.append(len(text.encode("utf-8")))
+        return []
+
+    monkeypatch.setattr("src.booking_parser.parse_rules", fake_parse_rules)
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: False)
+
+    huge = "x" * (MAX_PASTE_BYTES + 1000) + load_fixture("flight/united_single.txt")
+    parse_booking_email(huge)
+
+    assert len(seen_lengths) == 1
+    assert seen_lengths[0] <= MAX_PASTE_BYTES
+
+
+def test_parse_booking_email_empty_string_returns_none_source(monkeypatch):
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: False)
+    result = parse_booking_email("")
+    assert result.source == "none"
+    assert result.bookings == []

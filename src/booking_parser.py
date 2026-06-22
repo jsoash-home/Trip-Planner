@@ -1793,3 +1793,36 @@ def parse_with_llm(text: str) -> List[ParsedBooking]:
     except Exception as e:
         logger.warning("parse_with_llm failed: %s", e)
         return []
+
+
+# ─────────────────────────  parse_booking_email  ──────────────────────────
+
+
+def parse_booking_email(text: str) -> ParseResult:
+    """Public entry point. Tries rules first; falls back to LLM only if
+    all three LLM gates pass. Returns ParseResult with bookings list +
+    source attribution + a user-facing notes string when empty."""
+    # Truncate over-sized pastes on a UTF-8 byte boundary. `errors="ignore"`
+    # drops a trailing partial codepoint cleanly.
+    encoded = text.encode("utf-8")
+    original_len = len(encoded)
+    if original_len > MAX_PASTE_BYTES:
+        logger.info(
+            "paste body truncated from %d to %d bytes", original_len, MAX_PASTE_BYTES
+        )
+        text = encoded[:MAX_PASTE_BYTES].decode("utf-8", errors="ignore")
+
+    rules_results = parse_rules(text)
+    if rules_results:
+        return ParseResult(bookings=rules_results, source="rules")
+
+    if _llm_gates_pass():
+        llm_results = parse_with_llm(text)
+        if llm_results:
+            return ParseResult(bookings=llm_results, source="llm")
+
+    return ParseResult(
+        bookings=[],
+        source="none",
+        notes="Couldn't extract anything from that email — try typing it in.",
+    )
