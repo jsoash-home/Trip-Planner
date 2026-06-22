@@ -2337,3 +2337,23 @@ body.vp-public main { padding-top: 2rem; }
   border-color: var(--vp-accent);
   box-shadow: 0 0 0 0.2rem rgba(232, 116, 79, 0.15);
 }
+
+/* Paste-review screen (multi-booking) */
+.vp-paste-review .vp-paste-card {
+  border: 1px solid var(--vp-border);
+  border-radius: 0.5rem;
+}
+.vp-paste-review .vp-paste-card .card-header {
+  background: var(--vp-surface-2);
+  font-weight: 500;
+  border-bottom: 1px solid var(--vp-border);
+}
+.vp-paste-review .vp-paste-card .form-check {
+  margin-bottom: 0.75rem;
+}
+.vp-paste-review .vp-paste-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}

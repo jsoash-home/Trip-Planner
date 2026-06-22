@@ -2176,6 +2176,18 @@ def booking_paste(trip_id: int):
     )
 
 
+@app.route("/trips/<int:trip_id>/bookings/paste-confirm", methods=["POST"])
+@login_required
+def booking_paste_confirm(trip_id: int):
+    """Placeholder — implemented in Task 15.
+
+    The Task 14 paste-review template's <form action="…"> points here, so
+    we need the URL to resolve at template-render time. Task 15 replaces
+    the body with the real bulk-create logic.
+    """
+    abort(404)
+
+
 @app.route("/trips/<int:trip_id>/bookings/<int:booking_id>/edit", methods=["GET", "POST"])
 @login_required
 def booking_edit(trip_id, booking_id):

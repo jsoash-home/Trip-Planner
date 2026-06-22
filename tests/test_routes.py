@@ -5116,7 +5116,7 @@ def test_booking_paste_renders_review_screen_for_multi_match(
     app, trip, owner, monkeypatch
 ):
     """Two or more parsed bookings → render the multi-booking review
-    template (currently a stub from Task 13; real UI in Task 14)."""
+    template with one card per booking."""
     from src.booking_parser import ParsedBooking, ParseResult
 
     parsed_list = [
@@ -5137,6 +5137,134 @@ def test_booking_paste_renders_review_screen_for_multi_match(
     )
     assert resp.status_code == 200
     body = resp.data.decode()
-    # Stub template marker — Task 14 will replace this assertion with
-    # real per-booking row checks.
-    assert "review screen coming in Task 14" in body
+    # Review template renders the heading + sub-text mentioning the count.
+    assert "Review parsed bookings" in body
+    assert "Parser found 2 bookings" in body
+
+
+# ─── Task 14: paste-review template (multi-booking) ────────────────
+
+
+def test_paste_review_renders_per_booking_card(
+    app, trip, owner, monkeypatch
+):
+    """Each parsed booking gets its own vp-paste-card with a checkbox
+    and field inputs whose names are indexed by position."""
+    from unittest.mock import patch
+    from src.booking_parser import ParsedBooking, ParseResult
+
+    parsed_list = [
+        ParsedBooking(type="flight", title="UA 100"),
+        ParsedBooking(type="hotel", title="Hilton London"),
+    ]
+
+    client = app.test_client()
+    _login(client, owner)
+
+    with patch(
+        "app.parse_booking_email",
+        return_value=ParseResult(bookings=parsed_list, source="rules"),
+    ):
+        resp = client.post(
+            f"/trips/{trip.id}/bookings/parse",
+            data={"paste_body": "irrelevant"},
+        )
+
+    assert resp.status_code == 200
+    body = resp.data.decode()
+
+    # Two cards, one per parsed booking.
+    assert body.count('class="card vp-paste-card mb-3"') == 2
+
+    # Each card has an indexed _selected checkbox.
+    assert 'name="bookings[0][_selected]"' in body
+    assert 'name="bookings[1][_selected]"' in body
+
+    # Field name pattern uses the loop.index0 prefix.
+    assert 'name="bookings[0][title]"' in body
+    assert 'name="bookings[1][title]"' in body
+    assert 'name="bookings[0][type]"' in body
+    assert 'name="bookings[1][type]"' in body
+
+
+def test_paste_review_prefills_each_card(
+    app, trip, owner, monkeypatch
+):
+    """Each card's inputs carry the matching booking's values."""
+    from unittest.mock import patch
+    from src.booking_parser import ParsedBooking, ParseResult
+
+    parsed_list = [
+        ParsedBooking(
+            type="flight",
+            title="UA 423: SFO -> LHR",
+            vendor="United Airlines",
+            confirmation_number="ABC123",
+            start_datetime=datetime(2026, 8, 17, 22, 30),
+        ),
+        ParsedBooking(
+            type="hotel",
+            title="Hilton London Paddington",
+            vendor="Hilton",
+            confirmation_number="XYZ789",
+            start_datetime=datetime(2026, 8, 18, 15, 0),
+        ),
+    ]
+
+    client = app.test_client()
+    _login(client, owner)
+
+    with patch(
+        "app.parse_booking_email",
+        return_value=ParseResult(bookings=parsed_list, source="rules"),
+    ):
+        resp = client.post(
+            f"/trips/{trip.id}/bookings/parse",
+            data={"paste_body": "irrelevant"},
+        )
+
+    assert resp.status_code == 200
+    body = resp.data.decode()
+
+    # Card 0 prefills.
+    assert 'value="UA 423: SFO -&gt; LHR"' in body or 'value="UA 423: SFO -> LHR"' in body
+    assert 'value="United Airlines"' in body
+    assert 'value="ABC123"' in body
+    assert 'value="2026-08-17T22:30"' in body
+
+    # Card 1 prefills.
+    assert 'value="Hilton London Paddington"' in body
+    assert 'value="Hilton"' in body
+    assert 'value="XYZ789"' in body
+    assert 'value="2026-08-18T15:00"' in body
+
+
+def test_paste_review_form_action_points_at_paste_confirm(
+    app, trip, owner, monkeypatch
+):
+    """The outer form posts to booking_paste_confirm."""
+    from unittest.mock import patch
+    from src.booking_parser import ParsedBooking, ParseResult
+
+    parsed_list = [
+        ParsedBooking(type="flight", title="UA 100"),
+        ParsedBooking(type="flight", title="UA 200"),
+    ]
+
+    client = app.test_client()
+    _login(client, owner)
+
+    with patch(
+        "app.parse_booking_email",
+        return_value=ParseResult(bookings=parsed_list, source="rules"),
+    ):
+        resp = client.post(
+            f"/trips/{trip.id}/bookings/parse",
+            data={"paste_body": "irrelevant"},
+        )
+
+    assert resp.status_code == 200
+    body = resp.data.decode()
+
+    expected_action = f'/trips/{trip.id}/bookings/paste-confirm'
+    assert f'action="{expected_action}"' in body
