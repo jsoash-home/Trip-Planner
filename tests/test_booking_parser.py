@@ -3,13 +3,17 @@
 Task 1 of paste-and-parse-booking: pure helpers only, no DB / Flask / network.
 """
 
+import sys
+import types
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from src.booking_parser import (
     MAX_BOOKINGS_PER_PARSE,
     MIN_CONFIDENCE,
     ParsedBooking,
+    _llm_gates_pass,
     extract_activity,
     extract_car,
     extract_confirmation_number,
@@ -22,6 +26,7 @@ from src.booking_parser import (
     extract_transport,
     extract_url,
     parse_rules,
+    parse_with_llm,
     score_confidence,
 )
 
@@ -694,3 +699,126 @@ def test_parse_rules_flight_wins_over_other_fallback():
     bookings = parse_rules(load_fixture("flight/united_single.txt"))
     assert bookings, "expected at least one booking"
     assert bookings[0].type == "flight"
+
+
+# ──────────────────────  _llm_gates_pass / parse_with_llm  ──────────────────
+
+
+def _install_fake_anthropic(monkeypatch, parse_return=None, parse_raises=None):
+    """Inject a fake `anthropic` module with an Anthropic class whose
+    client.messages.parse() returns or raises whatever the test wants.
+
+    Returns the FakeAnthropic class so tests can assert call shape if needed.
+    """
+    fake_module = types.ModuleType("anthropic")
+
+    class FakeAnthropic:
+        def __init__(self, *args, **kwargs):
+            self.messages = MagicMock()
+            if parse_raises is not None:
+                self.messages.parse = MagicMock(side_effect=parse_raises)
+            else:
+                self.messages.parse = MagicMock(return_value=parse_return)
+
+    fake_module.Anthropic = FakeAnthropic
+    monkeypatch.setitem(sys.modules, "anthropic", fake_module)
+    return FakeAnthropic
+
+
+def test_llm_gates_pass_false_when_key_missing(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("PASTE_PARSER_LLM_ENABLED", "1")
+    assert _llm_gates_pass() is False
+
+
+def test_llm_gates_pass_false_when_flag_unset(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.delenv("PASTE_PARSER_LLM_ENABLED", raising=False)
+    assert _llm_gates_pass() is False
+
+
+def test_llm_gates_pass_false_when_sdk_missing(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("PASTE_PARSER_LLM_ENABLED", "1")
+    # Force `import anthropic` to fail by stubbing the module to None.
+    monkeypatch.setitem(sys.modules, "anthropic", None)
+    assert _llm_gates_pass() is False
+
+
+def test_llm_gates_pass_true_when_all_three_present(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("PASTE_PARSER_LLM_ENABLED", "1")
+    # Inject a fake anthropic module so the import succeeds without the real SDK.
+    monkeypatch.setitem(sys.modules, "anthropic", types.ModuleType("anthropic"))
+    assert _llm_gates_pass() is True
+
+
+def test_parse_with_llm_returns_empty_when_gates_off(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert parse_with_llm("anything") == []
+
+
+def test_parse_with_llm_returns_bookings_when_mocked(monkeypatch):
+    # Bypass the env-var gate; the gate only checks env + import-ability.
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: True)
+
+    # Build a fake parsed_output that mirrors what client.messages.parse()
+    # returns: a BatchedParsedBookings-shaped object with a `bookings` list.
+    fake_booking = MagicMock()
+    fake_booking.type = "flight"
+    fake_booking.title = "Test flight"
+    fake_booking.vendor = None
+    fake_booking.confirmation_number = None
+    fake_booking.start_datetime = "2026-08-17T14:30:00"
+    fake_booking.end_datetime = None
+    fake_booking.location = None
+    fake_booking.cost = None
+    fake_booking.currency = None
+    fake_booking.url = None
+    fake_booking.notes = None
+
+    fake_response = MagicMock()
+    fake_response.parsed_output = MagicMock(bookings=[fake_booking])
+
+    _install_fake_anthropic(monkeypatch, parse_return=fake_response)
+
+    result = parse_with_llm("anything")
+    assert len(result) == 1
+    booking = result[0]
+    assert booking.type == "flight"
+    assert booking.title == "Test flight"
+    assert booking.start_datetime == datetime(2026, 8, 17, 14, 30)
+    assert booking.confidence == 1.0
+    assert booking.source == "llm"
+
+
+def test_parse_with_llm_returns_empty_on_api_error(monkeypatch):
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: True)
+    _install_fake_anthropic(monkeypatch, parse_raises=RuntimeError("boom"))
+    assert parse_with_llm("anything") == []
+
+
+def test_parse_with_llm_handles_invalid_datetime(monkeypatch):
+    monkeypatch.setattr("src.booking_parser._llm_gates_pass", lambda: True)
+
+    fake_booking = MagicMock()
+    fake_booking.type = "flight"
+    fake_booking.title = "Test flight"
+    fake_booking.vendor = None
+    fake_booking.confirmation_number = None
+    fake_booking.start_datetime = "not-a-date"
+    fake_booking.end_datetime = None
+    fake_booking.location = None
+    fake_booking.cost = None
+    fake_booking.currency = None
+    fake_booking.url = None
+    fake_booking.notes = None
+
+    fake_response = MagicMock()
+    fake_response.parsed_output = MagicMock(bookings=[fake_booking])
+
+    _install_fake_anthropic(monkeypatch, parse_return=fake_response)
+
+    result = parse_with_llm("anything")
+    assert len(result) == 1
+    assert result[0].start_datetime is None

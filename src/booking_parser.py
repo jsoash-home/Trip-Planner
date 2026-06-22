@@ -14,6 +14,7 @@ later tasks. No DB, no Flask, no network here.
 """
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -1667,3 +1668,128 @@ def parse_rules(text: str) -> List[ParsedBooking]:
     )
 
     return kept[:MAX_BOOKINGS_PER_PARSE]
+
+
+# ─────────────────────────────  LLM fallback  ─────────────────────────────
+#
+# Optional gated path that hands the paste to Claude for structured extraction.
+# Deliberately lazy-imported so the module loads cleanly without the
+# `anthropic` or `pydantic` SDKs installed — the gate fails first.
+
+# Pydantic schema for Anthropic structured-output parsing. Lazy-defined so
+# the module imports cleanly without pydantic. If pydantic isn't installed,
+# `_HAS_PYDANTIC` stays False and parse_with_llm's gate fails before it
+# would ever touch BatchedParsedBookings.
+try:
+    from pydantic import BaseModel as _PydanticBaseModel
+
+    _HAS_PYDANTIC = True
+except ImportError:
+    _HAS_PYDANTIC = False
+    _PydanticBaseModel = object  # placeholder so class def doesn't crash
+
+
+if _HAS_PYDANTIC:
+
+    class ParsedBookingSchema(_PydanticBaseModel):
+        """Pydantic mirror of ParsedBooking minus bookkeeping fields."""
+
+        type: str  # one of: flight, hotel, car, restaurant, activity, transport, other
+        title: str
+        vendor: Optional[str] = None
+        confirmation_number: Optional[str] = None
+        start_datetime: Optional[str] = None  # ISO 8601; converted post-parse
+        end_datetime: Optional[str] = None
+        location: Optional[str] = None
+        cost: Optional[float] = None
+        currency: Optional[str] = None  # ISO 4217 code
+        url: Optional[str] = None
+        notes: Optional[str] = None
+
+    class BatchedParsedBookings(_PydanticBaseModel):
+        bookings: List[ParsedBookingSchema]
+
+
+def _llm_gates_pass() -> bool:
+    """True iff ANTHROPIC_API_KEY is set AND PASTE_PARSER_LLM_ENABLED='1'
+    AND the `anthropic` SDK is importable. Lazy import — never raises."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return False
+    if os.environ.get(LLM_GATE_ENV_FLAG) != "1":
+        return False
+    try:
+        import anthropic  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _safe_iso(s: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO 8601 string into a datetime, or return None on failure.
+
+    Accepts a trailing 'Z' by normalising it to '+00:00' for fromisoformat.
+    """
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def parse_with_llm(text: str) -> List[ParsedBooking]:
+    """Call Claude with a structured-output schema, parse to ParsedBookings.
+
+    Returns [] on any API/network/schema/import error. Caller is responsible
+    for checking _llm_gates_pass() first (this fn re-checks defensively).
+    """
+    if not _llm_gates_pass():
+        return []
+
+    try:
+        from anthropic import Anthropic
+
+        client = Anthropic()  # reads ANTHROPIC_API_KEY from env
+
+        system_prompt = (
+            "You are extracting structured booking data from a pasted email body. "
+            "Identify each booking the email describes and return them as a list. "
+            "Cap your list at " + str(MAX_BOOKINGS_PER_PARSE) + " bookings. "
+            "If you cannot identify any booking, return an empty list. "
+            "type must be one of: flight, hotel, car, restaurant, activity, transport, other. "
+            "Datetimes must be ISO 8601 strings (e.g. '2026-08-17T14:30:00'). "
+            "Currency must be a 3-letter ISO 4217 code."
+        )
+
+        response = client.messages.parse(
+            model=LLM_MODEL,
+            max_tokens=LLM_MAX_TOKENS,
+            system=system_prompt,
+            messages=[{"role": "user", "content": text}],
+            output_format=BatchedParsedBookings,
+        )
+        parsed = response.parsed_output  # BatchedParsedBookings instance
+
+        results: List[ParsedBooking] = []
+        for b in parsed.bookings:
+            results.append(
+                ParsedBooking(
+                    type=b.type if b.type in BOOKING_TYPE_CODES else "other",
+                    title=b.title,
+                    vendor=b.vendor,
+                    confirmation_number=b.confirmation_number,
+                    start_datetime=_safe_iso(b.start_datetime),
+                    end_datetime=_safe_iso(b.end_datetime),
+                    location=b.location,
+                    cost=b.cost,
+                    currency=b.currency,
+                    url=b.url,
+                    notes=b.notes,
+                    confidence=1.0,
+                    source="llm",
+                )
+            )
+        return results
+    except Exception as e:
+        logger.warning("parse_with_llm failed: %s", e)
+        return []
