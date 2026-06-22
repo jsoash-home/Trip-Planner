@@ -2179,13 +2179,114 @@ def booking_paste(trip_id: int):
 @app.route("/trips/<int:trip_id>/bookings/paste-confirm", methods=["POST"])
 @login_required
 def booking_paste_confirm(trip_id: int):
-    """Placeholder — implemented in Task 15.
+    """Bulk-create bookings from the paste-review screen.
 
-    The Task 14 paste-review template's <form action="…"> points here, so
-    we need the URL to resolve at template-render time. Task 15 replaces
-    the body with the real bulk-create logic.
+    The review template (bookings_paste_review.html) renders one card per
+    parsed booking, each with a `bookings[N][_selected]` checkbox plus
+    indexed field inputs. This route walks the indices where _selected is
+    on, re-maps the indexed fields back to the standard form keys, then
+    creates each Booking + spawns its auto-itinerary items via the same
+    pipeline as `booking_new`. Per-card validation: a bad card is skipped
+    with a warning flash, the rest of the batch still saves.
     """
-    abort(404)
+    trip, _ = _trip_with_access_or_404(trip_id, role="editor")
+
+    # Collect the indices the user actually checked.
+    indices = sorted({
+        int(key.split("[")[1].split("]")[0])
+        for key in request.form
+        if key.startswith("bookings[") and key.endswith("][_selected]")
+        and request.form.get(key) == "on"
+    })
+
+    if not indices:
+        flash("Select at least one booking to save.", "warning")
+        return redirect(url_for("booking_new", trip_id=trip_id))
+
+    created_count = 0
+    total_linked_items = 0
+
+    for i in indices:
+        # Re-map indexed inputs back to the keys parse_booking_form expects.
+        fake_form = {
+            "type": request.form.get(f"bookings[{i}][type]", "other"),
+            "title": request.form.get(f"bookings[{i}][title]", ""),
+            "vendor": request.form.get(f"bookings[{i}][vendor]", ""),
+            "confirmation_number": request.form.get(
+                f"bookings[{i}][confirmation_number]", "",
+            ),
+            "start_datetime": request.form.get(
+                f"bookings[{i}][start_datetime]", "",
+            ),
+            "end_datetime": request.form.get(
+                f"bookings[{i}][end_datetime]", "",
+            ),
+            "location": request.form.get(f"bookings[{i}][location]", ""),
+            "cost": request.form.get(f"bookings[{i}][cost]", ""),
+            "currency": request.form.get(
+                f"bookings[{i}][currency]", trip.primary_currency,
+            ),
+            "url": request.form.get(f"bookings[{i}][url]", ""),
+            "notes": request.form.get(f"bookings[{i}][notes]", ""),
+        }
+        data, field_errors = parse_booking_form(
+            fake_form, default_currency=trip.primary_currency,
+        )
+        if not is_valid_currency(data["currency"]):
+            field_errors["currency"] = "Currency is not supported."
+        if field_errors:
+            first_error = next(iter(field_errors.values()))
+            flash(f"Skipped booking {i + 1}: {first_error}", "warning")
+            continue
+
+        booking = Booking(trip_id=trip.id, **data)
+        db.session.add(booking)
+        # flush to populate booking.id so we can attach linked items below.
+        db.session.flush()
+
+        linked_count = 0
+        for item_data in auto_itinerary_items_for_booking(booking):
+            day = item_data["day_date"]
+            if day < trip.start_date or day > trip.end_date:
+                logger.info(
+                    "Skipping auto-itinerary item for paste-confirm booking "
+                    "id=%s — day %s outside trip range",
+                    booking.id, day,
+                )
+                continue
+            item_data["order_within_day"] = _next_order_within_day(trip.id, day)
+            db.session.add(ItineraryItem(
+                trip_id=trip.id,
+                linked_booking_id=booking.id,
+                **item_data,
+            ))
+            linked_count += 1
+
+        total_linked_items += linked_count
+        created_count += 1
+        logger.info(
+            "Paste-confirm created booking id=%s type=%s title=%r "
+            "linked_items=%s for trip_id=%s",
+            booking.id, booking.type, booking.title, linked_count, trip.id,
+        )
+
+    db.session.commit()
+
+    if created_count == 0:
+        flash(
+            "No bookings were created — check the warnings above.",
+            "warning",
+        )
+    else:
+        suffix = "s" if created_count != 1 else ""
+        item_word = "item" if total_linked_items == 1 else "items"
+        flash(
+            f"Created {created_count} booking{suffix} from paste "
+            f"({total_linked_items} linked itinerary {item_word}).",
+            "success",
+        )
+
+    return redirect(url_for("bookings_list", trip_id=trip.id))
 
 
 @app.route("/trips/<int:trip_id>/bookings/<int:booking_id>/edit", methods=["GET", "POST"])

@@ -5268,3 +5268,149 @@ def test_paste_review_form_action_points_at_paste_confirm(
 
     expected_action = f'/trips/{trip.id}/bookings/paste-confirm'
     assert f'action="{expected_action}"' in body
+
+
+# ─── Task 15: POST /bookings/paste-confirm (bulk create) ───────────
+
+
+def test_booking_paste_confirm_403_for_viewer(app, trip, viewer):
+    """Viewers can't bulk-create bookings — the editor guard blocks them
+    (returns 404, not 403, to avoid leaking trip existence — mirrors the
+    booking_paste pattern)."""
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(viewer.id)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/paste-confirm",
+        data={"bookings[0][_selected]": "on", "bookings[0][title]": "x"},
+    )
+    assert resp.status_code in (403, 404)
+
+
+def test_booking_paste_confirm_redirects_when_no_selections(app, trip, owner):
+    """No checked rows → flash a warning + 302 back to /bookings/new."""
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/paste-confirm",
+        # Cards present in the form but none have _selected=on.
+        data={"bookings[0][title]": "UA 100", "bookings[0][type]": "flight"},
+    )
+    assert resp.status_code == 302
+    assert f"/trips/{trip.id}/bookings/new" in resp.headers["Location"]
+
+    # Nothing should have been saved.
+    assert Booking.query.filter_by(trip_id=trip.id).count() == 0
+
+    # Flash text should explain why.
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes", [])
+    assert any("Select at least one" in msg for _, msg in flashes)
+
+
+def test_booking_paste_confirm_creates_one_when_one_selected(app, trip, owner):
+    """One checked card → one Booking saved + auto-itinerary items spawned
+    (the flight auto-links 'Depart' and 'Arrive' items via the same
+    pipeline as booking_new)."""
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/paste-confirm",
+        data={
+            "bookings[0][_selected]": "on",
+            "bookings[0][type]": "flight",
+            "bookings[0][title]": "UA 423",
+            "bookings[0][vendor]": "United",
+            "bookings[0][start_datetime]": "2026-06-05T10:00",
+            "bookings[0][end_datetime]": "2026-06-05T13:00",
+            "bookings[0][currency]": "USD",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert f"/trips/{trip.id}/bookings" in resp.headers["Location"]
+
+    bookings = Booking.query.filter_by(trip_id=trip.id).all()
+    assert len(bookings) == 1
+    assert bookings[0].title == "UA 423"
+    assert bookings[0].type == "flight"
+
+    # Flight with both datetimes → expect ≥1 auto-linked itinerary item.
+    linked = ItineraryItem.query.filter_by(
+        trip_id=trip.id, linked_booking_id=bookings[0].id,
+    ).all()
+    assert len(linked) >= 1
+
+
+def test_booking_paste_confirm_creates_multiple(app, trip, owner):
+    """Two checked cards → two Bookings saved."""
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/paste-confirm",
+        data={
+            "bookings[0][_selected]": "on",
+            "bookings[0][type]": "flight",
+            "bookings[0][title]": "UA 100 outbound",
+            "bookings[0][start_datetime]": "2026-06-05T08:00",
+            "bookings[0][end_datetime]": "2026-06-05T11:00",
+            "bookings[0][currency]": "USD",
+            "bookings[1][_selected]": "on",
+            "bookings[1][type]": "flight",
+            "bookings[1][title]": "UA 200 return",
+            "bookings[1][start_datetime]": "2026-06-10T15:00",
+            "bookings[1][end_datetime]": "2026-06-10T18:00",
+            "bookings[1][currency]": "USD",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+    bookings = Booking.query.filter_by(trip_id=trip.id).order_by(Booking.id).all()
+    assert len(bookings) == 2
+    assert bookings[0].title == "UA 100 outbound"
+    assert bookings[1].title == "UA 200 return"
+
+
+def test_booking_paste_confirm_skips_invalid_card_but_saves_others(
+    app, trip, owner
+):
+    """Card with invalid datetime is skipped (with warning flash); valid
+    card on the same submission still saves."""
+    client = app.test_client()
+    _login(client, owner)
+
+    resp = client.post(
+        f"/trips/{trip.id}/bookings/paste-confirm",
+        data={
+            # Card 0 — bad start_datetime → should be skipped.
+            "bookings[0][_selected]": "on",
+            "bookings[0][type]": "flight",
+            "bookings[0][title]": "Broken flight",
+            "bookings[0][start_datetime]": "not-a-date",
+            "bookings[0][currency]": "USD",
+            # Card 1 — valid → should be saved.
+            "bookings[1][_selected]": "on",
+            "bookings[1][type]": "flight",
+            "bookings[1][title]": "Good flight",
+            "bookings[1][start_datetime]": "2026-06-07T09:00",
+            "bookings[1][end_datetime]": "2026-06-07T12:00",
+            "bookings[1][currency]": "USD",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert f"/trips/{trip.id}/bookings" in resp.headers["Location"]
+
+    bookings = Booking.query.filter_by(trip_id=trip.id).all()
+    assert len(bookings) == 1
+    assert bookings[0].title == "Good flight"
+
+    # Confirm a "Skipped booking 1" warning was flashed.
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes", [])
+    assert any("Skipped booking 1" in msg for _, msg in flashes)
