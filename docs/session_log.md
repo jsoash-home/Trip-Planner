@@ -1,5 +1,27 @@
 # Session Log
 
+## 2026-06-24 — Trip-guide depth plan + small cleanup commits
+
+**Shipped:**
+- `fix(booking_parser)`: harden against Enterprise rental false-positives — accepts "X is Y" confirmation form, skips loyalty-context tokens, requires flight-evidence for bare IATA pairs (kills the 5x "United: PEC → PEC" phantom flights)
+- `feat(trip-guide)`: floating "Save as PDF" button via `inject_print_affordance` on both gated and public guide routes
+- `docs(plans)`: multi-phase plan for taking the trip-guide skill from solid → souvenir-grade (esp. history + nature depth)
+
+**Test status:** 961 passing / 0 failing
+
+**Stopped at:** Plan is written and committed. Phase 1 (editorial spine) has not started — no SKILL.md edits yet, no GuideConfig field additions yet.
+
+**Pick up next with:** Open `docs/superpowers/plans/2026-06-23-trip-guide-depth.md`, answer the 5 open questions at the bottom, then run `/session` to start Task 1 (extend `GuideConfig` with `depth_tier`, `archetype`, `narrator_angle`, `section_depth_overrides`).
+
+**Kickoff prompt for next session:**
+
+> I want to start executing the trip-guide depth Phase 1 plan at `docs/superpowers/plans/2026-06-23-trip-guide-depth.md`. Before opening the session, walk me through the 5 open questions at the bottom of that file and give me your recommendation on each. Then we'll run `/session` to do Task 1: extend `GuideConfig` in `src/guide_builder.py` with `depth_tier`, `archetype`, `narrator_angle`, and `section_depth_overrides`, with full round-trip + back-compat tests. Tests were at 961 green at start of session.
+
+**Loose ends:**
+- 5 open questions at the bottom of the Phase 1 plan need a decision before Task 1 (slug convention, banned-word check failure mode, override JSON shape, era-palette research timing, architecture_modern handling). Each has a recommended answer in the plan.
+- Phase 2 (visual primitives toolkit) and Phase 3 (in-trip companion + structural depth) plans to be written *after* each prior phase ships, per the project plan-splitting rule.
+- Plan uses "Skim / Curious / Deep" as the toggle naming — confirm this when getting into the CSS spec; an alternative is "Skim / Standard / Deep" to match the depth-tier names.
+
 ## 2026-06-20 → 2026-06-22 — Paste-and-parse booking (D2) shipped end-to-end
 
 **Shipped (in this order):**
