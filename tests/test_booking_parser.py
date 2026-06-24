@@ -110,6 +110,37 @@ def test_extract_confirmation_number_no_anchor_fallback():
     assert extract_confirmation_number("the year 123456 came and went") is None
 
 
+def test_extract_confirmation_number_is_phrase():
+    # The "X is Y" prose form (not just "X: Y"). Enterprise emails write
+    # "Your confirmation number is 2116414472." — without this, the parser
+    # falls through to the loyalty card number in the fallback path.
+    assert extract_confirmation_number(
+        "Your confirmation number is 2116414472."
+    ) == "2116414472"
+    assert extract_confirmation_number(
+        "Your booking reference is XYZ123."
+    ) == "XYZ123"
+
+
+def test_extract_confirmation_number_fallback_skips_loyalty_context():
+    # When the anchor doesn't fire and a Membership/Loyalty number sits
+    # nearby, the fallback path should NOT promote the loyalty card to
+    # the confirmation number slot.
+    text = (
+        "Thanks for booking with us.\n"
+        "Membership Number\n\nB47MSDD\n\n"
+        "Loyalty Program\n\nGold Tier"
+    )
+    assert extract_confirmation_number(text) is None
+
+
+def test_extract_confirmation_number_real_enterprise_email():
+    # End-to-end check against the saved fixture: confirmation extraction
+    # should return the real booking confirmation, not the loyalty number.
+    text = (FIXTURE_DIR / "flight/_negative/enterprise_pec.txt").read_text(encoding="utf-8")
+    assert extract_confirmation_number(text) == "2116414472"
+
+
 # ─────────────────────────────  extract_url  ───────────────────────────────
 
 
@@ -273,17 +304,36 @@ def test_flight_returns_none_for_restaurant_confirmation():
     assert extract_flight(load_fixture("flight/_negative/opentable.txt")) is None
 
 
+def test_flight_returns_none_for_car_rental_with_pec_prose():
+    # Real Enterprise rental confirmation: "Personal Effects Coverage (PEC)"
+    # appears repeatedly in the policy boilerplate, and "United States" sits
+    # nearby. Before the flight-evidence guard, this produced phantom
+    # "United: PEC → PEC" flights from prose, since PEC ... PEC pairs with
+    # "to"/hyphen between them passed the loose IATA regex.
+    assert extract_flight(load_fixture("flight/_negative/enterprise_pec.txt")) is None
+
+
 def test_flight_confidence_high_when_all_fields_present():
     p = extract_flight(load_fixture("flight/united_single.txt"))
     assert isinstance(p, ParsedBooking)
     assert p.confidence >= 0.8
 
 
-def test_flight_confidence_low_when_only_iata_pair():
-    # Bare IATA pair, no vendor / date / flight number → low score.
-    p = extract_flight("Trip leg: SFO → JFK and that's all we know.")
+def test_flight_returns_none_for_bare_iata_pair_with_no_evidence():
+    # A bare IATA pair with no flight number, no Depart: anchor, and no
+    # explicit airline anchor is treated as noise (e.g. an acronym pair
+    # in body prose) rather than a low-confidence flight. extract_flight
+    # returning a stub here is what produced the 5x "United: PEC → PEC"
+    # false positives on car-rental policy boilerplate.
+    assert extract_flight("Trip leg: SFO → JFK and that's all we know.") is None
+
+
+def test_flight_keeps_bare_pair_when_flight_no_present():
+    # Counterpoint to the test above: a flight number IS strong evidence
+    # so the pair survives even without a Depart: anchor.
+    p = extract_flight("Flight UA 100\nSFO → JFK")
     assert isinstance(p, ParsedBooking)
-    assert p.confidence < 0.6
+    assert p.type == "flight"
 
 
 # ─────────────────────────────  extract_hotel  ─────────────────────────────
@@ -626,6 +676,39 @@ def test_other_confidence_capped_at_half():
     p = extract_other(load_fixture("other/spa.txt"))
     assert isinstance(p, ParsedBooking)
     assert p.confidence <= 0.5
+
+
+def test_other_skips_all_caps_banner_for_title():
+    # Banner-style first lines like "YOUR RESERVATION IS CONFIRMED" are
+    # generic marketing headers — the next real line makes a better title.
+    text = (
+        "YOUR RESERVATION IS CONFIRMED\n"
+        "\n"
+        "Thank you for your reservation.\n"
+        "Confirmation: ABC123\n"
+        "Date: 2026-08-06\n"
+    )
+    p = extract_other(text)
+    assert isinstance(p, ParsedBooking)
+    assert p.title == "Thank you for your reservation."
+
+
+def test_other_falls_back_to_only_line_when_all_banners():
+    # Edge case: if every leading line is banner-style, return the first
+    # one rather than dropping the booking on the floor.
+    text = "FINAL CONFIRMATION\nConfirmation: ABC123\nDate: 2026-08-06\n"
+    p = extract_other(text)
+    assert isinstance(p, ParsedBooking)
+    # The second line is mixed case — that wins.
+    assert p.title == "Confirmation: ABC123"
+
+
+def test_other_uses_mixed_case_first_line():
+    # Existing behavior: a mixed-case first line is used directly.
+    text = "Order confirmation\n\nMore details here.\nConfirmation: ABC123\n"
+    p = extract_other(text)
+    assert isinstance(p, ParsedBooking)
+    assert p.title == "Order confirmation"
 
 
 # ──────────────────────────  parse_rules  ───────────────────────────────────

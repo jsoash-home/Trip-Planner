@@ -274,11 +274,15 @@ def extract_money(text: str) -> Optional[Tuple[float, str]]:
 # ──────────────────────  extract_confirmation_number  ──────────────────────
 
 
+# Each anchor accepts either ":" or " is " between the label and the token,
+# so "Confirmation #: ABC123" AND "Your confirmation number is 2116414472"
+# both match. \s+is\s+ requires whitespace on both sides so we don't pick
+# up "confirmation numbering is..." or similar.
 _CONFIRMATION_ANCHORS = (
-    r"confirmation\s*(?:number|code|#)?\s*:",
-    r"booking\s*(?:reference|ref|code|number)\s*:",
-    r"record\s*locator\s*:",
-    r"reservation\s*(?:number|code|#)?\s*:",
+    r"confirmation\s*(?:number|code|#)?\s*(?::|\s+is\s+)",
+    r"booking\s*(?:reference|ref|code|number)\s*(?::|\s+is\s+)",
+    r"record\s*locator\s*(?::|\s+is\s+)",
+    r"reservation\s*(?:number|code|#)?\s*(?::|\s+is\s+)",
 )
 # Capture allows hyphens in the middle (e.g. Amtrak's "AMT-7721-NER")
 # but not at either end. 5-15 chars total.
@@ -291,23 +295,44 @@ _RE_CONFIRMATION_ANCHOR = re.compile(
 # Fallback: standalone 6–10 alphanumeric token with at least one letter AND digit.
 _RE_CONFIRMATION_FALLBACK = re.compile(r"\b([A-Za-z0-9]{6,10})\b")
 
+# Words that indicate a nearby token belongs to a loyalty / rewards program,
+# not a booking confirmation. Used in the fallback path to skip tokens whose
+# preceding context names a membership program (e.g. "Enterprise Plus" /
+# "AAdvantage"). Kept narrow on purpose — "member" alone false-matches
+# normal words like "remember".
+_LOYALTY_CONTEXT_WORDS = ("membership", "loyalty")
+_LOYALTY_CONTEXT_WINDOW = 60
+
+
+def _has_loyalty_context(text: str, token_start: int) -> bool:
+    """True if the chars preceding token_start mention a loyalty/membership program."""
+    window = text[max(0, token_start - _LOYALTY_CONTEXT_WINDOW):token_start].lower()
+    return any(word in window for word in _LOYALTY_CONTEXT_WORDS)
+
 
 def extract_confirmation_number(text: str) -> Optional[str]:
     """Find a booking confirmation number.
 
     Prefers an anchor phrase ("Confirmation #:", "Booking reference:",
-    "Record locator:", "Reservation number:"). Falls back to any 6–10
-    char alphanumeric token containing at least one letter AND one digit
-    (so plain words and pure numbers don't match).
+    "Record locator:", "Reservation number:", or the same labels followed
+    by " is "). Anchored matches are filtered to those containing at least
+    one digit so phrases like "confirmation number is pending" don't pose
+    as the captured token. Falls back to any 6–10 char alphanumeric token
+    containing at least one letter AND one digit, skipping tokens that
+    sit in a loyalty / membership context.
     """
-    m = _RE_CONFIRMATION_ANCHOR.search(text)
-    if m:
-        return m.group(1)
+    for m in _RE_CONFIRMATION_ANCHOR.finditer(text):
+        token = m.group(1)
+        if any(c.isdigit() for c in token):
+            return token
 
     for m in _RE_CONFIRMATION_FALLBACK.finditer(text):
         token = m.group(1)
-        if any(c.isalpha() for c in token) and any(c.isdigit() for c in token):
-            return token
+        if not (any(c.isalpha() for c in token) and any(c.isdigit() for c in token)):
+            continue
+        if _has_loyalty_context(text, m.start()):
+            continue
+        return token
     return None
 
 
@@ -491,6 +516,28 @@ def _build_flight_title(
     return arrow
 
 
+def _segment_has_flight_evidence(segment: str) -> bool:
+    """True iff a segment around an IATA pair has a strong flight signal.
+
+    A "strong" signal is one that's specific to real flight emails:
+      - a flight number (e.g. "UA 423", "BA 286")
+      - an explicit airline anchor (Operated by: / Airline: / Carrier:)
+      - a Depart: anchor that yields a parseable date
+
+    Bare known-airline words in nearby prose ("United States" in a
+    car-rental policy) do NOT count — that's exactly the false-positive
+    pattern that lets PEC ↔ PEC pairs in policy text masquerade as flights.
+    """
+    if _RE_FLIGHT_NO.search(segment):
+        return True
+    if _RE_VENDOR_ANCHOR.search(segment):
+        return True
+    for m in _RE_DEP_ANCHOR.finditer(segment):
+        if extract_dates(m.group(1)):
+            return True
+    return False
+
+
 def _extract_one_segment(
     full_text: str,
     pair_start: int,
@@ -500,15 +547,21 @@ def _extract_one_segment(
     email_vendor: Optional[str],
     email_conf: Optional[str],
     email_cost: Optional[Tuple[float, str]],
-) -> ParsedBooking:
+) -> Optional[ParsedBooking]:
     """Build one ParsedBooking from a single IATA-pair match.
 
     Looks for vendor/flight-no/dates inside a ±SEGMENT_RADIUS window around
     the pair. Falls back to email-level vendor/conf/cost when nothing local.
+    Returns None when the segment lacks any flight-specific signal — that
+    guards against prose pairs like "PEC ... PEC" in car-rental policy
+    text being treated as real IATA airport pairs.
     """
     seg_start = max(0, pair_start - _SEGMENT_RADIUS)
     seg_end = min(len(full_text), pair_end + _SEGMENT_RADIUS)
     segment = full_text[seg_start:seg_end]
+
+    if not _segment_has_flight_evidence(segment):
+        return None
 
     vendor = _vendor_from_anchor_or_header(segment) or email_vendor
     # Within the segment, choose anchors/flight-no nearest the IATA pair —
@@ -563,20 +616,27 @@ def extract_flight(text: str) -> Optional[Union[ParsedBooking, List[ParsedBookin
     email_conf = extract_confirmation_number(text)
     email_cost = extract_money(text)
 
+    # Each pair becomes a ParsedBooking only if its segment carries a
+    # flight-specific signal — Nones are noise pairs from prose acronyms.
     segments: List[ParsedBooking] = [
-        _extract_one_segment(
-            text,
-            m.start(),
-            m.end(),
-            m.group(1),
-            m.group(2),
-            email_vendor,
-            email_conf,
-            email_cost,
+        seg for seg in (
+            _extract_one_segment(
+                text,
+                m.start(),
+                m.end(),
+                m.group(1),
+                m.group(2),
+                email_vendor,
+                email_conf,
+                email_cost,
+            )
+            for m in pairs
         )
-        for m in pairs
+        if seg is not None
     ]
 
+    if not segments:
+        return None
     if len(segments) == 1:
         return segments[0]
     # Multi-segment — sort by start_datetime (None-dated sort last).
@@ -1559,6 +1619,10 @@ _RE_TITLE_PREFIX = re.compile(r"^(re|fwd|fw):\s*", re.IGNORECASE)
 # Cap applied to the score so the catch-all rarely outranks a real extractor.
 _OTHER_CONFIDENCE_CAP = 0.5
 
+# How many leading non-empty lines to scan for a non-banner title before
+# giving up and using the first one as-is.
+_TITLE_SCAN_LIMIT = 10
+
 
 def _first_nonempty_line(text: str) -> Optional[str]:
     """First line in text that isn't empty/whitespace-only."""
@@ -1567,6 +1631,41 @@ def _first_nonempty_line(text: str) -> Optional[str]:
         if stripped:
             return stripped
     return None
+
+
+def _looks_like_banner(line: str) -> bool:
+    """True if a line reads like a generic marketing header banner.
+
+    Banners are all-uppercase marketing headers ("YOUR RESERVATION IS
+    CONFIRMED", "ORDER RECEIVED") — they make poor titles because they
+    don't carry the specific subject of the email. The check requires at
+    least three letters so short tokens like "OK" or "HI" don't disqualify
+    themselves. Digits, punctuation, and whitespace don't count.
+    """
+    letters = [c for c in line if c.isalpha()]
+    if len(letters) < 3:
+        return False
+    return all(c.isupper() for c in letters)
+
+
+def _best_title_line(text: str) -> Optional[str]:
+    """Pick the first non-banner non-empty line in the leading window.
+
+    Falls back to the first non-empty line if every line in the scan
+    window looks like a banner — that way we always return *something*
+    rather than dropping a booking on the floor for the catch-all.
+    """
+    seen: List[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        seen.append(stripped)
+        if not _looks_like_banner(stripped):
+            return stripped
+        if len(seen) >= _TITLE_SCAN_LIMIT:
+            break
+    return seen[0] if seen else None
 
 
 def extract_other(text: str) -> Optional[ParsedBooking]:
@@ -1584,7 +1683,7 @@ def extract_other(text: str) -> Optional[ParsedBooking]:
     if not dates and money is None and conf is None:
         return None
 
-    title_line = _first_nonempty_line(text)
+    title_line = _best_title_line(text)
     if not title_line:
         return None
     title = _RE_TITLE_PREFIX.sub("", title_line)
