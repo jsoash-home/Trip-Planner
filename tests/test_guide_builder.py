@@ -18,6 +18,7 @@ from src.guide_builder import (
     clear_share_token,
     guide_exists,
     guide_path,
+    inject_print_affordance,
     load_or_init_config,
     load_trip_data,
     read_guide,
@@ -516,3 +517,37 @@ def test_trip_by_share_token_case_sensitive(app, trip):
     token = set_share_token(trip.id)
     upper_token = token.upper()
     assert trip_by_share_token(upper_token) is None
+
+
+# ─── inject_print_affordance ───────────────────────────────────────────────
+
+
+def test_inject_print_affordance_inserts_before_body_close():
+    """The button + print CSS land just before </body>."""
+    html = b"<!doctype html><html><body><h1>Hi</h1></body></html>"
+    result = inject_print_affordance(html)
+    assert b"vp-print-btn" in result
+    assert b"window.print()" in result
+    assert b"@media print" in result
+    # Affordance is positioned before the closing body, not after it.
+    assert result.index(b"vp-print-btn") < result.index(b"</body>")
+
+
+def test_inject_print_affordance_appends_when_no_body_close():
+    """Falls back to appending if </body> is missing — never drops the button."""
+    html = b"<div>just a fragment</div>"
+    result = inject_print_affordance(html)
+    assert result.startswith(html)
+    assert b"vp-print-btn" in result
+
+
+def test_inject_print_affordance_uses_last_body_close():
+    """If a guide contains escaped '</body>' in text, only the real one is targeted."""
+    html = b"<html><body><pre>example: &lt;/body&gt;</pre></body></html>"
+    result = inject_print_affordance(html)
+    # Affordance should land just before the final </body>, not inside the <pre>.
+    last_close = result.rfind(b"</body>")
+    btn_pos = result.index(b"vp-print-btn")
+    assert btn_pos < last_close
+    # And the <pre> content should still be intact.
+    assert b"<pre>example: &lt;/body&gt;</pre>" in result

@@ -280,6 +280,40 @@ def read_guide(trip_id: int) -> bytes:
         raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
 
 
+_PRINT_AFFORDANCE = """\
+<style>
+.vp-print-btn{position:fixed;top:16px;right:16px;z-index:9999;display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;border:0;background:#1a1a1a;color:#fff;font:600 14px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,0.25);cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
+.vp-print-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,0.30)}
+.vp-print-btn:focus-visible{outline:2px solid #4f8df9;outline-offset:2px}
+.vp-print-btn svg{width:16px;height:16px;flex-shrink:0}
+@media print{
+  .vp-print-btn{display:none !important}
+  section,article,figure,.day,.card{break-inside:avoid;page-break-inside:avoid}
+}
+</style>
+<button type="button" class="vp-print-btn" onclick="window.print()" aria-label="Save guide as PDF">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+<span>Save as PDF</span>
+</button>
+"""
+
+
+def inject_print_affordance(html: bytes) -> bytes:
+    """
+    Insert a floating "Save as PDF" button and matching @media print CSS
+    just before </body>. Falls back to appending if no </body> tag.
+
+    The button calls window.print(), which opens the browser's native print
+    dialog where the user can pick "Save as PDF" as the destination.
+    """
+    needle = b"</body>"
+    payload = _PRINT_AFFORDANCE.encode("utf-8")
+    idx = html.rfind(needle)
+    if idx == -1:
+        return html + payload
+    return html[:idx] + payload + html[idx:]
+
+
 # ─── share-token helpers ─────────────────────────────────────────────────────
 
 

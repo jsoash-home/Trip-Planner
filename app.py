@@ -1599,7 +1599,7 @@ def trip_guide(trip_id: int) -> Response:
         html = guide_builder.read_guide(trip_id)
     except guide_builder.GuideMissing:
         abort(404)
-    return Response(html, mimetype="text/html")
+    return Response(guide_builder.inject_print_affordance(html), mimetype="text/html")
 
 
 @app.route("/guides/share/<token>")
@@ -1613,7 +1613,7 @@ def guide_share(token: str) -> Response:
         html = guide_builder.read_guide(trip.id)
     except guide_builder.GuideMissing:
         abort(404)
-    return Response(html, mimetype="text/html")
+    return Response(guide_builder.inject_print_affordance(html), mimetype="text/html")
 
 
 def _changes_banner_and_mark_seen(trip_id: int, user_id: int) -> Optional[str]:
