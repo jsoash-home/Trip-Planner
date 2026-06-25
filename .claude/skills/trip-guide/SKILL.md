@@ -93,6 +93,110 @@ from duration, destination count, or itinerary density.
 
 ---
 
+## Editorial voice — the writing rules
+
+These rules apply to body prose in every section. The composer enforces
+them at write time; Step 10 verification greps for violations.
+
+### Banned phrases
+
+Strip any of these from prose. Quoted material (a period author, a local
+quoted by name) is exempt — see the anti-pattern at the end of this
+section.
+
+```
+vibrant, bustling, hidden gem, must-see, rich heritage, melting pot,
+charming, picturesque, unspoilt, off-the-beaten-path, dates back to,
+centuries of, has long been, something for everyone, a feast for the
+senses, gem of a, jewel of, crown jewel, postcard-perfect, fairytale,
+storied, world-class, breathtaking
+```
+
+Clustered, with the reason each fails:
+
+- **Brochure adjectives** (`vibrant`, `bustling`, `charming`, `picturesque`, `postcard-perfect`, `fairytale`) — evoke nothing specific. Replace with a named sound, a named smell, or a named scene.
+- **Discovery framing** (`hidden gem`, `off-the-beaten-path`, `must-see`, `gem of a`, `jewel of`, `crown jewel`) — implies the reader is rare and special; meaningless and slightly insulting. Replace with the specific recommendation plus the constraint that makes it specific (when to go, who runs it, what you'll see).
+- **Vague-history filler** (`rich heritage`, `melting pot`, `dates back to`, `centuries of`, `has long been`, `storied`) — claim without dates or names. Replace with a date, a named figure, and a present-day consequence (see the History claim triad below).
+- **Ungraded superlatives** (`unspoilt`, `world-class`, `breathtaking`) — grading without specifics. The reader can't picture it. Replace with the comparison that grounds the grade — compared to what, on what axis.
+- **Anti-content** (`something for everyone`, `a feast for the senses`) — says nothing. Delete.
+
+### Named-particulars density floor
+
+Every paragraph in an **atmospheric** section must carry ≥1 proper noun —
+named street, named person, named date, named dish, named species, named
+building. "A great cafe" → "Café Tortoni"; "an old church" → "Hagia
+Sophia, completed 537."
+
+**Atmospheric sections** (rule applies):
+
+- `history` (every paragraph)
+- `field_guide` (every entry's flavor text)
+- `day_by_day` (each day's intro paragraph)
+- `food` ("things to try" entries)
+- `things_to_do` (every recommendation)
+
+**Practical sections** (rule does not apply — these are terse and
+factual):
+
+- `before_you_go`
+- `weather` (stats + packing list)
+- `fun_facts` (the tips column)
+
+### History claim triad
+
+Every history paragraph must carry all three:
+
+1. **Date** — a specific year or named period (`Augustan`, `Trecento`), not "centuries ago".
+2. **Named person or building** — Bramante, Sant'Andrea della Valle, not "a Renaissance architect".
+3. **Present-day consequence** — what the reader sees today because of this fact.
+
+A paragraph missing any of the three reads as filler. Strip it or
+rewrite.
+
+### Sensory opener rule
+
+The first paragraph of every section opens on a sensory note — smell,
+sound, light, texture — and the sense is named and specific.
+
+> "Roma Termini smells of coffee burnt the way station bars burn it:
+> too hot, too fast, the espresso pulled before the puck is wet through."
+
+Not:
+
+> "Rome welcomes you with energy and warmth."
+
+The first form names a place (Roma Termini), a sensation (burnt coffee),
+and a mechanism (puck pulled too fast). The second names none of these —
+it could be any city.
+
+### Register split — section-level CSS classes
+
+Atmospheric and practical sections render with different typography to
+signal the shift to the reader. The composer applies one class per
+section's wrapping element. CSS verbatim:
+
+```css
+.section--practical { font-family: var(--font-sans); max-width: 52ch; }
+.section--practical p { margin: 0.6em 0; }
+.section--practical ul { padding-left: 1.2em; }
+.section--atmospheric { font-family: var(--font-serif); max-width: 62ch; }
+.section--atmospheric p { margin: 1em 0; text-indent: 0; }
+.section--atmospheric p + p { text-indent: 1.5em; }
+```
+
+The `text-indent: 1.5em` on `p + p` mimics print typesetting and is the
+single highest-signal "this looks edited" move. Do not skip it.
+
+### Anti-pattern: banned-word check on quoted material
+
+The Step 10 verification grep operates on prose only, not on quoted
+material. A history vignette can quote a period author saying "the
+bustling port" — that's a citation, not the guide's voice. The composer
+wraps quoted material in `<blockquote>`, `<q>`, or `<cite>` tags; the
+verifier strips these tags' text content before scanning the body.
+
+---
+
 ## The 10-step flow
 
 Work through these in order. Do not skip a step. Check off each one before advancing.
@@ -311,6 +415,41 @@ See the "Depth tiers" section above for the per-section word floors that
 the chosen tier enforces, and the override merge rule. Reminder: never
 auto-pick depth from trip length.
 
+### 4.6. Narrator angle
+
+After depth, before palette: pick the lens that shapes voice across every
+section. Ask:
+
+> "Who is this guide written for?
+>
+> 1. First-timer with a history obsession
+> 2. Returning after 10+ years, wants what's new
+> 3. Family with kids 5–12
+> 4. Active outdoors / "out before sunrise" type
+> 5. Food-first traveler
+> 6. Cultural completionist
+> 7. Honeymoon / slow-travel
+> 8. Custom (free text, ≤80 chars)"
+
+Save the chosen angle immediately:
+
+```python
+cfg.narrator_angle = "First-timer with a history obsession"
+guide_builder.save_config(trip_id, cfg)
+```
+
+**How it surfaces in the guide.** A one-line italic dek under the trip
+title in the hero. Example:
+
+> *"For the returning visitor — what's changed since 2015."*
+
+**How it influences prose.** The angle is woven into every section's
+opening, not stated outright everywhere. The reader feels the lens; they
+do not read the label. A "Family with kids 5–12" narrator angle changes
+which restaurants get recommended, how walking distances are described,
+and which museums get covered — without the guide ever announcing "this
+is for families."
+
 ### 5. Palette proposal
 
 Research the destination's feel: climate, landscape, cultural mood, time of year.
@@ -396,8 +535,29 @@ This step is not optional. Do it before claiming success.
 3. Load `/trips/<id>` via the `webapp-testing` skill. Assert:
    - Hero card is visible with the "TRIP GUIDE" eyebrow and "Open guide" button
 
-If either check fails, surface the console error or missing element and stop.
-Do not smooth over failures with "probably fine."
+4. **Banned-word grep on body prose.** Strip HTML tags and the text content
+   of any `<blockquote>`, `<q>`, and `<cite>` tags (quoted material is
+   exempt — see the "Editorial voice" anti-pattern), then case-insensitively
+   word-boundary-search for any banned phrase. Any hit fails verification:
+
+   ```python
+   import re
+   BANNED = [
+       "vibrant", "bustling", "hidden gem", "must-see", "rich heritage",
+       "melting pot", "charming", "picturesque", "unspoilt",
+       "off-the-beaten-path", "dates back to", "centuries of",
+       "has long been", "something for everyone", "a feast for the senses",
+       "gem of a", "jewel of", "crown jewel", "postcard-perfect",
+       "fairytale", "storied", "world-class", "breathtaking",
+   ]
+   body_text = strip_html_and_quoted(html)  # see "Editorial voice"
+   hits = [w for w in BANNED if re.search(rf"\b{re.escape(w)}\b", body_text, re.I)]
+   if hits:
+       raise VerifyFail(f"banned phrases in body: {hits}")
+   ```
+
+If any check fails, surface the offending phrase, console error, or
+missing element and stop. Do not smooth over failures with "probably fine."
 
 ---
 
