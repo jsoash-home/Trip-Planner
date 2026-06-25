@@ -1,2 +1,7 @@
 -r requirements.txt
 pytest==8.2.2
+# Needed by tests/test_booking_parser.py LLM-fallback unit tests.
+# src/booking_parser.py defines BatchedParsedBookings only when pydantic
+# is importable; without this dep installed, parse_with_llm() raises
+# NameError and the mocked-LLM tests fail.
+pydantic>=2.0,<3.0
