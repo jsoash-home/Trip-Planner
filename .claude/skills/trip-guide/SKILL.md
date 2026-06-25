@@ -127,6 +127,118 @@ own default kick in, which is the absolute path to project-root `vacation.db`
 Itinerary is pre-grouped by `day_date` and sorted via `sort_within_day`.
 Bookings include their `linked_booking_id` itinerary children.
 
+### 2.5. Archetype detection
+
+Trip data is loaded — now classify the trip's editorial lens. Archetype
+drives which optional Deep-tier modules fire later; it's orthogonal to
+`depth_tier` (a `wildlife` trip can ship at Light or Souvenir-grade).
+
+#### The 8 archetypes
+
+| Archetype | Signal | Default Deep modules |
+|---|---|---|
+| `history_stacked` | Old-world capitals (Rome, Istanbul, Kyoto, Jerusalem) | Swimlane timeline, ERA palette, character vignettes, etymology cards, `twovoices` opt-in |
+| `wildlife` | Safari, Galápagos, Costa Rica, Madagascar | Habitat-first field guide, layered species cards, phenology strips, endemism callouts |
+| `geology` | Iceland, Patagonia, Yellowstone, Atacama | Stratigraphic stack, cross-sections, deep-time timeline |
+| `cuisine_led` | Tokyo, Lyon, Oaxaca, San Sebastián | Expanded food atlas, dish etymology cards, market guide |
+| `pilgrimage` | Camino, Varanasi, Mt Athos, Shikoku | Stage strip, ritual clock, etiquette callouts |
+| `expedition` | Antarctica, Svalbard, Greenland | Logistics-first, gear sidebars, SOS panel mandatory |
+| `architecture_modern` | Berlin, Bilbao, Marfa, Rotterdam | Building cards with architect + year, walking-line maps |
+| `mixed_leisure` | Beach + city blends without one dominant lens | Standard sections, no exotic modules — the safe default |
+
+Stored on `GuideConfig.archetype` as the snake-case string from the
+"Archetype" column.
+
+#### Classification rubric — 12 yes/no questions
+
+Walk the rubric in order. Record signal hits; the highest-scoring archetype
+becomes primary, with a runner-up promoted to "secondary" if it scored ≥3.
+
+1. **History layers.** Does the destination have ≥3 named historical periods with visible material remains (Republican / Imperial / Medieval / Renaissance / Baroque, etc.)? → `history_stacked`
+2. **Ecosystem lens.** Is the primary motivation a specific ecosystem, biome, or wildlife encounter? → `wildlife`
+3. **Naturalist bookings.** Are there bookings or itinerary items for guided naturalist activities, dives, hides, or safari drives? → `wildlife`
+4. **Endemism / unique geology.** Is the destination known for endemic species or geologically unique landforms? → `wildlife` or `geology`
+5. **Tectonic / volcanic / glacial.** Are there visible tectonic, volcanic, or glacial features the trip is built around (named volcanoes, glaciers, fault lines, hot springs as primary draws)? → `geology`
+6. **Chef / dish / market named.** Did the user mention a chef, named dish, market, or food-specific reason for picking the destination? → `cuisine_led`
+7. **Food-concentrated bookings.** Are bookings concentrated around restaurants, food tours, cooking classes, or markets (~≥40% of bookings)? → `cuisine_led`
+8. **Religious / spiritual route.** Is there a religious site, pilgrimage route, or spiritual practice central to the itinerary (Camino, Shikoku 88, Hajj, Char Dham)? → `pilgrimage`
+9. **Polar / expedition vessel.** Does the trip involve polar regions, ice, or expedition vessels with named departure ports? → `expedition`
+10. **Named architects / buildings.** Did the user mention named architects (Gehry, Niemeyer, Aalto), specific modern buildings, or design pilgrimage as a draw? → `architecture_modern`
+11. **No dominant lens.** Are there ≥2 distinct categories of activity (beach + museum + hike) without one dominating? → `mixed_leisure`
+12. **Soft leisure framing.** Did the user describe the trip as primarily relaxation, honeymoon, or "off" time? → `mixed_leisure`
+
+#### Worked example: Iceland, August, 7 days
+
+- 1 hotel booking in Reykjavík
+- 1 campervan booking (Reykjavík → Reykjavík)
+- Itinerary mentions Þingvellir, Geysir, Gullfoss, Vatnajökull, Reynisfjara
+
+**Rubric hits:** Q5 (volcanic + glacial — strong), Q4 (high geological uniqueness), Q2 (Vatnajökull suggests landscape lens), Q11 (campervan + several types of stop without one dominating).
+
+**Verdict:** primary `geology`, secondary `mixed_leisure`.
+
+#### Confirmation step
+
+Propose the verdict out loud and wait for the user:
+
+> "This reads as a `geology` trip with `mixed_leisure` blended in — agree?"
+
+On acceptance, save immediately:
+
+```python
+cfg.archetype = "geology"
+guide_builder.save_config(trip_id, cfg)
+```
+
+On correction, accept the user's choice without relitigating.
+
+#### Module matrix at Deep tier
+
+Modules each archetype fires by default at `depth_tier="deep"`. Phase 1
+ships the editorial spine; visual primitives marked `(Phase 2)` arrive in
+the next plan and the corresponding row entries will be skipped until then.
+
+```
+history_stacked × Deep    → ERA palette, swimlane timeline (Phase 2), histpins (Phase 2),
+                            character vignettes ×3, etymology cards, sidenotes ≥3/section
+wildlife × Deep           → habitat-first field guide, layered species cards,
+                            phenology strips (Phase 2), endemism callouts
+geology × Deep            → stratigraphic stack (Phase 2), cross-sections (Phase 2),
+                            deep-time timeline
+cuisine_led × Deep        → expanded food atlas, dish etymology cards, market guide
+pilgrimage × Deep         → stage strip, ritual clock, etiquette callouts
+expedition × Deep         → logistics-first sections, gear sidebars,
+                            SOS panel (mandatory at Deep)
+architecture_modern × Deep → building cards (architect + year),
+                            walking-line maps (Phase 2)
+mixed_leisure × Deep      → standard sections, no exotic modules (the safe default)
+```
+
+**Tier scaling.** Lower tiers drop modules from the bottom of each row;
+`Souvenir-grade` adds annotated bibliography + 4-card go-deeper rows on
+top of the Deep matrix for every archetype.
+
+#### Multi-archetype rule
+
+A trip with both a strong primary and a runner-up secondary (Rome history +
+Tuscany hiking, say) blends both:
+
+- **Primary archetype** modules fire at full weight (e.g. 3 vignettes).
+- **Secondary archetype** modules fire at half weight (e.g. 1 vignette).
+
+The depth-tier word floors are owned by the primary; the secondary
+contributes modules, not word budget.
+
+#### Anti-pattern: don't silently change archetype on regenerate
+
+When the user re-runs the skill on an existing trip with a different
+section pick, do NOT silently re-classify. Ask:
+
+> "Sections changed. Re-classify archetype (currently `geology`), or keep it?"
+
+A silent re-classification can flip a Souvenir-grade Rome guide from
+`history_stacked` to `mixed_leisure` and gut the modules. Always confirm.
+
 ### 3. Detect prior run
 
 ```python
