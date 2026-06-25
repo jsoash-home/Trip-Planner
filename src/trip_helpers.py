@@ -481,3 +481,40 @@ def format_changes_since_label(
     # "was" when the whole subject is a single thing (b+i == 1), else "were".
     verb = "was" if (b + i) == 1 else "were"
     return f"{subject} {verb} added since your last visit."
+
+
+def hotel_for_night(bookings: Iterable, target_date: date) -> Optional[Any]:
+    """Return the hotel booking whose stay covers the night of `target_date`.
+
+    Hotel-night semantics: a booking with check-in `start_datetime` and
+    check-out `end_datetime` covers nights where
+    `start_datetime.date() <= target_date < end_datetime.date()`.
+    The night of the check-out date is NOT spent at this hotel.
+
+    Returns `None` when no booking covers `target_date`. When two hotels
+    overlap on the same night (data oddity), logs a warning and returns
+    the first match in input order.
+
+    Duck-typed: takes anything with `.type`, `.start_datetime`,
+    `.end_datetime` attributes — no SQLAlchemy import, no Flask app
+    context needed.
+    """
+    matches: List[Any] = []
+    for b in bookings:
+        if getattr(b, "type", None) != "hotel":
+            continue
+        start = getattr(b, "start_datetime", None)
+        end = getattr(b, "end_datetime", None)
+        if start is None or end is None:
+            continue
+        if start.date() <= target_date < end.date():
+            matches.append(b)
+    if not matches:
+        return None
+    if len(matches) > 1:
+        logger.warning(
+            "multiple hotels cover night %s: %s",
+            target_date,
+            [getattr(m, "id", "?") for m in matches],
+        )
+    return matches[0]

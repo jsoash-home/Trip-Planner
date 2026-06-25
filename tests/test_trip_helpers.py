@@ -1,7 +1,7 @@
 """Unit tests for src/trip_helpers.py."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from src.trip_helpers import (
@@ -13,6 +13,7 @@ from src.trip_helpers import (
     emoji_theme,
     format_changes_since_label,
     group_trips_by_state,
+    hotel_for_night,
     is_valid_status,
     parse_trip_form,
     pick_active_trip,
@@ -31,6 +32,16 @@ class FakeTrip:
     id: int
     start_date: Optional[date]
     end_date: Optional[date]
+
+
+@dataclass
+class FakeBooking:
+    """Tiny stand-in for a SQLAlchemy Booking — only the fields hotel_for_night reads."""
+
+    id: int
+    type: str
+    start_datetime: Optional[datetime]
+    end_datetime: Optional[datetime]
 
 
 # ─────────────────────────────  derive_status  ─────────────────────────────
@@ -812,3 +823,62 @@ def test_changes_label_combined_plural_plural():
 def test_changes_label_negative_counts_treated_as_zero():
     # Defensive: negative counts shouldn't happen, but if they do, treat as none.
     assert format_changes_since_label(-1, -2) is None
+
+
+# ─────────────────────────────  hotel_for_night  ─────────────────────────────
+
+
+def _hotel(id_: int, start: datetime, end: datetime) -> FakeBooking:
+    return FakeBooking(id=id_, type="hotel", start_datetime=start, end_datetime=end)
+
+
+def test_hotel_for_night_picks_covering_booking():
+    # Hotel A covers Aug 3–5 (check in 3rd, check out 5th).
+    h_a = _hotel(1, datetime(2026, 8, 3, 16, 0), datetime(2026, 8, 5, 11, 0))
+    # Hotel B covers Aug 5–8.
+    h_b = _hotel(2, datetime(2026, 8, 5, 16, 0), datetime(2026, 8, 8, 11, 0))
+    # Night of Aug 4 → Hotel A. Night of Aug 6 → Hotel B.
+    assert hotel_for_night([h_a, h_b], date(2026, 8, 4)) is h_a
+    assert hotel_for_night([h_a, h_b], date(2026, 8, 6)) is h_b
+
+
+def test_hotel_for_night_returns_none_when_no_coverage():
+    # Hotel covers Aug 3–5. Aug 1 (before) and Aug 10 (after) → no coverage.
+    h = _hotel(1, datetime(2026, 8, 3, 16, 0), datetime(2026, 8, 5, 11, 0))
+    assert hotel_for_night([h], date(2026, 8, 1)) is None
+    assert hotel_for_night([h], date(2026, 8, 10)) is None
+    # No bookings at all → None.
+    assert hotel_for_night([], date(2026, 8, 4)) is None
+
+
+def test_hotel_for_night_excludes_checkout_night():
+    # Check in Aug 3 16:00, check out Aug 5 11:00 — you sleep Aug 3 & Aug 4 there.
+    # Aug 5 is the check-out date and is NOT a hotel night at this booking.
+    h = _hotel(1, datetime(2026, 8, 3, 16, 0), datetime(2026, 8, 5, 11, 0))
+    assert hotel_for_night([h], date(2026, 8, 3)) is h
+    assert hotel_for_night([h], date(2026, 8, 4)) is h
+    assert hotel_for_night([h], date(2026, 8, 5)) is None  # check-out night excluded
+
+
+def test_hotel_for_night_picks_first_when_overlapping_logs_warning(caplog):
+    # Two hotels accidentally overlap on Aug 4 — data oddity. We return the
+    # first and log a warning so it surfaces.
+    h_a = _hotel(1, datetime(2026, 8, 3, 16, 0), datetime(2026, 8, 5, 11, 0))
+    h_b = _hotel(2, datetime(2026, 8, 4, 16, 0), datetime(2026, 8, 6, 11, 0))
+    import logging as _logging
+
+    with caplog.at_level(_logging.WARNING, logger="src.trip_helpers"):
+        result = hotel_for_night([h_a, h_b], date(2026, 8, 4))
+    assert result is h_a
+    assert any("multiple hotels" in rec.message.lower() for rec in caplog.records)
+
+
+# Non-hotel bookings (flights, restaurants) are ignored even when they
+# happen to fall on the night in question.
+def test_hotel_for_night_ignores_non_hotel_types():
+    flight = FakeBooking(
+        id=99, type="flight",
+        start_datetime=datetime(2026, 8, 3, 9, 0),
+        end_datetime=datetime(2026, 8, 3, 12, 0),
+    )
+    assert hotel_for_night([flight], date(2026, 8, 3)) is None
