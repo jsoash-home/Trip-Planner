@@ -35,6 +35,64 @@ respect. Each destination should feel custom-designed, not like a template fill-
 
 ---
 
+## Depth tiers — the 1-knob calibration
+
+The user picks ONE depth tier per trip, plus optional per-section overrides.
+The tier sets word floors, section counts, visual-primitive use, and voice
+density. Depth is orthogonal to archetype — a `wildlife` trip can ship at
+Light or Souvenir-grade; same for `history_stacked`.
+
+| Tier | Word target | Sections | Visual primitives | Voice density |
+|---|---|---|---|---|
+| **Light** | ~3,000 | 4–5 | None beyond hero | Prose only, 1 sensory opener per section |
+| **Standard** | ~8,000 | 6–8 | Hero route SVG, 4-stat weather grid, phenology strip (if nature) | ≥1 named particular per paragraph |
+| **Deep** | ~15,000 | 7–8 + bonus | Full Visual Primitives toolkit, era palette, sidenotes ≥3/major subsection | ≥1 callout per ~600 words, dig-deepers on demand |
+| **Souvenir-grade** | ~25,000 | All 8 + bonus + `quick_reference` + `life_list` | All of Deep + annotated bibliography + 4-card go-deeper rows + character vignettes | ≥3 vignettes in history, dual-narrator history where contested |
+
+Stored on `GuideConfig.depth_tier` as one of `"light"`, `"standard"`, `"deep"`,
+`"souvenir_grade"` (snake-case, lowercase). Invalid values normalize to
+`None`; the skill prompts at Step 4.5 when unset.
+
+### Per-section word floors
+
+The trip's `depth_tier` sets the default; per-section overrides lift one
+section higher (or drop one lower) without dragging the rest.
+
+| Section | Light | Standard | Deep | Souvenir |
+|---|---|---|---|---|
+| `history` | 300 | 800 | 1,500 | 3,000 |
+| `field_guide` (per entry) | 40 | 80 | 150 | 250 |
+| `day_by_day` (per day intro) | 60 | 150 | 300 | 500 |
+| `food` (each "things to try" entry) | 25 | 60 | 120 | 200 |
+| `fun_facts` | 200 | 400 | 700 | 1,200 |
+
+*(other sections scale by the same multipliers)*
+
+### Per-section overrides
+
+`GuideConfig.section_depth_overrides` is a flat dict keyed by section key:
+
+```json
+{
+  "history": "souvenir_grade",
+  "food": "deep"
+}
+```
+
+**Merge rule, applied per section at compose time:**
+
+1. If the section has an entry in `section_depth_overrides` → use it.
+2. Else if `cfg.depth_tier` is set → use it.
+3. Else fall back to `"standard"`.
+
+### Anti-pattern: do NOT auto-pick depth from trip length
+
+A 14-day Greek-islands lounge can be Light; a 3-night Rome trip can be
+Souvenir-grade. The user picks at Step 4.5; the skill never infers depth
+from duration, destination count, or itinerary density.
+
+---
+
 ## The 10-step flow
 
 Work through these in order. Do not skip a step. Check off each one before advancing.
@@ -78,7 +136,7 @@ with app.app_context():
 
 If `cfg.last_generated_at` is set, present three options and wait for user choice:
 
-1. Regenerate with same sections (reuse saved sections + palette; re-research; overwrite)
+1. Regenerate with same sections + depth (reuse saved sections, palette, `depth_tier`, and `section_depth_overrides`; re-research; overwrite)
 2. Change sections (re-run the picker; optionally re-pick palette)
 3. Cancel
 
@@ -115,6 +173,31 @@ language (card grid, mono labels, group headers).
 encounter-heavy trips: a checklist grid of "things to keep an eye out for" —
 wildlife, views, foods, small moments — synthesised from the trip's other
 sections. Mirrors the Galapagos Field Log benchmark.
+
+### 4.5. Pick depth tier
+
+Before proposing a palette, lock the depth. Ask:
+
+> "Light / Standard / Deep / Souvenir-grade — which?
+>
+> - **Light** (~3,000 words): prose-only, 4–5 sections. Day-of read on the plane.
+> - **Standard** (~8,000 words): 6–8 sections, route SVG + weather grid.
+> - **Deep** (~15,000 words): full visual toolkit, era palette, sidenotes throughout.
+> - **Souvenir-grade** (~25,000 words): everything + vignettes + annotated bibliography. A keepsake.
+>
+> Any sections you want lifted above (or dropped below) that default? (e.g. *"Deep overall, Souvenir-grade on history"*)"
+
+Save the agreed tier and overrides immediately:
+
+```python
+cfg.depth_tier = "deep"  # or whatever the user picked, snake-case
+cfg.section_depth_overrides = {"history": "souvenir_grade"}  # optional
+guide_builder.save_config(trip_id, cfg)
+```
+
+See the "Depth tiers" section above for the per-section word floors that
+the chosen tier enforces, and the override merge rule. Reminder: never
+auto-pick depth from trip length.
 
 ### 5. Palette proposal
 
