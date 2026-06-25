@@ -446,6 +446,205 @@ payoff.
 
 ---
 
+## Source disclosure
+
+A souvenir-grade guide is opinionated. That's the point. But
+opinion without disclosure reads as bluster, and unsourced facts
+read as hallucinations. Every guide carries three sourcing surfaces
+plus two prose conventions that let the reader see where the
+authority comes from — and where it doesn't.
+
+The three required surfaces:
+
+1. A **"note on sources"** `<details>` block right after the hero
+2. A per-section **"Go deeper" 4-card row** at the close of every
+   section that ships at Deep tier or above
+3. A consolidated **"Sources & further reading"** section as the
+   last content section before the footer
+
+Plus two prose conventions:
+
+4. **Live-data callouts** — mono attribution lines at the foot of any
+   section pulling current data
+5. **`.opinion` typographic container** for explicitly marked
+   editorial judgment
+
+### 1. "A note on sources" block
+
+A `<details>` element right after the hero, opening with a single
+summary line. 3–5 plain-language sentences inside. Template:
+
+```html
+<details class="sources-note">
+  <summary>A note on sources</summary>
+  <p>Sources for this guide. The history draws on
+  [academic source class], the wildlife sections on [field
+  resource], the food on [local press / cookbook authors]. Live
+  data (weather, opening hours) was current as of
+  {generation_date} — verify before booking. Opinion is marked in
+  the prose; sources for individual claims are linked in the
+  "Sources &amp; further reading" section at the foot.</p>
+</details>
+```
+
+The block is collapsed by default — readers who care expand it;
+readers who don't get a clean hero-to-content flow. Required on
+every guide regardless of depth tier; the Light tier still benefits
+from the honesty.
+
+### 2. Per-section "Go deeper" 4-card row
+
+At the close of every section that lands at Deep tier or above
+(check the merged tier per section, not the trip-wide default),
+ship a 4-card aside with one card per medium: a book, a podcast,
+a film, and a "local voice to follow" (a real working
+journalist, museum, Substack writer, or institution with a
+current public presence).
+
+```html
+<aside class="go-deeper">
+  <h4>Go deeper on this</h4>
+  <div class="gd-grid">
+    <article class="gd-card">
+      <span class="gd-kind">Book</span>
+      <h5>Title</h5>
+      <p>One-line opinionated annotation.</p>
+    </article>
+    <article class="gd-card">
+      <span class="gd-kind">Podcast</span>
+      <h5>Title</h5>
+      <p>One-line opinionated annotation.</p>
+    </article>
+    <article class="gd-card">
+      <span class="gd-kind">Film</span>
+      <h5>Title</h5>
+      <p>One-line opinionated annotation.</p>
+    </article>
+    <article class="gd-card">
+      <span class="gd-kind">Local voice</span>
+      <h5>Name or handle</h5>
+      <p>One-line opinionated annotation.</p>
+    </article>
+  </div>
+</aside>
+```
+
+The "Local voice" card is the highest-signal one. It says: someone
+with a current relationship to this place writes about it, and here's
+where to find them. If WebSearch can't confirm a real current
+presence, **omit the card entirely** — better three cards than four
+with a fabricated fourth.
+
+The annotation is opinionated, not summary. "The standard one-volume
+history; dense but readable" beats "A history of Rome from
+foundation to fall."
+
+### 3. Consolidated "Sources & further reading"
+
+The last content section before the footer. Grouped by topic with
+small headings:
+
+- `On the history`
+- `On the wildlife` (or `On the geology`, `On the architecture`,
+  etc. — match what the guide covers)
+- `On the food`
+- `On the practical stuff` (transit, money, etiquette — optional)
+
+3–5 annotated entries per group. Each entry uses this exact format:
+
+```
+Title — Author (Year). One-line opinionated annotation.
+```
+
+Render as a `<ul>` with one `<li>` per entry. The title is bold; the
+author/year is mono; the annotation is body-weight prose. Example:
+
+> **The Romans: From Village to Empire** — Mary Beard, John North
+> & Sarah Price *(2014)*. The teaching standard; written by three
+> classicists who disagree productively. Read alongside SPQR.
+
+### 4. Live-data callouts
+
+For any section that pulled current data at compose time — weather,
+festival dates, opening hours, eBird sightings, currency rates — add
+a small mono attribution line at the section foot:
+
+```html
+<p class="live-data">
+  Weather data: NOAA, fetched 2026-06-23.
+  Wildlife sightings: eBird hotspot data, last 30 days.
+</p>
+```
+
+```css
+.live-data {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  color: var(--ink-soft);
+  margin-top: 1.5em;
+  padding-top: 0.6em;
+  border-top: 1px dashed var(--hairline);
+}
+```
+
+The point isn't legal CYA — it's letting the reader judge staleness.
+A weather call fetched 6 months ago is information; the reader can
+decide whether to re-check.
+
+### 5. `.opinion` typographic container
+
+Explicitly marked editorial judgment gets the `.opinion` class. This
+is the one place in the guide where the author's voice is named as
+opinion rather than reported.
+
+```html
+<p class="opinion">If you only do one thing in Rome: skip the
+Trevi Fountain queue and walk to the Palazzo Doria Pamphilj. The
+crowd never finds it.</p>
+```
+
+```css
+.opinion {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+```
+
+**Required minimum:** ≥1 `.opinion` block per `things_to_do` section
+and per `food` section, at Deep tier or above. These are the
+sections where opinion is the whole point; an unopinionated
+`things_to_do` is a worse guide than no `things_to_do` at all.
+
+Use sparingly elsewhere. Three `.opinion` blocks per section is
+plenty; ten is performative.
+
+### Anti-patterns
+
+- **No fabricated sources.** If the skill cannot name a real book,
+  podcast, film, or local voice for a "Go deeper" card, the card is
+  **omitted**, not invented. A 3-card row is fine; a 4-card row with
+  a faked entry is not. Same rule for the consolidated bibliography:
+  every entry must be a real, findable work.
+- **No URL citations in body prose.** Links to sources go in the
+  consolidated "Sources & further reading" section only. Inline URLs
+  break the reading rhythm and date the file the fastest.
+- **"Local voice" cards must clear a real-presence bar.** A real
+  person, museum, podcast, or Substack writer with a current public
+  presence (last post within ~12 months, named institution still
+  operating). Cards that can't be confirmed via WebSearch at compose
+  time are omitted, not invented.
+- **Don't let `.opinion` become a typographic crutch.** Italic
+  border-left is striking; the temptation is to wrap every spicy
+  sentence in it. The class is for *explicitly named editorial
+  judgment* — "skip X, do Y" — not for every assertion the author
+  feels strongly about. Most opinion lives in unmarked prose; the
+  `.opinion` block is the rare moment of stepping out from behind the
+  reportorial voice.
+
+---
+
 ## The 10-step flow
 
 Work through these in order. Do not skip a step. Check off each one before advancing.
@@ -737,6 +936,20 @@ Write the complete single-file HTML in one pass. Requirements:
 Always present: wrapper header (trip title, dates, destination, day count, mono eyebrow),
 sticky section nav (when 2+ sections), and footer (trip ID, last-generated timestamp,
 palette name).
+
+**Sourcing surfaces (required on every guide).** See the "Source disclosure"
+section above for the full pattern. At compose time, emit all three:
+
+1. The `<details class="sources-note">` "A note on sources" block immediately
+   after the hero.
+2. A `<aside class="go-deeper">` 4-card row at the close of every section
+   merged to Deep tier or above.
+3. A consolidated `Sources & further reading` section as the last content
+   section before the footer.
+
+Plus the prose conventions: `.live-data` mono attribution lines on any
+section pulling current data, and ≥1 `.opinion` block per `things_to_do`
+and per `food` section at Deep tier or above.
 
 ### 8. Save
 
