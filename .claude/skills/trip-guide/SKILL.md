@@ -262,6 +262,98 @@ The `.deep` div is the unit Skim mode hides (see below). Wrap every
 non-lede paragraph in it, not just the long ones — partial hiding looks
 broken.
 
+### Skim / Standard / Deep toggle
+
+A 3-position toggle sits in the sticky nav. It sets `data-mode` on
+`<body>`; CSS keys off that attribute to show or hide whole layers of
+content. The user's choice persists in `localStorage["vp.guide.mode"]`,
+so reopening the guide remembers the mode. `@media print` forces every
+layer visible regardless of mode.
+
+The three modes:
+
+- **Skim** — ledes only. `.deep`, `.dig-deeper`, `.sidenote-content`,
+  and `.endnotes` are hidden. Best for the day-of-trip read.
+- **Standard** — ledes + `.deep`. `.dig-deeper` and `.sidenote-content`
+  stay hidden; `.endnotes` shows. The default mode on first load.
+- **Deep** — everything visible. Sidenote bodies, dig-deeper insets,
+  endnotes, full apparatus. Best for the pre-trip read.
+
+**Naming note.** The toggle's "Standard" label is intentionally aligned
+with the depth-tier `"standard"` slug — both signal "the middle
+amount." The toggle is a *reader-side* control over what's revealed; the
+depth tier is an *author-side* control over how much was written. A
+Deep-tier guide in Skim mode still only shows the ledes; a Light-tier
+guide in Deep mode just doesn't have much extra to reveal.
+
+HTML pattern:
+
+```html
+<div class="mode-toggle" role="radiogroup" aria-label="Reading depth">
+  <button data-mode="skim" aria-pressed="false">Skim</button>
+  <button data-mode="standard" aria-pressed="true">Standard</button>
+  <button data-mode="deep" aria-pressed="false">Deep</button>
+</div>
+```
+
+CSS verbatim:
+
+```css
+body[data-mode="skim"] .deep,
+body[data-mode="skim"] .dig-deeper,
+body[data-mode="skim"] .sidenote-content,
+body[data-mode="skim"] .endnotes { display: none; }
+
+body[data-mode="standard"] .dig-deeper,
+body[data-mode="standard"] .sidenote-content { display: none; }
+
+@media print {
+  .deep, .dig-deeper, .sidenote-content, .endnotes { display: block !important; }
+  .mode-toggle { display: none; }
+}
+```
+
+JS verbatim (~30 lines, wrap in an IIFE so the closure stays out of
+window globals):
+
+```js
+(function(){
+  var KEY = "vp.guide.mode";
+  var saved;
+  try { saved = localStorage.getItem(KEY); } catch(e) { saved = null; }
+  var mode = saved || "standard";
+  document.body.setAttribute("data-mode", mode);
+
+  var buttons = document.querySelectorAll(".mode-toggle [data-mode]");
+  buttons.forEach(function(btn){
+    btn.setAttribute("aria-pressed", btn.dataset.mode === mode ? "true" : "false");
+    btn.addEventListener("click", function(){
+      var next = btn.dataset.mode;
+      document.body.setAttribute("data-mode", next);
+      buttons.forEach(function(b){
+        b.setAttribute("aria-pressed", b.dataset.mode === next ? "true" : "false");
+      });
+      try { localStorage.setItem(KEY, next); } catch(e){}
+    });
+  });
+})();
+```
+
+**Why `try/catch` around localStorage.** Private-browsing windows
+(Safari, mobile Firefox) throw on `localStorage.setItem`. The catch
+keeps the toggle working for the session even when persistence fails —
+same pattern the dashboard countdown uses.
+
+**Accessibility.** The toggle is `role="radiogroup"`; each button is a
+radio. `aria-pressed` reflects the current mode. Keyboard focus styles
+inherit the global `*:focus-visible` rule from the Accessibility
+patterns section.
+
+**Default on first load.** Standard, not Skim. A new reader landing on
+a guide should see the lede AND the deep prose by default — Skim is the
+mode you opt into on the plane, not the impression we want the guide to
+make first.
+
 ---
 
 ## The 10-step flow
