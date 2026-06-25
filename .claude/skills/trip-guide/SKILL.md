@@ -1018,6 +1018,17 @@ This step is not optional. Do it before claiming success.
        raise VerifyFail(f"banned phrases in body: {hits}")
    ```
 
+5. **Wayfinding scaffold asserts.** Required on every guide per the
+   Wayfinding scaffold section. Any miss fails verification:
+   - `#vp-progress` element exists in the DOM.
+   - `.vp-toc` exists with ≥2 `<a>` links, and after a scroll-to-bottom
+     action at least one link has the `.active` class
+     (proves scroll-spy is wired).
+   - Every `<h2>` inside `<main>` contains a `<span class="reading-time">`
+     chip (proves compose-time reading-time computation ran).
+   - Every TOC `<a href="#…">` target resolves to a `<section id="…">`
+     element. Orphan TOC links (anchor with no matching section) fail.
+
 If any check fails, surface the offending phrase, console error, or
 missing element and stop. Do not smooth over failures with "probably fine."
 
@@ -1210,6 +1221,181 @@ in isolation), mono meta row with When / Length / Countries / Bookings count.
 
 The route arc is a single biggest single-piece-of-polish for multi-destination
 trips. Skip it for single-city trips where it would feel inflated.
+
+---
+
+## Wayfinding scaffold (required)
+
+Long guides earn the reader's time only if the reader can tell where
+they are, how far they've gone, and how far is left. The scaffold
+below is required on every guide regardless of depth tier — even a
+Light-tier 3,000-word guide gets the TOC, progress bar, reading-time
+chips, and permalink anchors. The wayfinding apparatus costs almost
+nothing and rewards every reader.
+
+Four pieces, all sharing one initialiser:
+
+1. **Sticky side TOC** keyed to `<h2>`s with IntersectionObserver
+   scroll-spy that highlights the section currently in view.
+   Collapses to a top-bar dropdown under 760px.
+2. **3px top-edge progress bar** that fills as the document scrolls.
+   The dumbest possible "you're 60% of the way through this" cue.
+3. **Per-section reading-time chip** computed at compose time —
+   small mono "7 min · history" badge stuck inside each section's
+   `<h2>`.
+4. **Permalink anchors** with hover-reveal `¶` glyph,
+   `scroll-behavior: smooth` on `<html>`, and `scroll-margin-top` on
+   `<section>` so the sticky bar doesn't cover headings when jumping
+   in from a link.
+
+### JS verbatim
+
+Namespaced under `window.VPGuide` so each behaviour is independently
+addressable, wrapped in an IIFE so its closure scope stays out of the
+global namespace, and every init function `try/catch`es its own
+setup. The const-collision incident in `~/.claude/CLAUDE.md` — two
+script blocks declaring the same `const` name silently killed a
+whole page — is the cautionary tale here. **A broken scroll-spy
+must not break the depth toggle.** Same discipline applies to every
+future module added to a guide.
+
+```js
+window.VPGuide = window.VPGuide || {};
+
+(function(VPGuide){
+  // Top progress bar
+  function initProgressBar(){
+    try {
+      var bar = document.getElementById("vp-progress");
+      if (!bar) return;
+      window.addEventListener("scroll", function(){
+        var h = document.documentElement;
+        var pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+        bar.style.width = pct + "%";
+      }, { passive: true });
+    } catch(e){ console.warn("progress bar init failed", e); }
+  }
+
+  // Scroll-spy TOC
+  function initScrollSpy(){
+    try {
+      var links = document.querySelectorAll(".vp-toc a[href^='#']");
+      if (!links.length || !("IntersectionObserver" in window)) return;
+      var byId = {};
+      links.forEach(function(a){ byId[a.getAttribute("href").slice(1)] = a; });
+
+      var obs = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          var a = byId[e.target.id];
+          if (!a) return;
+          if (e.isIntersecting) {
+            links.forEach(function(l){ l.classList.remove("active"); });
+            a.classList.add("active");
+          }
+        });
+      }, { rootMargin: "-40% 0px -55% 0px" });
+
+      document.querySelectorAll("main section[id]").forEach(function(s){ obs.observe(s); });
+    } catch(e){ console.warn("scroll-spy init failed", e); }
+  }
+
+  VPGuide.initWayfinding = function(){
+    initProgressBar();
+    initScrollSpy();
+  };
+  document.addEventListener("DOMContentLoaded", VPGuide.initWayfinding);
+})(window.VPGuide);
+```
+
+The IntersectionObserver `rootMargin: "-40% 0px -55% 0px"` shrinks
+the viewport to a narrow band in the upper-middle; a section is
+"active" only when its top edge crosses that band. Adjust the
+percentages to taste, but the principle — a band, not a line — is
+what stops the active chip from flickering between two sections
+during scroll.
+
+### CSS verbatim
+
+```css
+#vp-progress {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+  background: var(--accent); z-index: 100; transition: width 80ms linear;
+}
+.vp-toc { position: sticky; top: 80px; }
+.vp-toc a { color: var(--ink-soft); text-decoration: none; }
+.vp-toc a.active { color: var(--accent); font-weight: 600; }
+.vp-toc a.active::before { content: "▸ "; }
+main section[id] { scroll-margin-top: 90px; }
+.permalink {
+  opacity: 0; margin-left: 0.3em; color: var(--ink-soft);
+  text-decoration: none; transition: opacity 120ms;
+}
+h2:hover .permalink, h3:hover .permalink { opacity: 0.6; }
+.permalink:hover { opacity: 1 !important; color: var(--accent); }
+.reading-time {
+  display: inline-block; font-family: var(--font-mono);
+  font-size: 0.75em; color: var(--ink-soft);
+  margin-left: 0.8em; padding: 1px 6px;
+  border: 1px solid var(--hairline); border-radius: 3px;
+}
+@media (max-width: 760px) {
+  .vp-toc { position: static; }
+}
+@media print {
+  #vp-progress, .vp-toc, .mode-toggle, .reading-time, .permalink { display: none !important; }
+}
+```
+
+`html { scroll-behavior: smooth; }` belongs in the base styles so
+permalink clicks animate. `prefers-reduced-motion: reduce` should
+flip it back to `auto` per the existing accessibility convention.
+
+### Reading-time computation
+
+At compose time, count words in each section's body (stripped of
+HTML tags), divide by **220** (average adult reading pace, words per
+minute), `math.ceil` to the nearest minute, and emit the chip inside
+the `<h2>`:
+
+```html
+<h2 id="history">
+  History
+  <span class="reading-time">7 min · history</span>
+  <a class="permalink" href="#history" aria-label="Permalink to History">¶</a>
+</h2>
+```
+
+The label after the dot — "history", "field guide", "food" —
+echoes the section slug. A reader skimming the TOC can read "7 min ·
+history" and decide whether to dive in now or skim it.
+
+### Section IDs and permalink anchors
+
+Every `<section>` gets an `id` matching the slug used in the TOC
+anchor (`<a href="#history">`). Every `<h2>` and `<h3>` ships with a
+`<a class="permalink" href="#…">¶</a>` immediately after its text.
+The `¶` glyph (`&para;`) appears only on hover thanks to the CSS
+`opacity: 0` → `opacity: 0.6` transition; click copies the URL with
+fragment to the address bar via the browser's default anchor
+behaviour.
+
+### Sticky-nav offset rule
+
+The 80px / 90px figures in the CSS assume the sticky top bar
+(housing the mode toggle and the mobile TOC dropdown) is ~70px
+tall. If the top bar grows, bump both numbers in lockstep:
+`.vp-toc { top: <bar-height + 10>px }` and
+`main section[id] { scroll-margin-top: <bar-height + 20>px }`.
+The extra 10–20px is breathing room above the heading so it doesn't
+sit pinned to the bar after a fragment jump.
+
+### Anti-pattern: don't ship a TOC without `id`s
+
+A `.vp-toc` with `href="#section"` links that point at non-existent
+section IDs is a silent failure — clicking does nothing, scroll-spy
+never fires, and nothing on screen tells the reader why. The Step 10
+verification grep below catches this case. Keep the rendered TOC
+and the section ID set in lockstep.
 
 ---
 
