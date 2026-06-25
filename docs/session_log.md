@@ -1,5 +1,30 @@
 # Session Log
 
+## 2026-06-25 — Trip-guide Phase 1 finish + Phase 2a editorial spine shipped
+
+**Shipped:** (13 commits)
+- Phase 1: Tasks 5a/5b/5c, 6, 7, 8 — progressive disclosure (lede + .deep + Skim/Standard/Deep toggle + ERA_COLORS), source disclosure, wayfinding scaffold, validation note (Phase 1 closed)
+- Phase 2a spec + plan written, brainstormed strict-split hyperlink rule + walking-distance design
+- Phase 2a Tasks 1, 2, 4, 6: `src/place_links.py`, `src/walking_distance.py`, `hotel_for_night` on `trip_helpers`, SKILL.md gains Practical hyperlinks + Walking-distance chips sections + Step 6.5
+- Phase 2a pivot: discovered project already has Mapbox `src/geocoding.py` + `GeocodeCache` table + `Booking.geocoded_*` columns; dropped Tasks 3 + 5 (duplicate infra); spec + plan revised mid-flight
+
+**Test status:** 988 passing / 0 failing (was 968 at session start; +20 net)
+
+**Stopped at:** Phase 2a code + docs all on origin. Mirrors Phase 1 pattern but the hands-on validation pass (regenerate a real trip guide, eyeball the chips and practical links) hasn't happened yet.
+
+**Pick up next with:** validation pass — regenerate one of your real trips through the updated `/trip-guide` skill, check that practical links land on the right surfaces, walking chips render on `day_by_day` site cards, no `<a>` tags leak into atmospheric prose. Same shape as Phase 1 Task 8.
+
+**Kickoff prompt for next session:**
+
+> Phase 2a validation pass. SKILL.md has the new Practical hyperlinks + Walking-distance chips sections (1913 lines, 17 sections of which 2 are new). Pick one of my real trips, run `/trip-guide`, regenerate, then visually verify in the browser at http://localhost:5002: (a) practical links wrap every venue in `things_to_do` / `food` (where to eat) / `day_by_day` site cards / `field_guide` landmark entries with `<a class="practical-link">` to Google Maps; (b) bibliography + Go-deeper card titles are `<a class="practical-link">`; (c) zero `<a>` tags in atmospheric prose (history paragraphs, day intros); (d) walking-distance chips render on `day_by_day` site cards where `hotel_for_night` resolves AND venue/hotel coords resolved; (e) chips skip transit days and multi-hotel `things_to_do` gracefully. Capture 3–5 observations into `docs/superpowers/notes/2026-XX-XX-trip-guide-phase2a-validation.md` for the Phase 2b plan seed. Tests at 988/988 via `.venv/bin/pytest tests/ -q`. `MAPBOX_TOKEN` needs to be set in env or chips will skip with a warning.
+
+**Loose ends:**
+- `.claude/settings.json` still untracked, not in `.gitignore` (intentional or oversight — leave as is)
+- Phase 2b plan (visual primitives toolkit — 8 SVG helpers + icon library) not yet brainstormed; do after Phase 2a validation lands
+- Phase 2a plan deviation: signature is `Iterable → Optional[Any]` (duck-typed) instead of plan's `List[Booking]`; field names `start_datetime`/`end_datetime` not `start_date`/`end_date`. Both correct against project reality, flagged in Task 4 commit
+
+---
+
 ## 2026-06-24 — Trip-guide depth plan + small cleanup commits
 
 **Shipped:**
