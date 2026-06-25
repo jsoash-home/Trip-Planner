@@ -1,8 +1,30 @@
 # Trip Guide Phase 2a — Editorial Spine Refinements — Design
 
 **Date:** 2026-06-25
-**Status:** Approved, ready for implementation plan
+**Status:** Approved (v2 after pivot — see "Revision note" below)
 **Scope:** Two new pure-helper modules + one extension to `src/trip_helpers.py` + edits to `.claude/skills/trip-guide/SKILL.md`. No changes to bookings, itinerary, packing, sharing, countdown, or any existing Flask routes. No DB schema changes.
+
+## Revision note (2026-06-25, after Task 2 of the v1 plan shipped)
+
+After Tasks 1 and 2 landed, the implementer started Task 3 (a new
+Nominatim-based `src/geocoding.py`) and discovered that the project
+**already has** `src/geocoding.py` using **Mapbox**, plus a
+`GeocodeCache` DB table, plus `Booking.geocoded_lat / geocoded_lng /
+geocoded_city / geocoded_country_code` columns auto-populated by
+`ensure_geocoded()` from existing routes in `app.py`. The brainstorm
+missed this — no harm done because nothing was committed for the
+duplicate module.
+
+**Pivot:** drop the two tasks that built duplicate geocoding infra
+(Task 3 = new Nominatim wrapper; Task 5 = `GuideConfig.geocode_cache`
+JSON field) and reuse what's already in the project. The walking-
+distance work still goes ahead — it just reads coords off
+`Booking.geocoded_lat/lng` for hotels and calls the existing
+`geocode_with_cache(text, db_session, token)` for venues mentioned in
+body prose.
+
+The two-tier hyperlink rule (the other half of Phase 2a) is unaffected
+by the pivot.
 **Parent plan:** [docs/superpowers/plans/2026-06-23-trip-guide-depth.md](../plans/2026-06-23-trip-guide-depth.md) (Phase 2)
 **Seed:** [docs/superpowers/notes/2026-06-25-trip-guide-phase1-validation.md](../notes/2026-06-25-trip-guide-phase1-validation.md)
 
@@ -101,16 +123,31 @@ becomes a binding decision below.
 - Round up to the nearest minute.
 - Format adapts by distance band — see decision 4 below.
 
-### 3. Coordinates via Nominatim, cached per trip
+### 3. Coordinates via the existing Mapbox geocoder + DB cache
 
-- Geocode every hotel and every named venue once via Nominatim
-  (OpenStreetMap's free geocoder).
-- Polite-use rules: 1 request per second, custom `User-Agent` header
-  identifying the project (`vacation-planner/0.1
-  (jeffsoash@gmail.com)`), no parallel requests.
-- Cache results on `GuideConfig.geocode_cache` as
-  `{"<name>::<city>": [lat, lon]}`. Persists across regenerations via
-  the existing config sidecar JSON.
+**Revised after pivot.** The project already has `src/geocoding.py`
+using Mapbox + a `GeocodeCache` DB table + `Booking.geocoded_*`
+columns. We reuse all of it.
+
+- **Hotels.** Coordinates are already on the Booking row as
+  `geocoded_lat` and `geocoded_lng` — populated by the existing
+  `ensure_geocoded(rows, db_session, token)` call from `app.py`. The
+  composer reads them directly. If a booking is missing coords (e.g.
+  a hotel added but no map page visited yet), the composer calls
+  `ensure_geocoded([booking], ...)` to fill them.
+- **Venues mentioned in body prose** (restaurants, museums,
+  landmarks). The composer calls
+  `geocode_with_cache(text=f"{name}, {city}", db_session=db.session,
+  token=MAPBOX_TOKEN)` which returns a `GeocodeResult` (with `.lat`
+  and `.lng` attributes) or `None`. The result is cached in the
+  `GeocodeCache` table automatically.
+- **No `GuideConfig.geocode_cache`** — that field is NOT added. The
+  cache lives in the DB.
+- **MAPBOX_TOKEN** is read from the environment via `app.py`'s
+  existing pattern. If the token is missing, the composer logs a
+  warning, skips the chip on any venue without already-cached coords,
+  and continues — same fail-soft pattern the rest of the project
+  uses.
 
 ### 4. Adaptive chip format
 
@@ -213,33 +250,22 @@ def walking_chip(
 
 Depends only on `math` (standard library).
 
-#### `src/geocoding.py`
+#### `src/geocoding.py` (existing — reused, not modified)
 
-The only module with network access.
+The project already has this module. We do NOT touch it. Its public
+surface, as used by the trip-guide composer:
 
-```python
-def geocode(
-    name: str,
-    city: str,
-    cache: Dict[str, List[float]],
-) -> Optional[Tuple[float, float]]: ...
-```
+- `geocode_with_cache(text: str, *, db_session, token: str) -> Optional[GeocodeResult]`
+  — checks the `GeocodeCache` DB table; on miss calls Mapbox; writes
+  the result. Returns `GeocodeResult(lat, lng, city, country_code)` or
+  `None` on any failure.
+- `ensure_geocoded(rows: Iterable, *, db_session, token: str) -> None`
+  — for each row with a non-empty `.location` and no `.geocoded_lat`,
+  fills `.geocoded_lat`, `.geocoded_lng`, `.geocoded_city`,
+  `.geocoded_country_code`. Commits once at the end.
 
-- Looks up `"<name>::<city>"` in `cache` first; cache hit returns
-  immediately without network.
-- Cache miss: HTTP GET against Nominatim's public endpoint
-  (`https://nominatim.openstreetmap.org/search`) with `format=json`,
-  `limit=1`, `User-Agent: vacation-planner/0.1 (jeffsoash@gmail.com)`.
-- Empty result → returns `None`, does NOT write to cache.
-- Successful result → writes `[lat, lon]` to cache (so the caller can
-  persist), returns the tuple.
-- `time.sleep(1.0)` after every actual HTTP call to respect Nominatim
-  rate limits.
-- All exceptions caught and logged via `logger.warning`; failures
-  return `None`.
-
-Adds `requests` to dev-runtime requirements (the project already uses
-it elsewhere; verify before adding).
+The composer uses `ensure_geocoded` for hotels (Bookings) and
+`geocode_with_cache` for body-prose venues. No new module needed.
 
 ### Extension to `src/trip_helpers.py`
 
@@ -260,29 +286,39 @@ def hotel_for_night(
 - Returns the first match if two bookings overlap (edge case; logged
   warning).
 
-### Cache shape
+### Cache shape (existing — reused, not extended)
 
-`GuideConfig.geocode_cache: Dict[str, List[float]]` — empty dict by
-default. Survives regeneration via the existing
-`save_config(trip_id, cfg)` path. Keys are stable
-`"<name>::<city>"` strings; values are 2-element lists `[lat, lon]`
-(JSON-safe; `Tuple` is the in-memory type but lists serialize cleanly).
+Coordinates are cached in two places that already exist:
 
-The `GuideConfig` dataclass and its serialization live in
-`src/guide_builder.py`; the field is added there as a default-factory
-empty dict. No migration needed — `load_or_init_config` already
-handles missing keys gracefully.
+- **`models.GeocodeCache`** — a DB table keyed by a normalized
+  location string. Populated automatically by
+  `geocode_with_cache(...)`. Survives regeneration trivially because
+  it's the project's main cache.
+- **`Booking.geocoded_lat / geocoded_lng / geocoded_city /
+  geocoded_country_code`** — coordinate columns on every Booking row,
+  populated by `ensure_geocoded(...)`. Hotels read off these directly.
+
+No new `GuideConfig` field. No new JSON sidecar key. The pivot removed
+those.
 
 ### Composer integration
 
 The skill picks up the new behaviour at compose time. SKILL.md
-documents two new sub-steps in the 10-step flow:
+documents one new sub-step in the 10-step flow:
 
-- **Step 6.5: Build the geocode cache.** Before composing
-  `day_by_day` and `things_to_do`, walk every named venue + every
-  hotel, geocode any missing into `cfg.geocode_cache`, persist via
-  `save_config`. The 1 req/sec throttle is enforced inside
-  `geocode()` — the composer just iterates.
+- **Step 6.5: Ensure coordinates.** Before composing `day_by_day` and
+  `things_to_do`:
+  1. Call `ensure_geocoded(bookings, db_session=db.session,
+     token=MAPBOX_TOKEN)` to fill in any missing hotel coords.
+  2. For each named venue the composer is about to render in a
+     practical surface (`things_to_do`, `food` where-to-eat,
+     `day_by_day` site cards, `field_guide` landmark entries), call
+     `geocode_with_cache(text=f"{name}, {city}", db_session=db.session,
+     token=MAPBOX_TOKEN)` and keep the returned `GeocodeResult`
+     alongside the venue data.
+
+  If `MAPBOX_TOKEN` is missing or empty, log a warning and skip both
+  steps — chips just won't render. The render still completes.
 - **Step 7 additions** (in the existing Compose step):
   - For each `day_by_day` site card: call
     `hotel_for_night(bookings, day_date)`, then
@@ -328,8 +364,10 @@ Three edits:
    "Practical hyperlinks" and "The 10-step flow". Contents: the
    haversine + 1.3× + 5 km/h math, the three adaptive format bands,
    the `hotel_for_night` per-day resolution, the single-vs-multi-hotel
-   rule for `things_to_do`, the geocode cache lifecycle, the
-   Nominatim politeness rules (1 req/sec, custom User-Agent).
+   rule for `things_to_do`, and a one-paragraph note that geocoding
+   reuses the existing Mapbox infrastructure
+   (`ensure_geocoded` for hotels, `geocode_with_cache` for venues) —
+   no new cache, no new env var.
 
 4. **Step 10 verification additions:**
    - Every bibliography entry is an `<a>` tag.
@@ -347,12 +385,15 @@ Three edits:
 
 ## Edge cases
 
-- **Nominatim returns no result.** `geocode` returns `None`. Chip
-  omitted for that venue. Link still rendered — Google Maps URL works
-  even on bad-name queries; the reader gets a search results page.
+- **Mapbox returns no result.** `geocode_with_cache` returns `None`.
+  Chip omitted for that venue. Link still rendered — Google Maps URL
+  works even on bad-name queries; the reader gets a search results page.
 - **Network failure during geocoding.** Same as no result: `None`,
-  chip omitted, warning logged. Pause-and-retry is the composer's
-  call, not the helper's.
+  chip omitted, warning logged by the existing module. The composer
+  does not need to handle this — `geocode_with_cache` already does.
+- **`MAPBOX_TOKEN` not configured.** Composer logs a warning and
+  skips Step 6.5 entirely. The chip never renders; link rendering is
+  unaffected (Google Maps URLs don't require coordinates).
 - **Hotel night unresolved** (transit day, gap in booking dates). Chip
   omitted on that day's cards.
 - **Multi-hotel trip** in `things_to_do`. Chips omitted entirely.
@@ -368,35 +409,43 @@ Three edits:
 
 ## Testing approach
 
-One test file per new module. Mocked tests for `geocoding.py` so the
-suite stays offline.
+One test file per new module. The existing `tests/test_geocoding.py`
+covers the Mapbox geocoder; no new tests needed there.
 
 | Test file | Test names |
 |---|---|
 | `tests/test_place_links.py` | `maps_url_builds_google_search_query`, `maps_url_url_encodes_punctuation`, `maps_url_url_encodes_unicode`, `practical_link_includes_rel_noopener`, `practical_link_escapes_html_in_name`, `practical_link_target_blank` |
 | `tests/test_walking_distance.py` | `haversine_km_known_landmark_pair`, `haversine_km_zero_for_same_point`, `haversine_km_symmetric`, `walking_chip_under_2km_format`, `walking_chip_2_to_5km_format`, `walking_chip_over_5km_format`, `walking_chip_returns_empty_on_none_venue_coords`, `walking_chip_returns_empty_on_none_hotel_coords`, `walking_chip_html_escapes_hotel_name` |
-| `tests/test_geocoding.py` | `geocode_cache_hit_returns_cached_no_network`, `geocode_cache_miss_calls_nominatim_mocked`, `geocode_empty_result_returns_none`, `geocode_empty_result_does_not_write_to_cache`, `geocode_writes_to_cache_on_success`, `geocode_network_error_returns_none`, `geocode_sleeps_after_real_call` |
 | `tests/test_trip_helpers.py` (additions) | `hotel_for_night_picks_covering_booking`, `hotel_for_night_returns_none_when_no_coverage`, `hotel_for_night_excludes_checkout_night`, `hotel_for_night_picks_first_when_overlapping_logs_warning` |
 
-Total: 26 new tests. Suite currently at 968; expected end state ~994.
+Total: **19 new tests** (was 26 + 1 in v1; the 7 geocoding tests +
+1 guide_builder round-trip dropped with the pivot). Suite currently at
+983 (968 baseline + 6 from Task 1 + 9 from Task 2). Expected end state
+**987**.
 
 ## Risks and open questions
 
-- **Nominatim rate limit / blocking.** OSM's geocoder is generous but
-  not unlimited. On a trip with 50+ named venues, hitting all of them
-  at 1 req/sec is ~50 seconds of geocoding the first time. Acceptable.
-  If we ever hit a 429, we add an exponential backoff to `geocode()`.
+- **Mapbox token cost.** The project's existing Mapbox usage is light
+  (geocoding triggered from the map page when bookings are viewed).
+  Adding a per-venue geocode call for body-prose venues in `things_to_do`,
+  `food`, `day_by_day`, and `field_guide` landmark entries during guide
+  composition will increase the call count modestly. Each result is
+  cached in `GeocodeCache` so regeneration is free. Even a souvenir-grade
+  Rome trip with ~80 named venues is one-time ~80 calls; well inside
+  Mapbox's free tier (100k/month).
 - **Stale Maps URLs.** Google Maps search URLs are by name, not by
   place ID, so they survive venue renames better than place-ID-pinned
   URLs. Link rot is still possible (venue closes) but no worse than a
   printed guide.
 - **Geocoded venue mismatch.** "Café Tortoni, Buenos Aires" geocodes
   fine. "Café Tortoni, Madrid" geocodes to a different (or no)
-  result. The composer always passes `(name, city)` together; cache
-  keys include the city to keep the disambiguation explicit.
+  result. The composer always passes `(name, city)` together. The
+  existing `GeocodeCache` is keyed by a normalized location string so
+  passing different (name, city) tuples produces different cache rows.
 - **Plan 2b dependency.** This phase establishes the `practical-link`
-  CSS class and the geocode cache. Plan 2b's `era_chip` and other
-  visual primitives can reuse the cache for nothing extra.
+  CSS class and reuses the existing geocode infrastructure. Plan 2b's
+  `era_chip` and other visual primitives can reuse both for nothing
+  extra.
 
 ## Acceptance criteria
 
@@ -413,9 +462,11 @@ A guide regenerated after this phase ships must:
    where both endpoints geocoded.
 5. Have walking-distance chips on `things_to_do` entries if and only
    if the trip is single-hotel.
-6. Persist `geocode_cache` to the config sidecar; second regeneration
-   makes zero geocoding HTTP calls if no new venues were added.
-7. Pass all existing tests (968) plus the 26 new ones.
+6. Second regeneration makes zero Mapbox HTTP calls if no new venues
+   were added (the existing `GeocodeCache` table handles this — no
+   new cache infrastructure introduced).
+7. Pass all existing tests plus the 19 new ones — suite at **987/987**
+   (was 994 in v1; pivot dropped 7 geocoding tests + 1 round-trip).
 
 A guide is signed off when the user manually reviews these and the
 chip/link presentation reads right at a glance.

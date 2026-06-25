@@ -6,9 +6,34 @@
 
 **Architecture:** Three new pure-helper modules in `src/` (`place_links`, `walking_distance`, `geocoding`) + one extension to `src/trip_helpers.py` (`hotel_for_night`) + one new field on `GuideConfig` (`geocode_cache`) + four SKILL.md documentation edits. No DB schema change, no Flask route change, no template change.
 
-**Tech Stack:** Python 3.9 (no `X | Y` union syntax — use `Optional[X]`), Flask + SQLAlchemy + SQLite, pytest, `requests` (already a dep, used by `app.py`), Nominatim (OpenStreetMap geocoder, free, public endpoint, 1 req/sec rate limit).
+**Tech Stack:** Python 3.9 (no `X | Y` union syntax — use `Optional[X]`), Flask + SQLAlchemy + SQLite, pytest, `requests` (already a dep), Mapbox (already wired through `MAPBOX_TOKEN` and `src/geocoding.py`).
 
 **Spec:** [docs/superpowers/specs/2026-06-25-trip-guide-phase2a-editorial-spine-design.md](../specs/2026-06-25-trip-guide-phase2a-editorial-spine-design.md). Every locked design decision lives there. This plan does not restate them — it points at them.
+
+---
+
+## Pivot note (after Task 2 shipped)
+
+The v1 plan included Task 3 (new Nominatim-based `src/geocoding.py`)
+and Task 5 (new `GuideConfig.geocode_cache` JSON field). When the
+implementer started Task 3, they discovered the project **already
+has** `src/geocoding.py` using Mapbox, a `GeocodeCache` DB table,
+and `Booking.geocoded_lat / geocoded_lng / geocoded_city /
+geocoded_country_code` columns auto-populated by
+`ensure_geocoded()`. Building parallel infra would have been
+wasteful and conflicting.
+
+**Tasks 3 and 5 are removed.** Task numbers 1, 2, 4, 6 are preserved
+(matches the v1 commit messages for Tasks 1 and 2 already on `main`).
+Task 4 gets a small wording tweak (composer reads
+`booking.geocoded_lat/lng` directly). Task 6's Step 6.5 collapses to
+a few existing-helper calls.
+
+**New end state:** 987/987 tests (was 995/995 in v1). 4 remaining
+tasks instead of 6 — Tasks 1 and 2 already shipped, leaving Tasks 4
+and 6.
+
+See the spec's "Revision note" for the design rationale.
 
 ---
 
@@ -16,19 +41,15 @@
 
 | Path | Action | Responsibility |
 |---|---|---|
-| `src/place_links.py` | Create | Build Google Maps search URLs and the practical-link HTML snippet. Pure, no network. |
-| `tests/test_place_links.py` | Create | 6 tests covering `maps_url` and `practical_link`. |
-| `src/walking_distance.py` | Create | Haversine math + chip formatting (≤2km / 2–5km / >5km adaptive). Pure. |
-| `tests/test_walking_distance.py` | Create | 9 tests covering `haversine_km` and `walking_chip`. |
-| `src/geocoding.py` | Create | Nominatim wrapper with cache-first lookup, 1 req/sec rate limit, fail-soft. Only module with network. |
-| `tests/test_geocoding.py` | Create | 7 tests, all with `requests` mocked. Suite stays offline. |
+| `src/place_links.py` | **Done (Task 1)** | Build Google Maps search URLs and the practical-link HTML snippet. Pure, no network. |
+| `tests/test_place_links.py` | **Done (Task 1)** | 6 tests covering `maps_url` and `practical_link`. |
+| `src/walking_distance.py` | **Done (Task 2)** | Haversine math + chip formatting (≤2km / 2–5km / >5km adaptive). Pure. |
+| `tests/test_walking_distance.py` | **Done (Task 2)** | 9 tests covering `haversine_km` and `walking_chip`. |
 | `src/trip_helpers.py` | Modify | Add `hotel_for_night(bookings, date)` helper. |
 | `tests/test_trip_helpers.py` | Modify | Add 4 tests for `hotel_for_night`. |
-| `src/guide_builder.py` | Modify | Add `geocode_cache: Dict[str, List[float]]` field on `GuideConfig` (default-factory empty dict). Add `tests/test_guide_builder.py` round-trip assertion that the field persists. |
-| `tests/test_guide_builder.py` | Modify | One new test for `geocode_cache` round-trip. |
-| `.claude/skills/trip-guide/SKILL.md` | Modify | Two new top-level sections + revise Task 6 anti-pattern + four new Step 10 verification asserts. |
+| `.claude/skills/trip-guide/SKILL.md` | Modify | Two new top-level sections + revise Task 6 anti-pattern + four new Step 10 verification asserts + Step 6.5 (existing-helper invocation). |
 
-End state: **995/995 tests green** (968 current + 27 new — `6+9+7+4` from the helper modules and `1` from the `guide_builder` round-trip; the SKILL.md tasks add no tests). The spec's "26 new tests" headline number plus the round-trip test introduced in Task 5 below.
+End state: **987/987 tests green** (968 baseline + 6 from Task 1 + 9 from Task 2 + 4 from Task 4 = 987; the SKILL.md task adds no tests).
 
 ---
 
@@ -126,55 +147,11 @@ def walking_chip(
 
 ---
 
-## Task 3 — `src/geocoding.py`
+## ~~Task 3 — `src/geocoding.py`~~ REMOVED (see Pivot note)
 
-**Files:**
-- Create: `src/geocoding.py`
-- Create: `tests/test_geocoding.py`
-
-**Public surface:**
-
-```python
-from typing import Dict, List, Optional, Tuple
-
-def geocode(
-    name: str,
-    city: str,
-    cache: Dict[str, List[float]],
-) -> Optional[Tuple[float, float]]:
-    """Cache-first Nominatim lookup. Returns (lat, lon) or None on no-match / network error."""
-```
-
-**Implementation notes:**
-- Module constants at top:
-  - `NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"`
-  - `USER_AGENT = "vacation-planner/0.1 (jeffsoash@gmail.com)"`
-  - `RATE_LIMIT_SECONDS = 1.0`
-- Cache key shape: `f"{name}::{city}"`. Cache value: 2-element `[lat, lon]` list (JSON-safe; the in-memory return is a `Tuple[float, float]`).
-- Flow:
-  1. Look up cache key; if hit, return `(cache[key][0], cache[key][1])` immediately, no network, no sleep.
-  2. Cache miss: GET `NOMINATIM_URL` with params `{"q": f"{name}, {city}", "format": "json", "limit": 1}` and headers `{"User-Agent": USER_AGENT}`. Wrap in `try/except requests.RequestException`; on any exception, log a warning and return `None`.
-  3. Parse JSON. If list is empty, return `None` (do NOT write to cache — leaves room for retry on the next run).
-  4. Extract `lat = float(result[0]["lat"])`, `lon = float(result[0]["lon"])`. Catch `(KeyError, ValueError)` around the float coerce; on failure, log warning and return `None`.
-  5. Write `cache[key] = [lat, lon]`.
-  6. `time.sleep(RATE_LIMIT_SECONDS)` BEFORE returning (so two back-to-back calls are paced).
-  7. Return `(lat, lon)`.
-- The caller owns persistence of `cache` to the config sidecar (see Task 4 and Task 6).
-
-**Test names** (all use `unittest.mock.patch` on `src.geocoding.requests.get` and `src.geocoding.time.sleep`):
-- `test_geocode_cache_hit_returns_cached_no_network`
-- `test_geocode_cache_miss_calls_nominatim_mocked`
-- `test_geocode_empty_result_returns_none`
-- `test_geocode_empty_result_does_not_write_to_cache`
-- `test_geocode_writes_to_cache_on_success`
-- `test_geocode_network_error_returns_none`
-- `test_geocode_sleeps_after_real_call`
-
-The suite MUST stay offline. Verify locally by running tests with the network unplugged (or with `requests` raising in the mock).
-
-**Verify:** `.venv/bin/pytest tests/test_geocoding.py -q` → 7 passed. Full suite: 990/990.
-
-**Commit:** `feat(geocoding): add Nominatim wrapper with cache + rate limit`
+The project already has `src/geocoding.py` using Mapbox. We reuse
+the existing `geocode_with_cache(text, db_session, token)` and
+`ensure_geocoded(rows, db_session, token)`. No new module.
 
 ---
 
@@ -222,42 +199,18 @@ def hotel_for_night(
 - `test_hotel_for_night_excludes_checkout_night`
 - `test_hotel_for_night_picks_first_when_overlapping_logs_warning` (uses `caplog`)
 
-**Verify:** `.venv/bin/pytest tests/test_trip_helpers.py -q` → previous test count + 4 passed. Full suite: 994/994.
+**Verify:** `.venv/bin/pytest tests/test_trip_helpers.py -q` → previous test count + 4 passed. Full suite: 987/987.
 
 **Commit:** `feat(trip_helpers): add hotel_for_night helper`
 
 ---
 
-## Task 5 — Add `geocode_cache` to `GuideConfig`
+## ~~Task 5 — Add `geocode_cache` to `GuideConfig`~~ REMOVED (see Pivot note)
 
-**Files:**
-- Modify: `src/guide_builder.py` (the `@dataclass` definition of `GuideConfig`)
-- Modify: `tests/test_guide_builder.py` (one new test for round-trip persistence)
-
-**Public surface change:**
-
-```python
-from dataclasses import dataclass, field
-from typing import Dict, List
-
-@dataclass
-class GuideConfig:
-    # ... existing fields ...
-    geocode_cache: Dict[str, List[float]] = field(default_factory=dict)
-```
-
-**Implementation notes:**
-- The dataclass uses `dataclasses.asdict` for serialization to JSON and `**data` for hydration. `Dict[str, List[float]]` survives both directions natively (no custom `__post_init__` needed).
-- `load_or_init_config` already handles missing keys gracefully — existing configs without `geocode_cache` hydrate with the default `{}` because Python dataclass field defaults fire when the key is absent. Verify this in the round-trip test below.
-- No migration script. No `.config.json` rewrite needed at load time.
-- The cache is empty by default; population happens at compose time per Task 6.
-
-**Test name:**
-- `test_guide_config_geocode_cache_round_trips_through_save_load` — save a config with `geocode_cache = {"Vatican::Rome": [41.9, 12.45]}`, load it back, assert the dict survives intact AND that loading an older config file (one without the `geocode_cache` key) returns a `GuideConfig` with an empty `geocode_cache` dict (default-factory fired).
-
-**Verify:** `.venv/bin/pytest tests/test_guide_builder.py -q` → previous + 1 passed. Full suite: 995/995.
-
-**Commit:** `feat(guide_builder): persist geocode_cache on GuideConfig`
+Coordinates are already persisted in the existing `GeocodeCache` DB
+table (for venue lookups) and `Booking.geocoded_lat / geocoded_lng`
+columns (for hotels). No new `GuideConfig` field. No new JSON sidecar
+key. No new migration.
 
 ---
 
@@ -289,7 +242,10 @@ class GuideConfig:
    - Geocode cache lifecycle: cache lives on `GuideConfig.geocode_cache`, key is `"<name>::<city>"`, persisted via `save_config`. Document that second regeneration is offline if no new venues appear.
    - Nominatim politeness rules: 1 req/sec, custom `User-Agent`, no parallel requests. Cite the OSM usage policy URL: `https://operations.osmfoundation.org/policies/nominatim/`.
 
-4. **New `### Step 6.5: Build the geocode cache`** inside `## The 10-step flow`, between Step 6 and Step 7. Composer iterates every named venue + every hotel, calls `geocode(name, city, cfg.geocode_cache)`, and calls `save_config(trip_id, cfg)` once at the end. Throttling is enforced inside `geocode()` — the composer does NOT need to sleep.
+4. **New `### Step 6.5: Ensure coordinates`** inside `## The 10-step flow`, between Step 6 and Step 7. Composer:
+   - Calls `ensure_geocoded(bookings, db_session=db.session, token=MAPBOX_TOKEN)` once to fill in any missing hotel coords (Booking.geocoded_lat / lng).
+   - For each named venue about to render in a practical surface, calls `geocode_with_cache(text=f"{name}, {city}", db_session=db.session, token=MAPBOX_TOKEN)` and keeps the returned `GeocodeResult` alongside the venue data.
+   - If `MAPBOX_TOKEN` is empty, logs a warning and skips both steps — chips won't render but the guide still composes.
 
 5. **Modify Step 7 (Compose the HTML)** to add the practical-link wrapping rule and the walking-chip emission rule. Cite the helper imports and the `.tags` row placement on day_by_day site cards.
 
@@ -305,7 +261,7 @@ class GuideConfig:
 - This is a docs-only task — no Python changes, no new tests. Verification is "the new sections fence cleanly, the markdown still renders, the suite stays at 994/994."
 - Expected line addition to SKILL.md: ~200 lines. Final length ~1760, well under any practical limit (SKILL.md has no enforced cap).
 
-**Verify:** `.venv/bin/pytest tests/ -q` → 995/995 (unchanged from Task 5 end state). `grep -c "^## " .claude/skills/trip-guide/SKILL.md` should be exactly 2 higher than before this task.
+**Verify:** `.venv/bin/pytest tests/ -q` → 987/987 (unchanged from Task 4 end state). `grep -c "^## " .claude/skills/trip-guide/SKILL.md` should be exactly 2 higher than before this task.
 
 **Commit:** `docs(trip-guide): practical hyperlinks + walking-distance chips + step 6.5`
 
@@ -313,17 +269,23 @@ class GuideConfig:
 
 ## Cross-task type/signature consistency
 
-The signatures used in tasks 5–6 must match exactly what's defined in tasks 1–4. Pinned forms:
+The signatures used in Task 6 must match exactly what's defined in
+tasks 1, 2, and 4. Pinned forms:
 
-- `maps_url(name: str, city: str) -> str`
-- `practical_link(name: str, city: str) -> str`
-- `haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float`
-- `walking_chip(venue_coords: Optional[Tuple[float, float]], hotel_coords: Optional[Tuple[float, float]], hotel_name: str) -> str`
-- `geocode(name: str, city: str, cache: Dict[str, List[float]]) -> Optional[Tuple[float, float]]`
-- `hotel_for_night(bookings: List[Booking], date: datetime.date) -> Optional[Booking]`
-- `GuideConfig.geocode_cache: Dict[str, List[float]]` (default-factory `dict`)
+- `maps_url(name: str, city: str) -> str` (Task 1, done)
+- `practical_link(name: str, city: str) -> str` (Task 1, done)
+- `haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float` (Task 2, done)
+- `walking_chip(venue_coords: Optional[Tuple[float, float]], hotel_coords: Optional[Tuple[float, float]], hotel_name: str) -> str` (Task 2, done)
+- `hotel_for_night(bookings: List[Booking], date: datetime.date) -> Optional[Booking]` (Task 4)
 
-Any deviation from these in implementation is a plan failure — fix the plan or fix the code, but make them match.
+Existing helpers Task 6 references (do NOT redefine):
+
+- `geocode_with_cache(text: str, *, db_session, token: str) -> Optional[GeocodeResult]`
+- `ensure_geocoded(rows: Iterable, *, db_session, token: str) -> None`
+- `GeocodeResult` dataclass with `.lat`, `.lng`, `.city`, `.country_code` attributes
+- `Booking.geocoded_lat`, `.geocoded_lng`, `.geocoded_city`, `.geocoded_country_code` columns
+
+Any deviation in implementation is a plan failure — fix the plan or fix the code, but make them match.
 
 ---
 
@@ -333,20 +295,20 @@ Any deviation from these in implementation is a plan failure — fix the plan or
 |---|---|
 | §"Locked design decisions" 1 (two-tier rule) | Tasks 1, 6 |
 | §"Locked design decisions" 2 (walking distance math) | Task 2 |
-| §"Locked design decisions" 3 (Nominatim + cache) | Tasks 3, 5, 6 |
+| §"Locked design decisions" 3 (Mapbox + existing cache) | Task 6 (composer calls existing helpers) |
 | §"Locked design decisions" 4 (adaptive chip format) | Task 2 |
 | §"Locked design decisions" 5 (hotel resolution per day + single/multi rule) | Tasks 4, 6 |
 | §"Locked design decisions" 6 (Google Maps URL target) | Task 1 |
 | §"Locked design decisions" 7 (link styling) | Task 6 |
 | §"Architecture" → `src/place_links.py` | Task 1 |
 | §"Architecture" → `src/walking_distance.py` | Task 2 |
-| §"Architecture" → `src/geocoding.py` | Task 3 |
+| §"Architecture" → `src/geocoding.py` (existing, reused) | Task 6 |
 | §"Architecture" → `hotel_for_night` extension | Task 4 |
-| §"Architecture" → cache shape on `GuideConfig` | Task 5 |
+| §"Architecture" → cache shape (existing, reused) | Task 6 |
 | §"Architecture" → composer integration (Step 6.5, Step 7 additions) | Task 6 |
 | §"Architecture" → SKILL.md changes (4 items) | Task 6 |
-| §"Edge cases" (Nominatim no result, network failure, hotel night unresolved, multi-hotel things_to_do, same venue cached, print mode, reduced motion) | Tasks 2, 3, 4 (helper behaviour); Task 6 (composer behaviour + docs) |
-| §"Testing approach" (26 new tests across 4 test files) | Tasks 1–5 |
+| §"Edge cases" (Mapbox no result, network failure, MAPBOX_TOKEN missing, hotel night unresolved, multi-hotel things_to_do, same venue cached, print mode, reduced motion) | Tasks 2, 4 (helper behaviour); Task 6 (composer behaviour + docs) |
+| §"Testing approach" (19 new tests across 3 test files) | Tasks 1, 2, 4 |
 | §"Acceptance criteria" 1–7 | All tasks together; Step 10 asserts in Task 6 |
 
 No gaps.
@@ -367,8 +329,14 @@ These belong to **Phase 3** (`docs/superpowers/plans/2026-06-23-trip-guide-depth
 
 ## Done definition
 
-- 995/995 tests green via `.venv/bin/pytest tests/ -q`.
-- Five new commits on `main` plus one for this plan file (total six new commits since the validation note).
-- SKILL.md has two new top-level sections and one revised anti-pattern.
-- `GuideConfig` carries `geocode_cache`; a manual round-trip via `load_or_init_config` + `save_config` is verified offline.
-- Plan 2b can be brainstormed next; the geocode cache is ready for `era_chip` and other Plan 2b helpers to reuse.
+- 987/987 tests green via `.venv/bin/pytest tests/ -q`.
+- Tasks 1, 2 already on `main`. Tasks 4, 6 still to commit. Plus the
+  spec + plan v2 revision commit.
+- SKILL.md has two new top-level sections (Practical hyperlinks and
+  Walking-distance chips), a revised Task 6 anti-pattern, a new
+  Step 6.5, and four new Step 10 verification asserts.
+- The existing Mapbox geocoder + `GeocodeCache` table + Booking
+  geocoded_* columns are reused as-is. No new geocoding code, no new
+  cache infrastructure.
+- Plan 2b can be brainstormed next; the existing geocoder + cache are
+  ready for `era_chip` and other Plan 2b helpers to reuse.
