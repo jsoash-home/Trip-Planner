@@ -9,7 +9,7 @@ import logging
 import os
 import shutil
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -29,6 +29,7 @@ SECTION_KEYS = (
 )
 GUIDE_STORAGE = os.getenv("GUIDE_STORAGE", "filesystem")
 BAK_SUFFIX = ".html.bak"
+DEPTH_TIERS = frozenset({"light", "standard", "deep", "souvenir_grade"})
 
 
 class GuideError(Exception):
@@ -50,6 +51,17 @@ class GuideConfig:
     sections: List[str]
     palette: Dict[str, Any]
     last_generated_at: Optional[str]
+    depth_tier: Optional[str] = None
+    section_depth_overrides: Dict[str, str] = field(default_factory=dict)
+    archetype: Optional[str] = None
+    narrator_angle: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        # Normalize depth_tier: tolerate case/whitespace; unknown → None so a
+        # typo in an existing sidecar JSON doesn't crash load.
+        if self.depth_tier is not None:
+            cleaned = str(self.depth_tier).strip().lower()
+            self.depth_tier = cleaned if cleaned in DEPTH_TIERS else None
 
 
 def _fresh_config(trip_id: int) -> GuideConfig:
@@ -95,6 +107,10 @@ def load_or_init_config(trip_id: int) -> GuideConfig:
             sections=data.get("sections", []),
             palette=data.get("palette", {}),
             last_generated_at=data.get("last_generated_at"),
+            depth_tier=data.get("depth_tier"),
+            section_depth_overrides=data.get("section_depth_overrides", {}),
+            archetype=data.get("archetype"),
+            narrator_angle=data.get("narrator_angle"),
         )
     except KeyError as e:
         logger.warning(

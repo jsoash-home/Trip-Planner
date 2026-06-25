@@ -342,6 +342,109 @@ def test_save_config_atomic_write(patch_guides_dir, monkeypatch):
     assert not (guides / "99.config.json.tmp").exists()
 
 
+# ─── GuideConfig depth_tier / archetype / narrator_angle ───────────────────
+
+
+def _base_kwargs(**overrides):
+    """Minimal positional-equivalent kwargs for GuideConfig used by these tests."""
+    base = dict(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=1,
+        sections=[],
+        palette={},
+        last_generated_at=None,
+    )
+    base.update(overrides)
+    return base
+
+
+def test_guide_config_defaults_new_fields_to_none():
+    """All four new fields default cleanly when not provided."""
+    cfg = GuideConfig(**_base_kwargs())
+    assert cfg.depth_tier is None
+    assert cfg.section_depth_overrides == {}
+    assert cfg.archetype is None
+    assert cfg.narrator_angle is None
+
+
+def test_guide_config_roundtrip_with_depth_tier(patch_guides_dir):
+    """depth_tier survives save → load round-trip."""
+    original = GuideConfig(**_base_kwargs(trip_id=11, depth_tier="souvenir_grade"))
+    save_config(11, original)
+    loaded = load_or_init_config(11)
+    assert loaded.depth_tier == "souvenir_grade"
+
+
+def test_guide_config_roundtrip_with_section_overrides(patch_guides_dir):
+    """section_depth_overrides survives save → load (flat shape: section → tier)."""
+    overrides = {"history": "souvenir_grade", "food": "deep"}
+    original = GuideConfig(
+        **_base_kwargs(trip_id=12, section_depth_overrides=overrides)
+    )
+    save_config(12, original)
+    loaded = load_or_init_config(12)
+    assert loaded.section_depth_overrides == overrides
+
+
+def test_guide_config_roundtrip_with_archetype(patch_guides_dir):
+    """archetype survives save → load round-trip."""
+    original = GuideConfig(**_base_kwargs(trip_id=13, archetype="history_stacked"))
+    save_config(13, original)
+    loaded = load_or_init_config(13)
+    assert loaded.archetype == "history_stacked"
+
+
+def test_guide_config_roundtrip_with_narrator_angle(patch_guides_dir):
+    """narrator_angle (free-form short string) survives save → load round-trip."""
+    angle = "First-timer with a history obsession"
+    original = GuideConfig(**_base_kwargs(trip_id=14, narrator_angle=angle))
+    save_config(14, original)
+    loaded = load_or_init_config(14)
+    assert loaded.narrator_angle == angle
+
+
+def test_guide_config_back_compat_missing_fields_load_as_none(patch_guides_dir):
+    """A sidecar JSON written before Task 1 (no depth/archetype/narrator keys)
+    must load with sensible defaults so existing trips keep working."""
+    guides = patch_guides_dir
+    guides.mkdir(parents=True, exist_ok=True)
+    legacy = {
+        "schema_version": CONFIG_SCHEMA_VERSION,
+        "trip_id": 15,
+        "sections": ["history", "food"],
+        "palette": {"primary": "#112233"},
+        "last_generated_at": "2026-06-19T12:00:00",
+        # NOTE: depth_tier, section_depth_overrides, archetype, narrator_angle absent.
+    }
+    (guides / "15.config.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+    cfg = load_or_init_config(15)
+    assert cfg.depth_tier is None
+    assert cfg.section_depth_overrides == {}
+    assert cfg.archetype is None
+    assert cfg.narrator_angle is None
+
+
+def test_guide_config_invalid_depth_tier_rejected_or_normalized():
+    """depth_tier is normalized: whitespace + case are tolerated, unknown values
+    silently drop to None so a typo in an existing sidecar JSON doesn't crash."""
+    # Whitespace + uppercase → canonical lowercase form
+    cfg_a = GuideConfig(**_base_kwargs(depth_tier="  Deep  "))
+    assert cfg_a.depth_tier == "deep"
+
+    # Mixed case souvenir_grade still normalizes
+    cfg_b = GuideConfig(**_base_kwargs(depth_tier="Souvenir_Grade"))
+    assert cfg_b.depth_tier == "souvenir_grade"
+
+    # Unknown value silently dropped to None (does not raise)
+    cfg_c = GuideConfig(**_base_kwargs(depth_tier="extreme"))
+    assert cfg_c.depth_tier is None
+
+    # None stays None (no-op for the default case)
+    cfg_d = GuideConfig(**_base_kwargs(depth_tier=None))
+    assert cfg_d.depth_tier is None
+
+
 # ─── guide_path / guide_exists / save_guide / read_guide ───────────────────
 
 
