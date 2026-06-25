@@ -627,9 +627,14 @@ plenty; ten is performative.
   **omitted**, not invented. A 3-card row is fine; a 4-card row with
   a faked entry is not. Same rule for the consolidated bibliography:
   every entry must be a real, findable work.
-- **No URL citations in body prose.** Links to sources go in the
-  consolidated "Sources & further reading" section only. Inline URLs
-  break the reading rhythm and date the file the fastest.
+- **No _citation_ URLs in body prose.** Book / podcast / film /
+  Substack links go in the consolidated "Sources & further reading"
+  section and "Go deeper" cards only — never sprinkled inline through
+  history paragraphs or day intros (they break reading rhythm and
+  date the file the fastest). **Practical** URLs — Google Maps for
+  venues, ticketing pages, official sites — ARE fair game in the
+  card grids and tables listed in `## Practical hyperlinks` below.
+  The two-tier split is documented there.
 - **"Local voice" cards must clear a real-presence bar.** A real
   person, museum, podcast, or Substack writer with a current public
   presence (last post within ~12 months, named institution still
@@ -642,6 +647,224 @@ plenty; ten is performative.
   feels strongly about. Most opinion lives in unmarked prose; the
   `.opinion` block is the rare moment of stepping out from behind the
   reportorial voice.
+
+---
+
+## Practical hyperlinks
+
+A trip guide that lists named venues, restaurants, museums, and
+hotels but doesn't link any of them out is asking the reader to
+retype every name into Google Maps. The convention below treats
+practical links as a first-class part of the guide while keeping
+atmospheric body prose link-free.
+
+### The two-tier rule
+
+| Tier | What | Where it appears |
+|---|---|---|
+| **Citation** | Books, podcasts, films, Substacks of named authors, academic sources | ONLY in the consolidated "Sources & further reading" section and the per-section "Go deeper" 4-card rows |
+| **Practical** | Google Maps URLs for named venues, ticketing pages, official-site URLs | In the card grids and tables listed below — NOT in atmospheric body prose |
+
+**Practical surfaces** (links allowed and expected):
+
+- Every named venue in `things_to_do`.
+- Every named restaurant in `food` (where to eat).
+- Every named site card in `day_by_day`.
+- Every named landmark / museum entry in `field_guide` (wildlife
+  entries have no Maps target — skip).
+- Every hotel row in the "Hotels at a glance" table.
+
+**Atmospheric prose stays link-free.** `history` paragraphs,
+`day_by_day` day-intro sentences, `food` culture intros, and any
+other prose covered by the named-particulars density floor are
+unlinked. The reading-rhythm preservation goal from the editorial
+voice rules is unchanged.
+
+### Helper invocation
+
+The composer imports two pure helpers from `src/place_links.py`:
+
+```python
+from src.place_links import maps_url, practical_link
+
+# Google Maps search URL — used when you want just the URL string.
+url = maps_url("Vasa Museum", "Stockholm")
+# → "https://www.google.com/maps/search/?api=1&query=Vasa%20Museum%2C%20Stockholm"
+
+# Full <a> tag with rel="noopener" + target="_blank" + html-escaped name.
+html = practical_link("Vasa Museum", "Stockholm")
+# → '<a class="practical-link" href="..." rel="noopener" target="_blank">Vasa Museum</a>'
+```
+
+`rel="noopener"` is a security convention — the new tab can't
+`window.opener.location = ...` back at the guide. `target="_blank"`
+opens the link in a new tab so the reader doesn't lose their place
+in the guide.
+
+### CSS verbatim
+
+```css
+a.practical-link {
+  color: var(--ink);
+  text-decoration-color: var(--hairline);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color 120ms, text-decoration-color 120ms,
+              text-decoration-thickness 120ms;
+}
+a.practical-link:hover,
+a.practical-link:focus-visible {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+}
+```
+
+The same class powers bibliography entries and Go-deeper card
+titles too. Citation and practical links style identically — they
+never share a paragraph, so a per-tier variant would be ceremony
+with no payoff.
+
+### Bibliography + Go-deeper cards
+
+Every entry in the consolidated "Sources & further reading"
+section is an `<a class="practical-link">` tag. Every "Go deeper"
+card title is an `<a class="practical-link">` tag wrapping the
+title text (the card's icon, kind label, and annotation stay
+plain text). When `WebSearch` cannot confirm a real landing page
+for a source, **omit the card entirely** per the Source disclosure
+anti-pattern — better three cards than four with a faked fourth.
+
+### Anti-patterns
+
+- **No inline citation markers** (`[1]`, `[2]`, footnote-style
+  superscripts) in body prose. The bibliography is the single
+  citation surface; ducking out to it mid-paragraph breaks reading
+  rhythm.
+- **No external-link glyphs** (`↗`, `🔗`) appended to practical
+  links. Subtle underline + accent on hover already says "link";
+  the glyph adds visual noise without information.
+- **No user-agent-aware Maps rewriting** (Apple Maps on iOS,
+  Google Maps elsewhere). Google Maps deep-links into the
+  appropriate native app on both iOS and Android — the rewrite is
+  unnecessary work for zero user benefit.
+- **No links in atmospheric prose.** If you find yourself wanting
+  to link a name in a `history` paragraph or a day intro, that's a
+  signal to move the recommendation into a `things_to_do` entry
+  where the link belongs.
+
+---
+
+## Walking-distance chips
+
+Day-of trip readers want to know, for every named site card or
+recommendation, **how far is it from where I'm sleeping tonight?**
+The walking-distance chip lives in the `.tags` row of every
+`day_by_day` site card (and on `things_to_do` entries when the trip
+is single-hotel) with that one piece of information made literal:
+"12 min walk · 0.9km from Hotel Skansen."
+
+### The math
+
+```
+km_straight  = haversine(venue_coords, hotel_coords)
+km_routed    = km_straight * 1.3           # street multiplier
+walk_min     = ceil(km_routed / 5.0 * 60)  # 5 km/h walking pace
+drive_min    = ceil(km_routed / 30.0 * 60) # 30 km/h in-city driving
+```
+
+The 1.3 multiplier approximates the typical detour between
+straight-line and routed walking on a city street grid. It's
+deliberately rough — the chip's job is "is this close-ish?" not
+"exactly how many seconds."
+
+### Three adaptive format bands
+
+| Routed km | Chip body |
+|---|---|
+| ≤ 2 km | `12 min walk · 0.9km from {hotel}` |
+| 2 – 5 km | `40 min walk · 3.2km · or 10 min by car from {hotel}` |
+| > 5 km | `15 min by car · 5.8km from {hotel}` |
+
+The middle band's "or N min by car" alternate gives the reader the
+"do I walk or grab a taxi?" decision in one glance. The >5 km band
+drops the walk number — at that distance, walking isn't the
+default, and showing "65 min walk" makes the chip noisier than
+useful.
+
+### Helper invocation
+
+```python
+from src.walking_distance import walking_chip
+
+chip_html = walking_chip(
+    venue_coords=(59.3293, 18.0686),
+    hotel_coords=(59.3275, 18.0712),
+    hotel_name="Hotel Skansen",
+)
+# → '<span class="walkchip">5 min walk · 0.4km from Hotel Skansen</span>'
+```
+
+Either coord can be `None`; in that case `walking_chip` returns the
+empty string and the composer omits the chip entirely. This is the
+graceful path when geocoding hasn't run yet or returned no result.
+
+### Hotel resolution per day
+
+The hotel that the chip resolves to depends on which day the site
+card belongs to. Use `hotel_for_night(bookings, target_date)` from
+`src/trip_helpers.py`:
+
+```python
+from src.trip_helpers import hotel_for_night
+
+hotel = hotel_for_night(trip.bookings, day_date)
+if hotel is None:
+    # Transit day, no hotel covers tonight — omit the chip on this day.
+    pass
+else:
+    hotel_coords = (hotel.geocoded_lat, hotel.geocoded_lng)
+    # ...
+```
+
+**Hotel-night semantics.** A hotel booking with check-in
+`start_datetime` and check-out `end_datetime` covers nights where
+`start_datetime.date() <= target_date < end_datetime.date()`. The
+night of the check-out date is NOT a hotel night at that booking —
+the reader is somewhere else by then.
+
+### Single-vs-multi-hotel rule for `things_to_do`
+
+`day_by_day` site cards have a clear "tonight's hotel" anchor.
+`things_to_do` entries don't — they're generic picks not bound to a
+day. The rule:
+
+- **Single-hotel trip** (one hotel covers every night of the trip):
+  emit the chip on every `things_to_do` entry, anchored to that one
+  hotel.
+- **Multi-hotel trip** (two or more hotels across the trip's
+  nights): **omit the chip entirely** on `things_to_do`. Labelling
+  "which hotel?" is more noise than signal — readers can read the
+  neighborhood and judge for themselves.
+
+### Geocoding reuses existing infrastructure
+
+The composer does NOT introduce new geocoding code. Coordinates
+come from the project's existing Mapbox geocoder:
+
+- **Hotels:** `Booking.geocoded_lat` and `.geocoded_lng` columns,
+  auto-populated by `ensure_geocoded(rows, db_session, token)` from
+  `src/geocoding.py`. Step 6.5 below calls this on the trip's
+  bookings once before composition starts.
+- **Venues mentioned in body prose:** call
+  `geocode_with_cache(text=f"{name}, {city}", db_session=db.session,
+  token=MAPBOX_TOKEN)` and read `.lat` and `.lng` off the returned
+  `GeocodeResult`. Results are cached in the `GeocodeCache` DB
+  table, so regeneration is free.
+
+If `MAPBOX_TOKEN` is empty in the environment, log a warning and
+skip Step 6.5 entirely — chips just won't render. The guide still
+composes; links still work.
 
 ---
 
@@ -825,13 +1048,41 @@ Save their choice immediately via `guide_builder.save_config(trip_id, cfg)`.
 All 8 can be included. Any subset is valid. The picker is the source of truth —
 the skill does NOT auto-detect "nature trip" and skip sections.
 
-**Themed bonus sections.** Listen for user interests volunteered during the
-picker conversation ("I'm a coffee nerd", "we love craft beer", "I bird"). Offer
-to add a themed section tailored to that interest — e.g. a `beer` section with
-country-grouped breweries + bar lists, a `coffee` section with notable roasters,
-a `photography` section with locations and timing. Themed sections sit alongside
-the 8 base sections; they're additive, not replacements. Use the same visual
-language (card grid, mono labels, group headers).
+**Themed bonus sections — REQUIRED prompt.** After proposing the base section
+list, the skill MUST ask the user — in one explicit line, not as a passive
+"let me know if you want anything else" — whether to add a themed bonus
+section. The skill does not get to decide this by listening alone; absence of
+volunteered interest is NOT permission to skip the offer.
+
+Use this prompt verbatim or near-verbatim at section-picker time:
+
+> Want a themed bonus section? Common ones: beer / breweries, coffee, photography
+> spots, bookstores, running routes, birding, live music. Skip if none fit.
+
+Only treat silence as "no" if the user has affirmatively said the base list is
+enough — never as the default. On any trip where the destination has a
+plausible scene for one of the example interests (e.g. a US city has a
+brewery scene; a Pacific Northwest city has a coffee scene; almost anywhere
+has photography spots), the offer is non-negotiable.
+
+When the user says yes, the bonus section is built with the same visual
+language as the rest of the guide — card grid, mono labels, area/city group
+headers — and sits between `food` and `fun_facts` in the nav order
+(adjacent to `food` so it reads as related material). Examples: a `beer`
+section with area-grouped breweries + a "where to drink" list per area, a
+`coffee` section with notable roasters, a `photography` section with
+locations and golden-hour timing. Themed sections are additive, not
+replacements.
+
+**Anti-pattern: don't skip the offer because you can already see relevant
+items in the base sections.** A `food` section that mentions two breweries
+in passing is NOT a substitute for a dedicated `beer` section — the dedicated
+section can group by area, add style tags, and recommend where to drink with
+opinionated context that won't fit in a "where to eat" tier. If the base
+sections surface ≥2 items in a category (≥2 breweries, ≥2 coffee shops, ≥2
+record stores), that's a signal to escalate the themed-bonus offer to a
+specific recommendation: *"Rock Hill + Charlotte have a deep brewery scene
+— want a `beer` section?"* — not a generic list of options.
 
 **Optional closing section.** Consider a `life_list` footer for nature- or
 encounter-heavy trips: a checklist grid of "things to keep an eye out for" —
@@ -919,6 +1170,49 @@ Work through each selected section in order: draft, then refine. Aim for editori
 quality: specific names, actual context, useful detail. No placeholders, no filler.
 Each section should feel like it was written by someone who has been there.
 
+### 6.5. Ensure coordinates
+
+Before composing the HTML, fill in the coordinates needed for the
+walking-distance chips and (later) the practical-link Maps URLs.
+The composer reuses the project's existing Mapbox geocoder — no new
+cache, no new env var.
+
+```python
+import os
+from app import db
+from src.geocoding import ensure_geocoded, geocode_with_cache
+
+MAPBOX_TOKEN = os.environ.get("MAPBOX_TOKEN", "").strip()
+
+with app.app_context():
+    if not MAPBOX_TOKEN:
+        logger.warning("MAPBOX_TOKEN not configured — chips will be skipped")
+    else:
+        # 1. Fill in hotel coords on Booking rows (uses GeocodeCache table).
+        ensure_geocoded(trip.bookings, db_session=db.session, token=MAPBOX_TOKEN)
+
+        # 2. For each named venue you're about to render in a practical surface,
+        # cache its coords too. Keep the GeocodeResult alongside the venue data
+        # so Step 7 can read .lat / .lng off it.
+        venue_coords = {}
+        for venue in named_venues_in_things_to_do + day_by_day_named_sites + ...:
+            result = geocode_with_cache(
+                text=f"{venue.name}, {venue.city}",
+                db_session=db.session,
+                token=MAPBOX_TOKEN,
+            )
+            if result is not None:
+                venue_coords[venue.id] = (result.lat, result.lng)
+```
+
+Coordinates for hotels live on `Booking.geocoded_lat / geocoded_lng`
+after `ensure_geocoded` runs. Coordinates for venues live in the
+`venue_coords` dict the composer just built. Both feed Step 7.
+
+If `MAPBOX_TOKEN` is missing, skip both calls and let the chip
+helpers return empty strings on `None` coords — the composer
+continues; the guide still ships; the chips just don't render.
+
 ### 7. Compose the HTML
 
 Write the complete single-file HTML in one pass. Requirements:
@@ -950,6 +1244,37 @@ section above for the full pattern. At compose time, emit all three:
 Plus the prose conventions: `.live-data` mono attribution lines on any
 section pulling current data, and ≥1 `.opinion` block per `things_to_do`
 and per `food` section at Deep tier or above.
+
+**Practical hyperlinks (required on every guide).** See the
+`## Practical hyperlinks` section above. At compose time:
+
+- Wrap every named venue title in `things_to_do`, `food` (where to
+  eat), `day_by_day` site cards, and `field_guide` landmark / museum
+  entries with `practical_link(name, city)`.
+- Wrap every bibliography entry's title and every "Go deeper" card
+  title with `<a class="practical-link" href="...">`. Use the
+  source's canonical landing URL (publisher page, podcast feed, film
+  page, Substack URL) when known. If `WebSearch` cannot confirm a
+  real URL, omit the card per the Source disclosure anti-pattern.
+- Leave atmospheric body prose (history paragraphs, day intros, food
+  culture intros) unlinked — the named-particulars density floor
+  carries the same names, but in prose, not as anchors.
+
+**Walking-distance chips (required where coords resolve).** See
+the `## Walking-distance chips` section above. At compose time:
+
+- For each `day_by_day` site card on day `d`:
+  ```python
+  hotel = hotel_for_night(trip.bookings, d.date)
+  hotel_coords = (hotel.geocoded_lat, hotel.geocoded_lng) if hotel and hotel.geocoded_lat else None
+  chip_html = walking_chip(venue_coords.get(site.id), hotel_coords, hotel.title if hotel else "")
+  # Emit chip_html in the .tags row alongside .travelpill / category tag.
+  ```
+  If `chip_html` is the empty string (any None coord, or no hotel
+  covers tonight), no chip renders — graceful skip.
+- For each `things_to_do` entry on a **single-hotel** trip: same
+  pattern, with the single hotel as the anchor. On a **multi-hotel**
+  trip, skip the chip entirely.
 
 ### 8. Save
 
@@ -1028,6 +1353,32 @@ This step is not optional. Do it before claiming success.
      chip (proves compose-time reading-time computation ran).
    - Every TOC `<a href="#…">` target resolves to a `<section id="…">`
      element. Orphan TOC links (anchor with no matching section) fail.
+
+6. **Practical hyperlinks asserts.** Required on every guide per
+   the Practical hyperlinks section. Any miss fails verification:
+   - Every bibliography `<li>` contains an `<a class="practical-link">`
+     wrapping its title.
+   - Every `.go-deeper` card title is an `<a class="practical-link">`
+     (or the card is omitted per Source disclosure's no-fabricated-
+     sources rule — a 3-card row is fine).
+   - Every named venue in `things_to_do`, `food` (where to eat),
+     `day_by_day` site cards, and `field_guide` landmark/museum
+     entries has an `<a class="practical-link" href="...google.com/maps...">`.
+   - Atmospheric body prose (under `.section--atmospheric > p` and
+     under day-intro paragraphs) contains zero `<a>` tags — the
+     verifier grep should find none.
+
+7. **Walking-distance chip asserts.** Required where coords resolved.
+   Skipped guides (multi-hotel `things_to_do`, transit days,
+   `MAPBOX_TOKEN` unset, geocode-miss venues) do NOT fail verification:
+   - On any `day_by_day` site card where `hotel_for_night` resolved
+     AND `venue_coords.get(site.id)` is not None, a
+     `<span class="walkchip">` element renders inside the `.tags` row.
+   - On single-hotel trips, every `things_to_do` entry where venue
+     coords resolved has a `<span class="walkchip">`.
+   - The "Hotels at a glance" addresses are clickable (each address
+     cell wraps in `<a class="practical-link">` linking to the
+     hotel's Google Maps URL).
 
 If any check fails, surface the offending phrase, console error, or
 missing element and stop. Do not smooth over failures with "probably fine."
