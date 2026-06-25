@@ -354,6 +354,96 @@ a guide should see the lede AND the deep prose by default — Skim is the
 mode you opt into on the plane, not the impression we want the guide to
 make first.
 
+### ERA_COLORS palette pattern
+
+`history_stacked` archetypes (and any other archetype with non-trivial
+history — e.g. `architecture_modern`) declare a **per-destination
+period palette** at the top of the file, alongside the regular trip
+palette. The same five-or-so colours are reused across every history
+surface: date chips in body prose, era boxes, layer chips on site
+cards, histpins (Phase 3), swimlane bands (Phase 2). That repetition
+is what teaches the reader the period system without a memorization
+quiz.
+
+CSS pattern:
+
+```css
+:root {
+  /* trip palette */
+  --bg: #1a1a1e; --ink: #e8e6e1; --ink-soft: #b5b1a8; --accent: #c97f3a;
+
+  /* era palette — researched per destination */
+  --era-prehistoric: #6b7280;
+  --era-roman:       #b45309;
+  --era-medieval:    #4a6741;
+  --era-renaissance: #8e3a59;
+  --era-modern:      #4769a8;
+}
+
+.era-card { border-left: 4px solid var(--era); padding-left: 12px; }
+.era-card.era-roman       { --era: var(--era-roman); }
+.era-card.era-medieval    { --era: var(--era-medieval); }
+.era-card.era-renaissance { --era: var(--era-renaissance); }
+/* etc. */
+
+.date-chip {
+  background: var(--era);
+  color: white;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+}
+```
+
+The `--era` indirection on `.era-card` lets one rule (`border-left:
+4px solid var(--era)`) drive every variant — the variant class just
+swaps which palette colour `--era` resolves to. Same trick for
+`.date-chip` once it's wrapped in an era-tagged ancestor.
+
+**Era names are researched per destination.** Rome's eras are not
+Kyoto's are not Iceland's. Don't ship the example slugs above as
+defaults — they're illustrative. The skill researches each
+destination's actual historical periodization at compose time and
+emits slugs that match (Rome: `republican` / `imperial` / `medieval`
+/ `renaissance` / `baroque` / `modern`; Kyoto: `heian` / `kamakura`
+/ `muromachi` / `edo` / `meiji` / `modern`; Iceland: `settlement` /
+`commonwealth` / `norwegian-rule` / `danish-rule` / `republic`).
+
+**Storage shape.** Persist the era palette on `GuideConfig.era_palette`:
+
+```json
+{
+  "name": "Rome periodization",
+  "eras": [
+    {"slug": "republican",  "label": "Republican",  "hex": "#8b6f47", "year_range": "509–27 BCE"},
+    {"slug": "imperial",    "label": "Imperial",    "hex": "#b45309", "year_range": "27 BCE–476 CE"},
+    {"slug": "medieval",    "label": "Medieval",    "hex": "#4a6741", "year_range": "476–1417"},
+    {"slug": "renaissance", "label": "Renaissance", "hex": "#8e3a59", "year_range": "1417–1600"},
+    {"slug": "baroque",     "label": "Baroque",     "hex": "#c97f3a", "year_range": "1600–1800"},
+    {"slug": "modern",      "label": "Modern",      "hex": "#4769a8", "year_range": "1800–today"}
+  ]
+}
+```
+
+Five to seven eras. Fewer and the palette doesn't carry enough signal;
+more and the reader can't hold them in working memory across the
+guide.
+
+**Cross-section reuse is the point.** Every surface in the guide that
+references a period uses the era palette. A 1417 date in body prose
+becomes `<span class="date-chip era-renaissance">1417</span>`. A
+"Layers" row on a site card lists chips coloured by era. The swimlane
+band (Phase 2) for the same range is the same colour. After two or
+three encounters the reader internalises the period → colour mapping
+and can scan visual rhythm at speed.
+
+**When to skip.** `mixed_leisure`, `wildlife`, `geology`,
+`cuisine_led`, `pilgrimage`, and `expedition` archetypes typically
+don't need an era palette — their history surfaces are too thin to
+amortise the visual machinery. Add one only if the trip has both a
+`history` section at Deep or Souvenir-grade tier AND ≥3 clearly named
+periods in the prose. Otherwise the era palette is overhead with no
+payoff.
+
 ---
 
 ## The 10-step flow
