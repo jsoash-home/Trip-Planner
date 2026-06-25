@@ -197,6 +197,73 @@ verifier strips these tags' text content before scanning the body.
 
 ---
 
+## Progressive disclosure architecture
+
+Souvenir-grade guides carry a lot of prose. The reader who's about to
+board a plane needs the short answer; the reader on the couch the night
+before wants the long one. These three patterns let one HTML file serve
+both without splitting into two guides.
+
+### Lede / `.deep` two-track pattern
+
+Every dense subsection opens with a **bold standalone lede** — 2–3
+sentences that are the complete short answer. The lede is followed by
+`.deep` prose: styled softer, slightly smaller, slightly muted. A reader
+who only reads ledes still gets a usable guide; a reader who wants the
+full essay reads on into `.deep`.
+
+The lede is not a "TL;DR" label. It is the same content, compressed.
+Write it last, after the deep version exists, so the lede reflects what
+the section actually says.
+
+CSS verbatim:
+
+```css
+.lede {
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.5;
+  margin: 0 0 1em 0;
+  color: var(--ink);
+}
+.deep {
+  font-size: 0.96em;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+.deep p:first-child { margin-top: 0; }
+```
+
+**Palette rule.** Every guide's palette MUST declare both `--ink` (body
+ink at full strength) and `--ink-soft` (body ink mixed ~12% toward the
+page background). The Palette proposal step (Step 5) selects both. The
+soft variant powers `.deep` prose, the `.opinion` container, the
+sidenote text, and any other "secondary register" surface. Without
+`--ink-soft`, `.deep` falls back to inheriting `--ink` and the
+contrast collapse disappears.
+
+HTML pattern:
+
+```html
+<section class="section--atmospheric">
+  <h2>The Republic, in plain sight</h2>
+  <p class="lede">Rome's first Republic walls still mark out the
+  Aventine district. Walk the perimeter on a Sunday morning and you can
+  read the city's earliest political geography in the street grid.</p>
+  <div class="deep">
+    <p>Servius's wall went up in the 4th century BC after the Gallic
+    sack, built from tufa quarried at Grotta Oscura...</p>
+    <p>Three of the original gates survive in named form...</p>
+  </div>
+</section>
+```
+
+The `.deep` div is the unit Skim mode hides (see below). Wrap every
+non-lede paragraph in it, not just the long ones — partial hiding looks
+broken.
+
+---
+
 ## The 10-step flow
 
 Work through these in order. Do not skip a step. Check off each one before advancing.
