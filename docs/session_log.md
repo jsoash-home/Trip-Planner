@@ -1,5 +1,63 @@
 # Session Log
 
+## 2026-06-29 — Phase 2a eyeball validation + one-line underline-contrast fix
+
+**Shipped:**
+- Browser eyeball pass on Phase 2a output via Claude Preview MCP — script-grep
+  asserts (988 tests, 145 practical-link, 53 walkchip) had all passed in 2026-06-27,
+  but rendering against the dark theme revealed `--hairline` (#2a323f) vs `--bg`
+  (#0e131a) made the practical-link underline essentially invisible (~25/ch contrast)
+- `a232e95 fix(trip-guide):` swap `--hairline` → `--ink-soft` (#a8a39a) on
+  `a.practical-link` decoration color, in SKILL.md + trip-2 compose script.
+  Hover state unchanged. Browser-verified post-regen.
+- `.claude/launch.json` runtimeExecutable: `python3` → `.venv/bin/python` so
+  `preview_start` picks up project Flask + deps.
+- `docs/superpowers/notes/2026-06-29-trip-guide-phase2a-validation-eyeball.md`
+  documents the full pass with 3 remaining findings + 4 carried-over seeds from
+  2026-06-27.
+
+**Test status:** 988 passing / 0 failing (unchanged from session start)
+
+**Stopped at:** Phase 2a editorial spine is now visually shippable. The eyeball
+pass closed Finding 1 (underline contrast). Findings 2 (Deep-mode apparatus gap —
+composer doesn't emit `.dig-deeper` or `.sidenote-content`, so 3rd toggle button
+is dead weight), 3 (top-bar responsive fold at 600–900px), and 4 (things_to_do
+visual hierarchy — neighborhood tag more prominent than link title) are parked
+as Phase 2b seeds alongside the 4 seeds from the 2026-06-27 note.
+
+**Pick up next with:** Either (a) Finding 2 — emit one `<aside class="dig-deeper">`
+per Deep-tier history vignette in `scripts/2026-06-27_compose_trip2.py` so the
+Deep toggle has visible content to reveal (~30 min); or (b) Phase 2b plan
+write-up via `/writing-plans` from the 7 consolidated seeds (~45 min). The
+2026-06-27 note has the 4 prior seeds; today's note has the new 3.
+
+**Kickoff prompt for next session:**
+
+> Phase 2b. The Phase 2a eyeball pass on 2026-06-29 closed Finding 1 (underline
+> contrast) and surfaced 3 more issues; the 2026-06-27 script-grep pass surfaced
+> 4. Seven consolidated seeds at
+> `docs/superpowers/notes/2026-06-29-trip-guide-phase2a-validation-eyeball.md`
+> "Phase 2b plan seeds — consolidated". Either knock off the cheapest one
+> (Finding 2: emit `<aside class="dig-deeper">` per history vignette in
+> `scripts/2026-06-27_compose_trip2.py` so the Deep mode-toggle button has
+> content to reveal — currently it's identical to Standard since the compose
+> script emits zero `.dig-deeper`/`.sidenote-content` elements) OR write the
+> full Phase 2b plan via `/writing-plans`. Tests at 988/988. Trip-2 share token
+> for re-validation: `fd581f88-440b-47cf-9680-ba08791c2e63`. Preview server via
+> `preview_start vacation-planner` (launch.json fixed to .venv/bin/python this
+> session).
+
+**Loose ends:**
+- `.claude/settings.json` still untracked across sessions — leave as is per
+  prior handoff note.
+- `data/guides/2.html.bak` is the pre-fix rotation backup; will be replaced
+  on next trip-2 regen. Gitignored, no action needed.
+- 7 Phase 2b seeds enumerated in
+  `docs/superpowers/notes/2026-06-29-trip-guide-phase2a-validation-eyeball.md`
+  pending a plan write-up.
+
+---
+
 ## 2026-06-25 — Trip-guide Phase 1 finish + Phase 2a editorial spine shipped
 
 **Shipped:** (13 commits)
