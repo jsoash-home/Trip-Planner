@@ -135,10 +135,17 @@ def find_hotel_night_gaps(
 **Gap definition:** A `day_date` is a gap when ALL of:
 1. `trip_start <= day_date < trip_end` (the trip's nights, exclusive of last day)
 2. `hotel_for_night(bookings, day_date)` returns `None`
-3. The day has ≥1 itinerary item with `day_date == day_date` OR a non-hotel booking overlapping (flight on that day, restaurant booking that day, etc.)
+3. The day has ≥1 itinerary item with `day_date == day_date`
 
-Days with no hotel AND no activity (true transit days where the user is in
-the air or on a ferry) are NOT gaps — they're expected.
+Days with no hotel AND no itinerary items (true transit days where the user
+is in the air or on a ferry) are NOT gaps — they're expected.
+
+**Definition tightening note (added 2026-06-29 before T3 implementation):**
+The earlier draft included a third clause "OR a non-hotel booking overlapping
+that day" — but "overlapping" was ambiguous for overnight flights and the
+clause didn't change the verdict on any known driving case (the Bergen 08-28
+gap is driven by itinerary items, not bookings). Dropping it keeps the rule
+robust to weird datetime ranges and easier to reason about.
 
 **Test list (names only):**
 
