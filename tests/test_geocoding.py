@@ -234,3 +234,63 @@ def test_ensure_geocoded_skips_already_geocoded_rows(mock_get, app, trip):
 
     assert mock_get.call_count == 0   # didn't even try.
     assert b.geocoded_lat == 1.0      # unchanged.
+
+
+# ────────────────────────── relevance field (Phase 2b T5) ──────────────────────────
+
+MAPBOX_RESPONSE_WITH_RELEVANCE = {
+    "features": [
+        {
+            "center": [18.0686, 59.3293],
+            "relevance": 0.94,
+            "context": [
+                {"id": "place.123", "short_code": None, "text": "Stockholm"},
+                {"id": "country.456", "short_code": "SE", "text": "Sweden"},
+            ],
+        }
+    ]
+}
+
+
+@patch("src.geocoding.requests.get")
+def test_relevance_populated_from_mapbox_response_when_present(mock_get):
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: MAPBOX_RESPONSE_WITH_RELEVANCE,
+    )
+    result = geocode_one("Hotel Skansen", token="pk.test")
+    assert result.relevance == 0.94
+
+
+@patch("src.geocoding.requests.get")
+def test_relevance_defaults_to_none_when_missing_from_response(mock_get):
+    # Existing MAPBOX_RESPONSE_OK has no relevance field — should default to None.
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: MAPBOX_RESPONSE_OK,
+    )
+    result = geocode_one("Hotel Skansen", token="pk.test")
+    assert result.relevance is None
+
+
+@patch("src.geocoding.requests.get")
+def test_cache_hit_returns_geocoderesult_with_relevance_none(mock_get, app):
+    # First call writes a cache row (no relevance column in the table).
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        json=lambda: MAPBOX_RESPONSE_WITH_RELEVANCE,
+    )
+    r1 = geocode_with_cache("Hotel Skansen", db_session=db.session, token="pk.test")
+    assert r1.relevance == 0.94  # fresh API call carries relevance
+
+    # Second call is a cache hit — relevance should be None (not persisted).
+    r2 = geocode_with_cache("Hotel Skansen", db_session=db.session, token="pk.test")
+    assert r2.lat == 59.3293
+    assert r2.relevance is None
+
+
+def test_geocoderesult_is_backward_compatible_with_callers_ignoring_relevance():
+    # Existing callers constructing GeocodeResult without relevance keyword
+    # should keep working — relevance defaults to None.
+    result = GeocodeResult(lat=1.0, lng=2.0, city="X", country_code="ZZ")
+    assert result.relevance is None

@@ -30,6 +30,7 @@ class GeocodeResult:
     lng: float
     city: Optional[str]
     country_code: Optional[str]
+    relevance: Optional[float] = None  # Mapbox match confidence 0.0–1.0; None on cache hits.
 
 
 def _extract_city_and_country(feature: dict) -> tuple:
@@ -93,7 +94,13 @@ def geocode_one(text: str, *, token: str) -> Optional[GeocodeResult]:
         logger.error("geocode malformed feature for %r: %s", text, e)
         return None
     city, country = _extract_city_and_country(feat)
-    return GeocodeResult(lat=lat, lng=lng, city=city, country_code=country)
+    relevance = feat.get("relevance")
+    if relevance is not None:
+        try:
+            relevance = float(relevance)
+        except (TypeError, ValueError):
+            relevance = None
+    return GeocodeResult(lat=lat, lng=lng, city=city, country_code=country, relevance=relevance)
 
 
 def geocode_with_cache(text: str, *, db_session, token: str) -> Optional[GeocodeResult]:
