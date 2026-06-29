@@ -2253,7 +2253,7 @@ section .content-block {{ margin: 0 24px; }}
 /* Practical links */
 a.practical-link {{
   color: var(--ink);
-  text-decoration-color: var(--hairline);
+  text-decoration-color: var(--ink-soft);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
   transition: color 120ms, text-decoration-color 120ms, text-decoration-thickness 120ms;

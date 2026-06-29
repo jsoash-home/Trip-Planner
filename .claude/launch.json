@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "vacation-planner",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["app.py"],
       "port": 5002
     }
