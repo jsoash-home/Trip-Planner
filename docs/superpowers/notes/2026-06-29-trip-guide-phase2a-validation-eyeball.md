@@ -209,6 +209,21 @@ ends up the *least* visually marked element on the card.
 visible), the hierarchy resolves itself. Worth re-checking after that
 change before adding any new typographic weight.
 
+**2026-06-29 follow-up (Phase 2b T2 verify):** Re-checked after the
+Finding 1 underline fix (`a232e95`). The title now carries three
+visual-hierarchy signals over the neighborhood tag:
+
+| Element | Size | Weight | Decoration |
+|---|---|---|---|
+| Title (`h5 > a.practical-link`) | 17.1px | 600 | underline (ink-soft) |
+| Neighborhood mono tag | 12.7px | 400 | none |
+
+Three signals in favor of the title vs one for the tag (its accent
+color). Title clearly dominates; the inversion is closed by the
+Finding 1 fix alone — no additional CSS change needed.
+
+**Finding 4 — CLOSED 2026-06-29 (no code change).**
+
 ## Phase 2b plan seeds — consolidated
 
 Combining today's eyeball findings with the four seeds from the
