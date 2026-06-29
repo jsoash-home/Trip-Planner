@@ -1516,7 +1516,19 @@ HISTORY = {
                   "objects and were found in burial mounds along the Oslofjord in the 1880s and 1900s by farmers "
                   "ploughing fields."),
          "consequence": "The waterfront you walk in Oslo is 2008-onwards and oil-funded; the Viking ships were "
-                        "found by farmers."},
+                        "found by farmers.",
+         "dig_deeper": {
+             "title": "How the oil fund actually works",
+             "body": ("The Government Pension Fund Global was set up in 1990 to hold Norway's North Sea revenues; "
+                      "it now manages roughly $1.5 trillion — about $275,000 per Norwegian citizen, around 1.5% of "
+                      "all listed equities globally. Two design choices made it durable. First, every krone is "
+                      "invested abroad — domestic spending of oil money would inflate the currency and crush "
+                      "non-oil exports (the Dutch-disease lesson from the 1970s Netherlands). Second, the "
+                      "handlingsregel fiscal rule caps annual government drawdown at ~3% of the fund's market "
+                      "value, treating oil as a permanent endowment rather than a windfall. A separate Council on "
+                      "Ethics excludes tobacco, coal, controversial weapons, and companies systematically "
+                      "violating human rights, publishing each exclusion with its reasoning.")
+         }},
         # Svalbard
         {"title": "Svalbard · treaty island",
          "era_slug": "modern",
@@ -1531,7 +1543,18 @@ HISTORY = {
                   "under that treaty provision. The Global Seed Vault (2008) is the most quietly serious "
                   "demonstration that the treaty's openness is permanent."),
          "consequence": "The town has a permanent Russian neighbour at Barentsburg and the world keeps its "
-                        "agricultural backup in a mountain you can walk to."},
+                        "agricultural backup in a mountain you can walk to.",
+         "dig_deeper": {
+             "title": "What is actually in the Global Seed Vault",
+             "body": ("The vault opened in February 2008 at Platåberget, 130 metres into a sandstone mountain "
+                      "above Longyearbyen, kept at −18°C by the surrounding permafrost. It holds backup copies "
+                      "of seed samples deposited by 80+ national and regional gene banks — over 1.3 million "
+                      "distinct varieties, including 150,000+ wheat and rice cultivars. The vault is a *backup* "
+                      "repository: depositing banks retain ownership, can withdraw their samples at any time, and "
+                      "have done so in earnest exactly once — Syria's ICARDA gene bank, displaced by the civil "
+                      "war, withdrew samples in 2015 to reseed at facilities in Lebanon and Morocco. A 2017 "
+                      "entrance-tunnel flood from melting permafrost prompted a $20M climate-resilience rebuild.")
+         }},
         # Finland
         {"title": "Finland · between two empires",
          "era_slug": "early-modern",
@@ -1546,7 +1569,19 @@ HISTORY = {
                   "1941–44 Continuation War kept Finland out of the Soviet sphere; the price was 11% of "
                   "pre-war territory ceded to the USSR (Karelia)."),
          "consequence": "Helsinki's monumental centre is Russian-imperial neoclassicism; the rest of the city "
-                        "is what an independent Finland chose to add."},
+                        "is what an independent Finland chose to add.",
+         "dig_deeper": {
+             "title": "Why Alexander I moved the capital from Turku to Helsinki",
+             "body": ("Turku had been the Finnish capital since the 14th century — older, larger, tied to Swedish-"
+                      "administrative tradition. Alexander I moved it in 1812 for two strategic reasons. First, "
+                      "distance: Helsinki sat 250 km further from the Swedish border than Turku, making any "
+                      "Swedish revanchism a much harder operation to support. Second, proximity to St Petersburg "
+                      "and the Russian naval base at Kronstadt — Helsinki was reachable from the imperial capital "
+                      "in days, not weeks. The 1827 Great Fire of Turku later destroyed two-thirds of the old "
+                      "capital, removing the option to reverse the decision. Alexander's German architect C. L. "
+                      "Engel was hired in 1816 and spent the next thirty years building the Senate-Square "
+                      "ensemble in St-Petersburg neoclassical style.")
+         }},
         # Estonia
         {"title": "Estonia · medieval to digital",
          "era_slug": "medieval",
@@ -1561,7 +1596,19 @@ HISTORY = {
                   "complex you climb on Day 19. The 1918 independence lasted 22 years until the 1940 Soviet "
                   "occupation; the 1991 re-independence has been the country's longest sovereign run since "
                   "1561."),
-         "consequence": "The old-town walls are medieval Hanseatic; the digital state is the most recent layer."},
+         "consequence": "The old-town walls are medieval Hanseatic; the digital state is the most recent layer.",
+         "dig_deeper": {
+             "title": "How X-Road and the digital state actually work",
+             "body": ("Estonia's digital state runs on X-Road — a federated data-exchange layer first deployed in "
+                      "2001 that lets government services request data from each other (and from authorised "
+                      "private parties) without building a central database. Each citizen has one digital ID "
+                      "backed by public-key cryptography; once you log in, every service knows it is you. Tax "
+                      "returns are pre-filled and take about 3 minutes; prescriptions are issued digitally "
+                      "directly to pharmacies; the company-formation system can register an LLC in under an "
+                      "hour. Every data lookup is logged to an immutable KSI blockchain ledger the citizen can "
+                      "audit — the architecture's most important property is that you can see, at any time, "
+                      "exactly which agency looked up your records and why.")
+         }},
         # Sweden + Denmark
         {"title": "Sweden + Denmark · the imperial neighbours",
          "era_slug": "early-modern",
@@ -1577,7 +1624,19 @@ HISTORY = {
                   "Prussia (1848, 1864). The Tivoli (1843, Christian VIII's grant) and the Carlsberg brewery "
                   "(1847) are the early-industrial Copenhagen artefacts that survived into the present."),
          "consequence": "Stockholm's Vasa is the only intact warship of the 17th century anywhere; the Tivoli "
-                        "is the direct ancestor of Disneyland (Walt visited in 1951)."},
+                        "is the direct ancestor of Disneyland (Walt visited in 1951).",
+         "dig_deeper": {
+             "title": "Why the Vasa sank",
+             "body": ("The Vasa's sinking has three immediate causes and one structural one. The hull cross-section "
+                      "was too narrow for the second gun deck Gustav II Adolf demanded mid-construction, putting "
+                      "cannons higher above the waterline than the hull could counterweight. Ballast was "
+                      "insufficient: shipwrights kept reducing the stone load because adding it lowered the "
+                      "gun-port sills toward sea level. A stability test was run in harbour before launch — 30 "
+                      "men running back and forth across the deck — and abandoned after three passes because the "
+                      "ship was clearly listing past safe limits; the launch went ahead anyway. The structural "
+                      "cause: the king was at war in Poland, demanded immediate launch, and 17th-century "
+                      "shipwrights had no formal stability theory to push back with quantitatively.")
+         }},
     ],
     "phrase_table": [
         {"row": ["English",        "Norwegian",   "Finnish",        "Estonian",      "Swedish",     "Danish"]},
@@ -2631,6 +2690,30 @@ details.sources-note p {{ margin: 12px 0 0 0; color: var(--ink); }}
   padding: 1px 8px; border-radius: 8px;
 }}
 
+/* Dig-deeper — Deep-mode-only supplementary inset */
+aside.dig-deeper {{
+  margin: 24px 0 8px 0;
+  padding: 16px 20px;
+  background: rgba(126, 200, 177, 0.06);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}}
+aside.dig-deeper > h5 {{
+  margin: 0 0 8px 0;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}}
+aside.dig-deeper > p {{
+  margin: 0;
+  font-size: 0.95em;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}}
+
 /* Go-deeper */
 .go-deeper {{
   margin: 36px 0 0 0;
@@ -3151,6 +3234,13 @@ def emit_history() -> Tuple[str, str]:
         body_text += v["deep"]
         out.append(f'    <div class="consequence">Today: {esc(v["consequence"])}</div>')
         body_text += v["consequence"]
+        if "dig_deeper" in v:
+            dd = v["dig_deeper"]
+            out.append(f'    <aside class="dig-deeper">')
+            out.append(f'      <h5>Dig deeper · {esc(dd["title"])}</h5>')
+            out.append(f'      <p>{esc(dd["body"])}</p>')
+            out.append(f'    </aside>')
+            body_text += " " + dd["title"] + " " + dd["body"]
         out.append(f'  </article>')
     out.append(f'  <h4>Phrase table</h4>')
     out.append('  <table class="phrase-table">')
