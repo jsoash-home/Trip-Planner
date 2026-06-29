@@ -1,6 +1,6 @@
 ---
 name: trip-guide
-description: Generate a bespoke single-file HTML trip guide for a Vacation Planner trip. Reads bookings + itinerary from vacation.db and writes the guide to data/guides/<trip_id>.html. Use when the user asks to build, generate, regenerate, or share a trip guide. Requires no Anthropic API key — runs entirely in Claude Code.
+description: Use when the user asks to build, generate, regenerate, or share a trip guide for a Vacation Planner trip.
 ---
 
 # Trip Guide Generator
@@ -1029,6 +1029,20 @@ If `cfg.last_generated_at` is set, present three options and wait for user choic
 
 Never auto-regenerate without asking.
 
+**Re-ask themed-bonus when the saved sections pre-date the rule.** When
+`cfg.last_generated_at` is older than 2026-06-25 (when the themed-bonus
+REQUIRED prompt landed in this skill), the saved section list was chosen
+without ever being asked about themed bonuses. **Treat option 1
+("regenerate with same sections") as still requiring the themed-bonus
+offer** — silently reusing the old list will repeat the original omission.
+A one-line confirmation works: *"Sections look good. Quick check before I
+start: want a themed bonus section? Common ones: beer / coffee /
+photography / books / running / birding. Skip if none fit."* Apply the
+same rule when the user picks option 1 on any trip whose saved list
+omits a section the destination obviously calls for (e.g. a Scandinavia
+trip with no `beer` section, given the craft-beer scene across Oslo,
+Bergen, Helsinki, Tallinn, Stockholm, Copenhagen).
+
 ### 4. Section picker
 
 Present a multi-select from the 8-section catalog. The user picks a subset.
@@ -1456,6 +1470,35 @@ have a shot at seeing it?" Think field guide / Wikipedia, not travel-blog.
 with their day range too — e.g. "Arctic · Days 4–7", "Lofoten + Fjords · Days
 8–15", "Baltic + Cities · Days 16–23". Doubles as a trip-day filter without
 adding new JS.
+
+**Per-stop wildlife minimum (REQUIRED at Deep+, recommended at Standard).**
+Every named stop with enough distance or biogeographic distinctiveness gets
+**at least a minimum birds + wildlife rundown** — 3–5 entries per stop
+answering "what local fauna defines this place that the reader has a
+realistic shot at noticing?" Stops where nature is the headline (Arctic
+archipelago, rainforest, safari country, pelagic islands) get the **deep
+dive** — habitat-first organisation, ~150 words per entry, likelihood
+badges, endemism callouts, phenology strips where seasonally relevant.
+
+"Enough distance or distinctiveness" means: the stop is ≥4 hours' transit
+from the previous stop OR is a named ecoregion (Svalbard, Lofoten, Galápagos,
+Yellowstone) OR has a non-urban primary draw. City stops separated only by
+short flights or trains within the same biogeographic region (Stockholm +
+Copenhagen) can share one entry; Lofoten and Bergen (300 km apart, different
+fauna) cannot.
+
+**Anti-pattern to avoid.** Deep-diving one stop's wildlife (Svalbard polar
+bears, beluga, walrus) and skipping every other stop's fauna entirely
+because they're "not the headline." A reader walking the Bergen harbour
+benefits from knowing they're likely to see eider, common gull, and the
+occasional harbour porpoise — the entry doesn't need to be as long as the
+Svalbard ones, but skipping it tells the reader the section isn't for
+them at this stop.
+
+At Light tier only the marquee stop gets entries; the others get a
+one-line mention in the day-by-day intro instead. At Standard tier emit
+3–5 entries per stop for the top three stops. At Deep+ emit them for
+every qualifying stop.
 
 ### things_to_do
 
