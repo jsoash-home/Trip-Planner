@@ -2795,6 +2795,9 @@ footer.guide-footer .palette-name {{
 }}
 
 /* Responsive */
+@media (max-width: 920px) {{
+  .topbar .crumb .crumb-rest {{ display: none; }}
+}}
 @media (max-width: 760px) {{
   .toc-wrap {{ grid-template-columns: 1fr; gap: 24px; padding: 24px 18px; }}
   .vp-toc {{ position: static; max-height: none; }}
@@ -3441,7 +3444,7 @@ def compose(venue_coords: Dict[str, Tuple[float, float]], hotels: List[Dict]) ->
 <div id="vp-progress"></div>
 
 <div class="topbar">
-  <div class="crumb">Trip guide · <b>{esc(TRIP_META['title'])}</b> · Oslo → Copenhagen</div>
+  <div class="crumb">Trip guide<span class="crumb-rest"> · <b>{esc(TRIP_META['title'])}</b> · Oslo → Copenhagen</span></div>
   <div class="spacer"></div>
   <div class="mode-toggle" role="radiogroup" aria-label="Reading depth">
     <button data-mode="skim" aria-pressed="false">Skim</button>
