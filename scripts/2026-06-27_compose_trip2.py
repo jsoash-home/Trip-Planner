@@ -32,8 +32,9 @@ if not os.environ.get("MAPBOX_TOKEN"):
 os.environ.pop("DATABASE_URL", None)
 
 from app import app, db
-from models import Booking
+from models import Booking, ItineraryItem
 from src import guide_builder
+from src.data_check import find_hotel_night_gaps, HotelNightGap
 from src.geocoding import geocode_with_cache
 from src.place_links import maps_url, practical_link
 from src.walking_distance import walking_chip
@@ -2423,6 +2424,23 @@ details.sources-note p {{ margin: 12px 0 0 0; color: var(--ink); }}
   font-style: italic; color: var(--ink-soft);
   font-size: 0.93em;
 }}
+
+/* Data-check callout — surfaces bookings-data inconsistencies (gap nights) */
+.data-check-note {{
+  margin: 14px 0 18px 0;
+  padding: 10px 14px;
+  background: rgba(212, 162, 76, 0.08);
+  border-left: 3px solid #d4a24c;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--ink-soft);
+  border-radius: 0 4px 4px 0;
+}}
+.data-check-note::before {{
+  content: "⚠ Data check · ";
+  color: #d4a24c;
+  font-weight: 600;
+}}
 .site-card .tags {{
   display: flex; flex-wrap: wrap; gap: 6px;
   margin-top: 12px;
@@ -3031,7 +3049,8 @@ def emit_go_deeper(section_key: str) -> str:
 """
 
 
-def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, float]]) -> Tuple[str, str]:
+def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, float]],
+                    gaps_by_date: Dict[date, HotelNightGap]) -> Tuple[str, str]:
     intro_body = ("Twenty-three days, six modes of transport, eleven hotels. The intros "
                   "set the day's frame; the cards run in time order and carry the practical "
                   "load. Walking-distance chips show distance from <i>tonight's hotel</i> "
@@ -3052,6 +3071,10 @@ def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, flo
         if day.get("intro_deep"):
             out.append(f'  <div class="deep"><p class="dayintro-deep">{esc(day["intro_deep"])}</p></div>')
             body_for_rt += day["intro_deep"]
+        if d in gaps_by_date:
+            gap = gaps_by_date[d]
+            out.append(f'  <div class="data-check-note">{esc(gap.reason)}</div>')
+            body_for_rt += " " + gap.reason
         for card in day["cards"]:
             time_label = esc(card["time"])
             cat = category_color(card["category"])
@@ -3423,10 +3446,11 @@ def emit_sources() -> Tuple[str, str]:
 # MAIN COMPOSE
 # ============================================================================
 
-def compose(venue_coords: Dict[str, Tuple[float, float]], hotels: List[Dict]) -> str:
+def compose(venue_coords: Dict[str, Tuple[float, float]], hotels: List[Dict],
+            gaps_by_date: Dict[date, HotelNightGap]) -> str:
     is_single_hotel = len(set((h["lat"], h["lng"]) for h in hotels)) == 1
     sections = []
-    sections.append(("days", "Day by day", emit_day_by_day(hotels, venue_coords)))
+    sections.append(("days", "Day by day", emit_day_by_day(hotels, venue_coords, gaps_by_date)))
     sections.append(("field-guide", "Field guide", emit_field_guide()))
     sections.append(("things-to-do", "Things to do", emit_things_to_do(is_single_hotel)))
     sections.append(("weather", "Weather", emit_weather()))
@@ -3510,15 +3534,24 @@ def main():
     venue_coords = geocode_all_venues()
     print(f"  Got coords for {len(venue_coords)} of {len(NAMED_VENUES)} venues")
 
-    print("\n[2/4] Loading hotels...")
+    print("\n[2/4] Loading hotels + scanning for data gaps...")
     hotels = load_hotels()
     print(f"  {len(hotels)} hotels loaded, all geocoded: {all(h['lat'] for h in hotels)}")
     is_single_hotel = len(set((h["lat"], h["lng"]) for h in hotels)) == 1
     print(f"  Single-hotel trip: {is_single_hotel}")
+    with app.app_context():
+        all_bookings = Booking.query.filter_by(trip_id=TRIP_ID).all()
+        itinerary = ItineraryItem.query.filter_by(trip_id=TRIP_ID).all()
+        gaps = find_hotel_night_gaps(all_bookings, itinerary,
+                                     TRIP_META["start_date"], TRIP_META["end_date"])
+    gaps_by_date = {g.day_date: g for g in gaps}
+    print(f"  Data-check gaps detected: {len(gaps)}")
+    for g in gaps:
+        print(f"    - Day {g.day_number} ({g.day_date}): {g.reason}")
 
     print("\n[3/4] Composing HTML...")
     with app.app_context():
-        html = compose(venue_coords, hotels)
+        html = compose(venue_coords, hotels, gaps_by_date)
     print(f"  HTML composed: {len(html):,} chars")
 
     print("\n[4/4] Saving via save_guide...")
@@ -3535,8 +3568,10 @@ def main():
     dc_count = html.count('date-chip')
     gd_count = html.count('go-deeper')
     era_count = html.count('era-chip')
+    dcn_count = html.count('data-check-note')
     print(f"  date-chip instances:      {dc_count}")
     print(f"  go-deeper card sections:  {gd_count}")
+    print(f"  data-check-note callouts: {dcn_count}")
     print(f"  era-chip instances:       {era_count}")
 
     # Share URL

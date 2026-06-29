@@ -827,6 +827,12 @@ else:
     # ...
 ```
 
+**Companion: data-check callout.** When `hotel_for_night` returns None on
+a day that has ≥1 non-transit itinerary item, both behaviours fire
+together: the chip skips per the rule above, AND a `.data-check-note`
+callout surfaces in `day_by_day` to flag the gap. See the day_by_day
+content model's "Data-check callout" subsection for the emit pattern.
+
 **Hotel-night semantics.** A hotel booking with check-in
 `start_datetime` and check-out `end_datetime` covers nights where
 `start_datetime.date() <= target_date < end_datetime.date()`. The
@@ -1453,6 +1459,29 @@ transits don't need it — the time stamp already communicates duration.
 don't fall back to a single generic "Suggested arc" card. Plan 4–6 specific
 site cards with morning/midday/afternoon/evening/late time stamps and concrete
 names. These are the days a reader most needs pre-research.
+
+**Data-check callout.** When `find_hotel_night_gaps` from `src/data_check.py`
+detects a night where `hotel_for_night` returns None AND the day has ≥1
+non-transit itinerary item, emit a `<div class="data-check-note">` inside
+that day's `.daymark` block (after the day intro, before the first card).
+The reason field is rendered inline; CSS prepends a small "⚠ Data check ·"
+glyph in an amber-warning color. This catches bookings-data holes (a hotel
+that ends a day early, an un-booked night between two hotels) the user may
+not have noticed. Transit-only days (in-flight nights, ferry crossings) are
+correctly skipped — the data_check helper filters items with
+`category == 'transit'` from the "activity" set.
+
+Compose pattern:
+
+```python
+from src.data_check import find_hotel_night_gaps
+gaps = find_hotel_night_gaps(trip.bookings, trip.itinerary_items,
+                             trip.start_date, trip.end_date)
+gaps_by_date = {g.day_date: g for g in gaps}
+# inside the day loop:
+if day.date in gaps_by_date:
+    emit(f'<div class="data-check-note">{gaps_by_date[day.date].reason}</div>')
+```
 
 ### field_guide
 

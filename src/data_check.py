@@ -29,18 +29,24 @@ def find_hotel_night_gaps(
     trip_start: date,
     trip_end: date,
 ) -> List[HotelNightGap]:
-    """Return the list of trip nights with no hotel + at least one itinerary item.
+    """Return the list of trip nights with no hotel + at least one non-transit itinerary item.
 
     A gap satisfies ALL of:
     1. `trip_start <= day_date < trip_end` (nights only, last day excluded)
     2. `hotel_for_night(bookings, day_date)` returns `None`
     3. The day has >=1 itinerary item with `day_date == day_date`
+       AND `category != 'transit'`. Transit-only days (in-flight nights,
+       ferry crossings) are legitimately unbooked.
 
     Duck-typed on bookings (passes through to `hotel_for_night`) and on
-    itinerary_items (uses `.day_date` attribute).
+    itinerary_items (uses `.day_date` and `.category` attributes).
     """
     bookings_list = list(bookings)
-    activity_dates = {item.day_date for item in itinerary_items}
+    activity_dates = {
+        item.day_date
+        for item in itinerary_items
+        if getattr(item, "category", None) != "transit"
+    }
 
     gaps: List[HotelNightGap] = []
     current = trip_start

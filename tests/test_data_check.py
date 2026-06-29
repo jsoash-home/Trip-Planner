@@ -23,8 +23,12 @@ def _hotel(start: date, end: date):
     )
 
 
-def _item(day: date):
-    return SimpleNamespace(day_date=day)
+def _item(day: date, category: str = "other"):
+    return SimpleNamespace(day_date=day, category=category)
+
+
+def _transit_item(day: date):
+    return SimpleNamespace(day_date=day, category="transit")
 
 
 def test_returns_empty_when_all_nights_covered():
@@ -122,3 +126,27 @@ def test_inclusive_exclusive_boundary_correct():
     gaps = find_hotel_night_gaps(bookings, items, date(2026, 8, 14), date(2026, 8, 20))
     # 08-20 is trip_end (exclusive); not a gap candidate even with itinerary
     assert gaps == []
+
+
+def test_transit_category_items_dont_count_as_activity():
+    # Day 1 of the Scandinavia trip: only itinerary item is a "Depart MSP -> Oslo"
+    # overnight flight (category=transit). The user is in the air that night;
+    # the no-hotel state is correct, not a data hole.
+    bookings = [_hotel(date(2026, 8, 15), date(2026, 8, 17))]  # Oslo hotel starts day 2
+    items = [_transit_item(date(2026, 8, 14))]  # transit-only day 1
+    gaps = find_hotel_night_gaps(bookings, items, date(2026, 8, 14), date(2026, 8, 17))
+    assert gaps == []
+
+
+def test_mixed_transit_and_non_transit_still_counts_as_activity():
+    # If a day has BOTH a transit item AND a non-transit item, it's still
+    # a real activity day. (User flew somewhere AND had dinner there → they
+    # need a hotel that night.)
+    bookings = []  # no hotels at all
+    items = [
+        _transit_item(date(2026, 8, 14)),
+        _item(date(2026, 8, 14), category="meal"),
+    ]
+    gaps = find_hotel_night_gaps(bookings, items, date(2026, 8, 14), date(2026, 8, 16))
+    assert len(gaps) == 1
+    assert gaps[0].day_date == date(2026, 8, 14)
