@@ -39,9 +39,22 @@ def walking_chip(
     venue_coords: Optional[Tuple[float, float]],
     hotel_coords: Optional[Tuple[float, float]],
     hotel_name: str,
+    *,
+    venue_confidence: Optional[float] = None,
+    min_confidence: float = 0.7,
 ) -> str:
-    """Return chip HTML or '' when either coord is None."""
+    """Return chip HTML or '' when either coord is None OR when
+    `venue_confidence` is known and below `min_confidence`.
+
+    `venue_confidence` is the Mapbox `relevance` score (0.0–1.0) for the
+    venue geocode. None means "trusted" (cache hit or non-Mapbox source)
+    and the chip renders; a known value below threshold means the
+    geocode is likely a city-centroid fallback and the chip is skipped
+    to avoid showing a misleading distance.
+    """
     if venue_coords is None or hotel_coords is None:
+        return ""
+    if venue_confidence is not None and venue_confidence < min_confidence:
         return ""
 
     km_straight = haversine_km(

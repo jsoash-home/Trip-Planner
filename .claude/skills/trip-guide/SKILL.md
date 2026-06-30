@@ -872,6 +872,41 @@ If `MAPBOX_TOKEN` is empty in the environment, log a warning and
 skip Step 6.5 entirely — chips just won't render. The guide still
 composes; links still work.
 
+### Confidence threshold
+
+`walking_chip` accepts an optional `venue_confidence: Optional[float]`
+(default `None`) and `min_confidence: float = 0.7`. When venue
+confidence is **known and below threshold**, the chip is skipped —
+same path as the None-coord skip. The threshold guards against
+Mapbox city-centroid fallbacks, where the chip distance would be
+wrong by kilometres.
+
+`venue_confidence=None` is treated as **trusted** (legacy data, cache
+hits, non-Mapbox providers). The relevance field on `GeocodeResult` is
+in-memory only; cache hits return None and the chip renders. To force
+re-evaluation of a venue, manually `DELETE FROM geocode_cache WHERE
+location_text_normalized = ...` and regenerate.
+
+Wiring pattern (compose-script-local):
+
+```python
+coords, relevance = geocode_all_venues()  # parallel dicts keyed by venue
+# ...
+chip = walking_chip(
+    venue_coords=coords[key],
+    hotel_coords=(hotel.lat, hotel.lng),
+    hotel_name=hotel.title,
+    venue_confidence=relevance.get(key),   # may be None — trusted
+)
+```
+
+**Known limitation:** the threshold catches "Mapbox didn't find your
+venue" cases (low relevance → city centroid) but not "Mapbox confidently
+returned the wrong place" cases (high relevance, wrong coord). The
+2026-06-27 validation note documents one such case ("Vasa Museum,
+Stockholm" → snapped to Märsta with relevance 0.75). Manual coord
+overrides are the only fix for that class of error; not in scope here.
+
 ---
 
 ## The 10-step flow

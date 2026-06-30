@@ -73,3 +73,45 @@ def test_walking_chip_html_escapes_hotel_name():
     assert "&quot;" in chip
     assert "&amp;" in chip
     assert '"Three Crowns"' not in chip  # raw quotes must not survive
+
+
+# ────────────── confidence threshold (Phase 2b T6) ──────────────
+
+
+def test_renders_chip_when_confidence_above_threshold():
+    chip = walking_chip(NEAR_VENUE, NEAR_HOTEL, "Hotel One", venue_confidence=0.95)
+    assert chip.startswith('<span class="walkchip">')
+
+
+def test_skips_chip_when_confidence_below_threshold():
+    # 0.5 < 0.7 default threshold → skip.
+    chip = walking_chip(NEAR_VENUE, NEAR_HOTEL, "Hotel One", venue_confidence=0.5)
+    assert chip == ""
+
+
+def test_renders_chip_when_confidence_none_legacy_trusted():
+    # None means "we don't know" (cache hit / non-Mapbox provider) → trust.
+    chip = walking_chip(NEAR_VENUE, NEAR_HOTEL, "Hotel One", venue_confidence=None)
+    assert chip.startswith('<span class="walkchip">')
+
+
+def test_renders_chip_at_exact_threshold_boundary():
+    # Exactly equal to threshold → still rendered (>= semantics).
+    chip = walking_chip(NEAR_VENUE, NEAR_HOTEL, "Hotel One", venue_confidence=0.7)
+    assert chip.startswith('<span class="walkchip">')
+
+
+def test_min_confidence_param_overrides_default():
+    # Confidence 0.65, default threshold 0.7 → would skip.
+    # With min_confidence=0.5 → renders.
+    chip_with_lower_threshold = walking_chip(
+        NEAR_VENUE, NEAR_HOTEL, "Hotel One",
+        venue_confidence=0.65, min_confidence=0.5,
+    )
+    assert chip_with_lower_threshold.startswith('<span class="walkchip">')
+
+
+def test_other_skip_paths_still_work_with_confidence_passed():
+    # None-coords path still wins, regardless of confidence value.
+    assert walking_chip(None, NEAR_HOTEL, "X", venue_confidence=0.99) == ""
+    assert walking_chip(NEAR_VENUE, None, "X", venue_confidence=0.99) == ""

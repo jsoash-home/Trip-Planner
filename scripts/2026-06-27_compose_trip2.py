@@ -180,10 +180,18 @@ NAMED_VENUES = [
 ]
 
 
-def geocode_all_venues() -> Dict[str, Tuple[float, float]]:
+def geocode_all_venues() -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Optional[float]]]:
+    """Geocode every named venue. Returns (coords_by_key, relevance_by_key).
+
+    Relevance is Mapbox's match confidence (0.0–1.0); None on cache hits or
+    when Mapbox didn't supply one. Consumed by walking_chip's
+    venue_confidence param to skip chips on low-confidence (often
+    city-centroid) fallbacks.
+    """
     coords: Dict[str, Tuple[float, float]] = {}
+    relevance: Dict[str, Optional[float]] = {}
     if not MAPBOX_TOKEN:
-        return coords
+        return coords, relevance
     with app.app_context():
         for name, city_country in NAMED_VENUES:
             key = name.lower()
@@ -194,8 +202,9 @@ def geocode_all_venues() -> Dict[str, Tuple[float, float]]:
             )
             if result is not None:
                 coords[key] = (result.lat, result.lng)
+                relevance[key] = result.relevance
         db.session.commit()
-    return coords
+    return coords, relevance
 
 
 # venue lookup helper, dual-citified: tries multiple keys
@@ -1999,8 +2008,14 @@ def emit_practical_link(name: str, city: str, full_text: Optional[str] = None) -
 
 
 def emit_walking_chip_for_card(card: Dict, hotel: Optional[Dict],
-                                venue_coords: Dict[str, Tuple[float, float]]) -> str:
-    """Emit a walkchip if both venue and hotel resolve; else ''."""
+                                venue_coords: Dict[str, Tuple[float, float]],
+                                venue_relevance: Dict[str, Optional[float]]) -> str:
+    """Emit a walkchip if both venue and hotel resolve; else ''.
+
+    Skips when venue_relevance is known and below the default 0.7 threshold —
+    those are usually Mapbox city-centroid fallbacks where the distance would
+    be misleading.
+    """
     venue_key = card.get("venue_key")
     if not venue_key or not hotel or not hotel.get("lat"):
         return ""
@@ -2011,6 +2026,7 @@ def emit_walking_chip_for_card(card: Dict, hotel: Optional[Dict],
         venue_coords=vc,
         hotel_coords=(hotel["lat"], hotel["lng"]),
         hotel_name=hotel["title"],
+        venue_confidence=venue_relevance.get(venue_key.lower()),
     )
 
 
@@ -3050,6 +3066,7 @@ def emit_go_deeper(section_key: str) -> str:
 
 
 def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, float]],
+                    venue_relevance: Dict[str, Optional[float]],
                     gaps_by_date: Dict[date, HotelNightGap]) -> Tuple[str, str]:
     intro_body = ("Twenty-three days, six modes of transport, eleven hotels. The intros "
                   "set the day's frame; the cards run in time order and carry the practical "
@@ -3102,7 +3119,7 @@ def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, flo
             tag_parts = []
             if card.get("travelpill"):
                 tag_parts.append(f'<span class="travelpill">{esc(card["travelpill"])}</span>')
-            chip = emit_walking_chip_for_card(card, hotel, venue_coords)
+            chip = emit_walking_chip_for_card(card, hotel, venue_coords, venue_relevance)
             if chip:
                 tag_parts.append(chip)
             if tag_parts:
@@ -3446,11 +3463,14 @@ def emit_sources() -> Tuple[str, str]:
 # MAIN COMPOSE
 # ============================================================================
 
-def compose(venue_coords: Dict[str, Tuple[float, float]], hotels: List[Dict],
+def compose(venue_coords: Dict[str, Tuple[float, float]],
+            venue_relevance: Dict[str, Optional[float]],
+            hotels: List[Dict],
             gaps_by_date: Dict[date, HotelNightGap]) -> str:
     is_single_hotel = len(set((h["lat"], h["lng"]) for h in hotels)) == 1
     sections = []
-    sections.append(("days", "Day by day", emit_day_by_day(hotels, venue_coords, gaps_by_date)))
+    sections.append(("days", "Day by day",
+                     emit_day_by_day(hotels, venue_coords, venue_relevance, gaps_by_date)))
     sections.append(("field-guide", "Field guide", emit_field_guide()))
     sections.append(("things-to-do", "Things to do", emit_things_to_do(is_single_hotel)))
     sections.append(("weather", "Weather", emit_weather()))
@@ -3531,8 +3551,10 @@ def main():
     print("Trip 2 Scandinavia '26 — Deep tier compose")
     print("=" * 70)
     print("\n[1/4] Geocoding venues...")
-    venue_coords = geocode_all_venues()
+    venue_coords, venue_relevance = geocode_all_venues()
     print(f"  Got coords for {len(venue_coords)} of {len(NAMED_VENUES)} venues")
+    low_conf = sum(1 for r in venue_relevance.values() if r is not None and r < 0.7)
+    print(f"  Low-confidence venues (relevance < 0.7): {low_conf}")
 
     print("\n[2/4] Loading hotels + scanning for data gaps...")
     hotels = load_hotels()
@@ -3551,7 +3573,7 @@ def main():
 
     print("\n[3/4] Composing HTML...")
     with app.app_context():
-        html = compose(venue_coords, hotels, gaps_by_date)
+        html = compose(venue_coords, venue_relevance, hotels, gaps_by_date)
     print(f"  HTML composed: {len(html):,} chars")
 
     print("\n[4/4] Saving via save_guide...")
