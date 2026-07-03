@@ -114,12 +114,12 @@ Sarge (12 entries):
 
 **Steps:**
 
-- [ ] Read the current `permissions.deny` shape. Confirm it's a JSON array (currently empty).
-- [ ] Append the 5 Cerberus entries using `jq`: `jq '.permissions.deny += ["Write(**/vacation.db)", "Write(**/*.sqlite)", "Write(**/*.sqlite3)", "Bash(rm * vacation.db*)", "Bash(rm * *.sqlite*)"]' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json`
-- [ ] Validate: `jq .permissions.deny ~/.claude/settings.json` shows the 5 entries.
-- [ ] Smoke test (needs Claude Code restart to pick up new deny rules): after restart, ask Claude Code in any project to `Write` a file at `/tmp/vacation.db`. Expect: refused with a permission-denied message. Ask it to `Write` a file at `/tmp/other.txt`. Expect: allowed.
-- [ ] Delete `/tmp/vacation.db` if it got created before the block: `rm -f /tmp/vacation.db`.
-- [ ] Check `- [x]` on the Cerberus row and commit the plan progress in the Vacation Planner repo.
+- [x] Read the current `permissions.deny` shape. Confirm it's a JSON array (currently empty).
+- [x] Append the 5 Cerberus entries using `jq`: `jq '.permissions.deny += ["Write(**/vacation.db)", "Write(**/*.sqlite)", "Write(**/*.sqlite3)", "Bash(rm * vacation.db*)", "Bash(rm * *.sqlite*)"]' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json`
+- [x] Validate: `jq .permissions.deny ~/.claude/settings.json` shows the 5 entries.
+- [x] Smoke test (needs Claude Code restart to pick up new deny rules): after restart, ask Claude Code in any project to `Write` a file at `/tmp/vacation.db`. Expect: refused with a permission-denied message. Ask it to `Write` a file at `/tmp/other.txt`. Expect: allowed.
+- [x] Delete `/tmp/vacation.db` if it got created before the block: `rm -f /tmp/vacation.db`.
+- [x] Check `- [x]` on the Cerberus row and commit the plan progress in the Vacation Planner repo.
 
 ---
 
