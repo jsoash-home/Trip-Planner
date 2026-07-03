@@ -66,16 +66,50 @@ current compose. Task 4 diffs against these to prove the retrofit preserved outp
   body word count
 - [ ] Paste the captured audit output into this file's "Audit reference block" below
 
-**Audit reference block:**
+**Audit reference block** (captured 2026-07-03 08:33 from
+`scripts/2026-06-27_compose_trip2.py` at HEAD `8ad15b0`, before the retrofit):
 
 ```
-(paste the pre-retrofit audit output here — the exact numbers become the pass/fail
-gate for Task 4)
+Trip 2 Scandinavia '26 — Deep tier compose
+
+[1/4] Geocoding venues...
+  Got coords for 86 of 86 venues
+  Low-confidence venues (relevance < 0.7): 0
+
+[2/4] Loading hotels + scanning for data gaps...
+  11 hotels loaded, all geocoded: True
+  Single-hotel trip: False
+  Data-check gaps detected: 0
+
+[3/4] Composing HTML...
+  HTML composed: 200,594 chars
+
+[4/4] Saving via save_guide...
+  Saved: data/guides/2.html
+
+--- Markup audit ---
+  practical-link instances: 145
+  walkchip instances:       53
+  date-chip instances:      1
+  go-deeper card sections:  6
+  data-check-note callouts: 2
+  era-chip instances:       6
 ```
 
-**Expected shape** (per [2026-06-27 note § Composition stats](../notes/2026-06-27-trip-guide-phase2a-validation.md#composition-stats), updated for Phase 2b additions):
-practical-link ≈ 145, walkchip ≈ 53, era-chip 5, go-deeper 4, data-check-note ≥ 1,
-banned-word hits 0, body words ≈ 13,977. Match to actual capture.
+**Companion metrics** (separately computed from `data/guides/2.html`, not part of
+the script's built-in audit):
+
+- HTML bytes: 201,906
+- Body word count (post-`<script>`/`<style>`/quoted-material strip): 14,951
+- Banned-word hits (SKILL.md Step 10 list, case-insensitive word-boundary grep): 0
+
+**Preserved reference file** (for Task 3's byte-identity check):
+`/private/tmp/claude-501/-Users-jeff-s-Projects-Vacation-Planner/88f92fde-7292-4958-82bf-080576803522/scratchpad/2.html.pre-retrofit`
+
+**Numbers to preserve through Task 4** — any drift here is a bug:
+practical-link 145, walkchip 53, date-chip 1, go-deeper 6, data-check-note 2,
+era-chip 6, banned-word hits 0, HTML bytes ~200k, body words ~14,950
+(whitespace-tolerant ±5 words is acceptable; count deltas are not).
 
 **Verify:** stdout printed cleanly; numbers copied into the reference block.
 
