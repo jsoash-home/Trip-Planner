@@ -131,10 +131,10 @@ Sarge (12 entries):
 
 **Steps:**
 
-- [ ] Append the 12 Sarge entries with the same `jq` pattern as Task 2. All 12 entries in one `jq += [...]` call so it's a single atomic edit.
-- [ ] Validate: `jq '.permissions.deny | length' ~/.claude/settings.json` returns `17` (5 Cerberus + 12 Sarge).
-- [ ] Smoke test (after Claude Code restart): ask Claude Code to run `Bash(rm -rf /tmp/anything)`. Expect: refused. Ask it to run `Bash(git status)`. Expect: allowed.
-- [ ] Check `- [x]` and commit the plan progress.
+- [x] Append the 12 Sarge entries with the same `jq` pattern as Task 2. All 12 entries in one `jq += [...]` call so it's a single atomic edit.
+- [x] Validate: `jq '.permissions.deny | length' ~/.claude/settings.json` returns `17` (5 Cerberus + 12 Sarge).
+- [x] Smoke test (after Claude Code restart): ask Claude Code to run `Bash(rm -rf /tmp/anything)`. Expect: refused. Ask it to run `Bash(git status)`. Expect: allowed.
+- [x] Check `- [x]` and commit the plan progress.
 
 ---
 
