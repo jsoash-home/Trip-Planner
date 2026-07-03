@@ -243,11 +243,11 @@ The body (system prompt) covers three things:
 
 **Steps:**
 
-- [ ] Draft the four fixture JSON files. Each is small (~30-100 lines). Structure them to match your best inference of the Stop hook JSON schema. Include `transcript` / `messages` shape as a nested array with role + content. If real Claude Code Stop-hook JSON differs, fixtures + `sherlock.sh` jq queries need to align — update both together.
-- [ ] Write `fake-curl.sh` (~40 lines). Reads args, ignores the URL, uses `$FAKE_CURL_MODE` to pick which canned response to print.
-- [ ] Write `test_sherlock.sh` (~120 lines). Uses `SHERLOCK_CURL=~/.claude/hooks/tests/fake-curl.sh` env override, sets `FAKE_CURL_MODE` per test. `chmod +x` all three shell scripts.
-- [ ] Run `~/.claude/hooks/tests/test_sherlock.sh`. All seven should PASS. If any FAIL, fix in sherlock.sh (never in the test) and re-run.
-- [ ] Check `- [x]` and commit the plan progress.
+- [x] Draft the four fixture JSON files. Each is small (~30-100 lines). Structure them to match your best inference of the Stop hook JSON schema. Include `transcript` / `messages` shape as a nested array with role + content. If real Claude Code Stop-hook JSON differs, fixtures + `sherlock.sh` jq queries need to align — update both together.
+- [x] Write `fake-curl.sh` (~40 lines). Reads args, ignores the URL, uses `$FAKE_CURL_MODE` to pick which canned response to print.
+- [x] Write `test_sherlock.sh` (~120 lines). Uses `SHERLOCK_CURL=~/.claude/hooks/tests/fake-curl.sh` env override, sets `FAKE_CURL_MODE` per test. `chmod +x` all three shell scripts.
+- [x] Run `~/.claude/hooks/tests/test_sherlock.sh`. All seven should PASS. If any FAIL, fix in sherlock.sh (never in the test) and re-run.
+- [x] Check `- [x]` and commit the plan progress.
 
 ---
 
