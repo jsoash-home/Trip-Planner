@@ -33,10 +33,13 @@ history" for the full rationale.
 | Consent Cop mechanism | `permissions.deny` in `~/.claude/settings.json` | Custom shell hook with persona voice |
 | Verifier mechanism | Custom `Stop` hook that spawns an LLM subagent | Deterministic grep (can't judge whether a claim was verified); skill-only (skill is opt-in and gets skipped) |
 | Location | Global `~/.claude/` — always on, every project | Project-scoped |
-| Voice / messaging | Claude Code's generic "permission denied" for deny rules; persona-flavored message for Verifier's LLM output | Custom persona voice for all three (not worth the code) |
-| Per-session toggle | Marker file (`~/.claude/watchdogs.disabled`) for Verifier only; no toggle for deny rules | Marker check for all three (would require converting deny rules to hooks — undoes the simplification); no toggle at all (leaves Verifier hard to skip on refactor-heavy sessions) |
+| Voice / messaging | Claude Code's generic "permission denied" for deny rules; persona-flavored message for Sherlock's LLM output | Custom persona voice for all three (not worth the code) |
+| Per-session toggle | Marker file (`~/.claude/watchdogs.disabled`) for Sherlock only; no toggle for deny rules | Marker check for all three (would require converting deny rules to hooks — undoes the simplification); no toggle at all (leaves Sherlock hard to skip on refactor-heavy sessions) |
+| Persona names | Cerberus (DB Guardian), Sarge (Consent Cop), Sherlock (Verifier) | Generic functional names only; no character |
 
-## Mechanism 1 — DB Guardian (deny rules)
+## Mechanism 1 — Cerberus, the DB Guardian (deny rules)
+
+*Named for the three-headed guard dog of the Greek underworld. Nothing gets past him.*
 
 Add to `~/.claude/settings.json` under `permissions.deny`:
 
@@ -69,7 +72,9 @@ you have 2–5 projects; if the list grows past that we can revisit.
 and use `sqlite3` directly), you'd temporarily comment out the deny rule
 and re-enable it after. This friction is the point.
 
-## Mechanism 2 — Consent Cop (deny rules)
+## Mechanism 2 — Sarge, the Consent Cop (deny rules)
+
+*The formal-authority military police dog. "You do not have permission for that maneuver."*
 
 Add to `~/.claude/settings.json` under `permissions.deny`:
 
@@ -106,7 +111,9 @@ of these explicitly — deny rules don't have an "unless the user just said
 so" branch. If you ever explicitly ask me to force-push, we deal with it
 by editing the deny list temporarily.
 
-## Mechanism 3 — Verifier (custom Stop hook)
+## Mechanism 3 — Sherlock, the Verifier (custom Stop hook)
+
+*The evidence-first detective. "You said the case is closed — where's your proof?"*
 
 The one that needs a real hook. Fires on `Stop` (end of my turn), inspects
 my final message, decides whether I claimed "done" without evidence.
@@ -119,14 +126,14 @@ Registered in `~/.claude/settings.json` under `hooks.Stop`:
 "Stop": [
   {
     "matcher": "",
-    "hooks": [{"type": "command", "command": "~/.claude/hooks/verifier.sh"}]
+    "hooks": [{"type": "command", "command": "~/.claude/hooks/sherlock.sh"}]
   }
 ]
 ```
 
 ### Flow
 
-1. `verifier.sh` receives JSON on stdin with (at minimum) the transcript
+1. `sherlock.sh` receives JSON on stdin with (at minimum) the transcript
    of the finishing turn. Confirms via schema check when we build it.
 2. **Kill-switch check.** If `~/.claude/watchdogs.disabled` exists, exit
    `0` immediately. Lets you skip verification for a session or task
@@ -135,7 +142,7 @@ Registered in `~/.claude/settings.json` under `hooks.Stop`:
    code-relevant `Bash` calls), exit `0` silently. Pure conversation turns
    cost zero.
 4. If the turn DID touch code, spawn a Haiku 4.5 subagent (via
-   `~/.claude/agents/verifier.md`) with:
+   `~/.claude/agents/sherlock.md`) with:
    - My final assistant message
    - A summary of tool calls made this turn (types + counts, not full
      content)
@@ -151,12 +158,14 @@ Registered in `~/.claude/settings.json` under `hooks.Stop`:
 
 ### Subagent definition
 
-`~/.claude/agents/verifier.md` — a standard Claude Code subagent
+`~/.claude/agents/sherlock.md` — a standard Claude Code subagent
 definition with:
 - Model: `claude-haiku-4-5-20251001`
-- System prompt: character-flavored ("You are the Verifier — a skeptical
-  QA reviewer. Your only job is to catch claims of completion that
-  weren't backed by verification.")
+- System prompt: character-flavored ("You are Sherlock — a bloodhound-eared
+  detective for AI completion claims. Your only job is to sniff out cases
+  where the assistant said the work is done without evidence they actually
+  ran it. Evidence means tool calls that verified the change, not
+  narration about verifying.")
 - Tool access: none (it's a judgment call, no tool use needed)
 - Output constraint: JSON schema for the response above
 
@@ -175,15 +184,15 @@ per day ≈ $0.15–$0.40/day.
 ├── hooks/
 │   ├── block-cd-prefix-bash.sh         ← existing; unchanged
 │   ├── check-plan-size.sh              ← existing; unchanged
-│   └── verifier.sh                     ← NEW: shell wrapper that spawns the subagent
+│   └── sherlock.sh                     ← NEW: shell wrapper that spawns the subagent
 ├── agents/
-│   └── verifier.md                     ← NEW: subagent definition
+│   └── sherlock.md                     ← NEW: subagent definition
 └── (no config file, no shared library, no watchdog directory)
 
 ~/Projects/Vacation Planner/            ← unchanged. Nothing project-local.
 ```
 
-Two new files (`verifier.sh`, `verifier.md`) plus the JSON edit. That's the
+Two new files (`sherlock.sh`, `sherlock.md`) plus the JSON edit. That's the
 whole system.
 
 ## Testing strategy
@@ -193,9 +202,9 @@ smoke test after adding them: attempt a `Bash(rm -rf /tmp/x)` in a scratch
 directory, confirm it's blocked. Attempt a benign `Bash(rm /tmp/x)`,
 confirm it goes through.
 
-**Verifier** gets a small test file at
-`~/.claude/hooks/tests/test_verifier.sh` that:
-1. Feeds `verifier.sh` a fake Stop-hook JSON with a "no code edits" turn.
+**Sherlock** gets a small test file at
+`~/.claude/hooks/tests/test_sherlock.sh` that:
+1. Feeds `sherlock.sh` a fake Stop-hook JSON with a "no code edits" turn.
    Asserts exit 0, no stderr.
 2. Feeds it a "code edits + no verification claim" turn. Asserts exit 0.
 3. Feeds it a "code edits + verification claim + no browser tool call".
@@ -209,15 +218,15 @@ absolutely are.
 
 **Permanent disable** (any of the three): edit `~/.claude/settings.json`.
 Delete the relevant deny rule(s), or remove the Stop-hook registration
-for Verifier. ~30 seconds. Reversible by re-adding.
+for Sherlock. ~30 seconds. Reversible by re-adding.
 
-**Per-session or per-task disable for Verifier**: `touch ~/.claude/watchdogs.disabled`
-before the task, `rm ~/.claude/watchdogs.disabled` after. The Verifier
+**Per-session or per-task disable for Sherlock**: `touch ~/.claude/watchdogs.disabled`
+before the task, `rm ~/.claude/watchdogs.disabled` after. Sherlock's
 script checks for the marker at the top and exits `0` if it exists.
 
-**Per-session disable for DB Guardian or Consent Cop**: not supported by
-design. Deny rules are declarative — either present in `settings.json` or
-not. If you truly need to bypass one, edit the file and restart Claude Code.
+**Per-session disable for Cerberus or Sarge**: not supported by design.
+Deny rules are declarative — either present in `settings.json` or not.
+If you truly need to bypass one, edit the file and restart Claude Code.
 The friction is intentional: these two mechanisms only block *destructive*
 operations, and the everyday flows (reading DBs, running the app, normal
 git commits and pushes) are unaffected. Legitimate cases where you'd want
@@ -235,9 +244,9 @@ better done from your own terminal (where hooks don't fire) anyway.
 - **The other seven personas from the original design.** Scope Cop, Rule
   Keeper, Test Enforcer, Cleanup Auditor, Hallucination Hunter, Plan
   Deputy, Hedge Detector — all cut. See "Design history" for reasoning.
-- **Cross-turn state.** Verifier evaluates each turn on its own. No
+- **Cross-turn state.** Sherlock evaluates each turn on its own. No
   streak counters, no history.
-- **Auto-fix beyond the Verifier's own domain.** The Verifier surfaces a
+- **Auto-fix beyond Sherlock's own domain.** Sherlock surfaces a
   finding to my context; my in-session response is whatever the finding
   prompts. No separate "fixer" agent.
 
