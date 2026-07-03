@@ -97,12 +97,12 @@ Sarge (12 entries):
 
 **Steps:**
 
-- [ ] Confirm `jq` is installed: `jq --version`. If missing on macOS: `brew install jq`.
-- [ ] Confirm `curl` is installed: `curl --version`.
-- [ ] Confirm the user has `ANTHROPIC_API_KEY` set: `echo "${ANTHROPIC_API_KEY:0:6}..."` should print six chars + `...`. If empty, tell Jeff — he'll need to add it to his shell profile (`~/.zshrc`) before Sherlock can work.
-- [ ] `mkdir -p ~/.claude/hooks/tests/fixtures ~/.claude/agents`
-- [ ] Back up settings.json: `cp ~/.claude/settings.json ~/.claude/settings.json.bak.$(date +%s)`. Keep the backup path in a variable and print it — recovery matters if a bad edit corrupts the file.
-- [ ] Verify current settings.json is valid: `jq . ~/.claude/settings.json > /dev/null` should exit 0.
+- [x] Confirm `jq` is installed: `jq --version`. If missing on macOS: `brew install jq`.
+- [x] Confirm `curl` is installed: `curl --version`.
+- [x] Confirm the user has `ANTHROPIC_API_KEY` set: `echo "${ANTHROPIC_API_KEY:0:6}..."` should print six chars + `...`. If empty, tell Jeff — he'll need to add it to his shell profile (`~/.zshrc`) before Sherlock can work.
+- [x] `mkdir -p ~/.claude/hooks/tests/fixtures ~/.claude/agents`
+- [x] Back up settings.json: `cp ~/.claude/settings.json ~/.claude/settings.json.bak.$(date +%s)`. Keep the backup path in a variable and print it — recovery matters if a bad edit corrupts the file.
+- [x] Verify current settings.json is valid: `jq . ~/.claude/settings.json > /dev/null` should exit 0.
 
 ---
 
