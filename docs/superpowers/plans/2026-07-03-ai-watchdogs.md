@@ -160,9 +160,9 @@ The body (system prompt) covers three things:
 
 **Steps:**
 
-- [ ] Write the file with the frontmatter above and the three-part system prompt body. Full prompt text is engineer's judgment call within the constraints above — aim for ~300 words. Word "Sherlock" appears in character voice; do not include emoji per Jeff's global preference.
-- [ ] Verify YAML frontmatter parses: `head -8 ~/.claude/agents/sherlock.md | python3 -c "import sys, yaml; print(yaml.safe_load(sys.stdin.read().split('---')[1]))"` should print a dict with keys `name`, `description`, `model`, `tools`.
-- [ ] Check `- [x]` and commit the plan progress.
+- [x] Write the file with the frontmatter above and the three-part system prompt body. Full prompt text is engineer's judgment call within the constraints above — aim for ~300 words. Word "Sherlock" appears in character voice; do not include emoji per Jeff's global preference.
+- [x] Verify YAML frontmatter parses: `head -8 ~/.claude/agents/sherlock.md | python3 -c "import sys, yaml; print(yaml.safe_load(sys.stdin.read().split('---')[1]))"` should print a dict with keys `name`, `description`, `model`, `tools`.
+- [x] Check `- [x]` and commit the plan progress.
 
 ---
 
