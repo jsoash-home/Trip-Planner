@@ -209,11 +209,6 @@ def geocode_all_venues() -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Opti
     return coords, relevance
 
 
-# venue lookup helper, dual-citified: tries multiple keys
-def venue_xy(coords: Dict[str, Tuple[float, float]], name: str) -> Optional[Tuple[float, float]]:
-    return coords.get(name.lower())
-
-
 # ============================================================================
 # HOTELS
 # ============================================================================
@@ -2012,7 +2007,7 @@ BIBLIOGRAPHY = [
 
 def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, float]],
                     venue_relevance: Dict[str, Optional[float]],
-                    gaps_by_date: Dict[date, HotelNightGap]) -> Tuple[str, str]:
+                    gaps_by_date: Dict[date, HotelNightGap]) -> Tuple[Tuple[str, str], str]:
     intro_body = ("Twenty-three days, six modes of transport, eleven hotels. The intros "
                   "set the day's frame; the cards run in time order and carry the practical "
                   "load. Walking-distance chips show distance from <i>tonight's hotel</i> "
@@ -2081,7 +2076,7 @@ def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, flo
     return ("days", "Day by day"), section_html
 
 
-def emit_field_guide() -> Tuple[str, str]:
+def emit_field_guide() -> Tuple[Tuple[str, str], str]:
     fg = FIELD_GUIDE
     body_text = fg["intro_lede"]
     out = [f'<p class="lede">{esc(fg["intro_lede"])}</p>']
@@ -2138,7 +2133,7 @@ def emit_field_guide() -> Tuple[str, str]:
     return ("field-guide", "Field guide"), section_html
 
 
-def emit_things_to_do(is_single_hotel: bool) -> Tuple[str, str]:
+def emit_things_to_do(is_single_hotel: bool) -> Tuple[Tuple[str, str], str]:
     """Emit things_to_do — chips SKIPPED entirely on multi-hotel trips per spec."""
     ttd = THINGS_TO_DO
     body_text = ttd["intro_lede"]
@@ -2181,7 +2176,7 @@ def emit_things_to_do(is_single_hotel: bool) -> Tuple[str, str]:
     return ("things-to-do", "Things to do"), section_html
 
 
-def emit_weather() -> Tuple[str, str]:
+def emit_weather() -> Tuple[Tuple[str, str], str]:
     w = WEATHER
     body_text = w["intro_lede"] + w["season_notes"]
     out = [f'<p class="lede">{esc(w["intro_lede"])}</p>']
@@ -2211,7 +2206,7 @@ def emit_weather() -> Tuple[str, str]:
     return ("weather", "Weather"), section_html
 
 
-def emit_history() -> Tuple[str, str]:
+def emit_history() -> Tuple[Tuple[str, str], str]:
     h = HISTORY
     body_text = h["intro_lede"]
     out = [f'<p class="lede">{esc(h["intro_lede"])}</p>']
@@ -2255,7 +2250,7 @@ def emit_history() -> Tuple[str, str]:
     return ("history", "History"), section_html
 
 
-def emit_fun_facts() -> Tuple[str, str]:
+def emit_fun_facts() -> Tuple[Tuple[str, str], str]:
     ff = FUN_FACTS
     body_text = ff["intro_lede"]
     out = [f'<p class="lede">{esc(ff["intro_lede"])}</p>']
@@ -2297,7 +2292,7 @@ def emit_fun_facts() -> Tuple[str, str]:
     return ("fun-facts", "Fun facts & tips"), section_html
 
 
-def emit_food() -> Tuple[str, str]:
+def emit_food() -> Tuple[Tuple[str, str], str]:
     fd = FOOD
     body_text = fd["intro_lede"]
     out = [f'<p class="lede">{esc(fd["intro_lede"])}</p>']
@@ -2353,7 +2348,7 @@ def emit_food() -> Tuple[str, str]:
     return ("food", "Food"), section_html
 
 
-def emit_beer() -> Tuple[str, str]:
+def emit_beer() -> Tuple[Tuple[str, str], str]:
     """Themed bonus section — beer + breweries grouped by city."""
     b = BEER
     body_text = b["intro_lede"]
@@ -2391,7 +2386,7 @@ def emit_beer() -> Tuple[str, str]:
     return ("beer", "Beer & breweries"), section_html
 
 
-def emit_sources() -> Tuple[str, str]:
+def emit_sources() -> Tuple[Tuple[str, str], str]:
     body_text = "Sources and further reading"
     out = [f'<p class="lede">Books, podcasts, films, and people whose work informed this guide. Every entry links to its canonical source.</p>']
     for grp in BIBLIOGRAPHY:
