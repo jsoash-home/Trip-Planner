@@ -12,3 +12,5 @@ __pycache__/
 data/
 data/guides/
 .superpowers/
+.claude/settings.json
+.claude/settings.local.json
