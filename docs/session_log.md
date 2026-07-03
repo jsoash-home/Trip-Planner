@@ -1,5 +1,60 @@
 # Session Log
 
+## 2026-07-03 — Trip guide #5 (Tettegouche → Mishawaka) + Claude settings split
+
+**Shipped:**
+- Generated Souvenir-grade trip guide for trip #5 (Tettegouche → Michigan → 3SSB Session II).
+  22,811 words / 221KB, 12 core sections + 3 themed bonuses (beer, hoops_culture,
+  photography) + life_list closing. Palette "Basalt & Hardwood" (#d68949 rim-amber
+  + #4b7d99 Lake Superior blue). Archetype `mixed_leisure`, depth `souvenir_grade`.
+  Geocoded 24 venues via Mapbox, 25 walkchips rendered. 98 practical-link tags,
+  14-entry annotated bibliography. Static + browser verification passed (0 JS
+  errors; TOC scroll-spy, mode toggle, field-guide filter all interactive).
+- Minted public share token `554b66b1-db56-4bc4-a0fb-4288b3e5ebc9`.
+- Split `.claude/settings.json` → global `~/.claude/settings.json` (broadly useful:
+  curl `-o /dev/null`, lsof, 7 Claude_Preview MCP tools) + project
+  `.claude/settings.local.json` (5 sqlite3 vacation.db wildcards). Deleted the
+  committed `settings.json`; added both `.claude/settings*.json` to `.gitignore`.
+- `007d7a2 chore:` ignore `.claude/settings*.json`.
+
+**Test status:** 1010 passing / 0 failing (2.42s)
+
+**Stopped at:** Guide #5 complete + verified. Session cleanup. Two open follow-ups
+surfaced during composition: (1) Canton MI hotel row lacks vendor/address in DB;
+guide renders city as placeholder. (2) `field_guide` is North-Shore-heavy — the
+Notre Dame / Mishawaka / Canton MI stops have no fauna entries, violating the
+Deep+ per-stop wildlife minimum in the SKILL.
+
+**Pick up next with:** Either (a) fill Canton MI hotel details in the Vacation
+Planner UI then regenerate #5 via "same sections" path (composer will pick up
+the new booking data via `load_trip_data`); or (b) enrich the field_guide entry
+set with Midwest fauna. The composer lives at
+`scratchpad/compose_guide.py` — for future re-runs consider promoting to
+`scripts/<date>_compose_trip5.py` per the trip #2 pattern.
+
+**Kickoff prompt for next session:**
+
+> Regenerate trip guide #5 for the Vacation Planner project after updating the
+> Canton MI hotel booking with a real vendor + address. The composer is at
+> `/private/tmp/claude-501/-Users-jeff-s-Projects-Vacation-Planner/*/scratchpad/compose_guide.py`
+> — but that scratchpad path won't survive session boundaries, so promote it to
+> `scripts/2026-07-03_compose_trip5.py` first, then update the Canton MI row via
+> the UI (or SQL), then run the composer. Config is already saved at
+> `data/guides/5.config.json` (souvenir-grade, mixed_leisure archetype).
+> Also worth doing: enrich `FIELD_ENTRIES` in the composer with 3–5 South-Bend
+> or Mishawaka fauna entries (peregrine at Hesburgh Library is documented) to
+> meet the SKILL's per-stop wildlife minimum at Deep+ tier.
+> Tests green at 1010 as of session close.
+
+**Loose ends:**
+- Canton MI hotel row missing vendor/address (Booking id=45); regenerate to pick up.
+- `field_guide` fauna coverage is North-Shore-only; South Bend / Mishawaka stops
+  need 3–5 entries each per SKILL's per-stop wildlife minimum at Deep+ tier.
+- `scratchpad/compose_guide.py` lives outside the repo; promote to `scripts/`
+  before the next regen session or the file will vanish.
+- `.claude/settings.local.json` now at 357 entries; a future
+  permission-prompt-review pass could tighten wildcards.
+
 ## 2026-06-29 — Phase 2a eyeball validation + one-line underline-contrast fix
 
 **Shipped:**
