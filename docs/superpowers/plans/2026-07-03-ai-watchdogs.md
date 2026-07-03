@@ -196,11 +196,11 @@ The body (system prompt) covers three things:
 
 **Steps:**
 
-- [ ] Write the script per behavior above
-- [ ] `chmod +x ~/.claude/hooks/sherlock.sh`
-- [ ] Quick sanity: `echo '{}' | ~/.claude/hooks/sherlock.sh` → exit 0, no stderr (no code touched — short-circuits before API call).
-- [ ] `touch ~/.claude/watchdogs.disabled && echo '{}' | ~/.claude/hooks/sherlock.sh; rm ~/.claude/watchdogs.disabled` → exit 0, no stderr (kill-switch).
-- [ ] Check `- [x]` and commit the plan progress.
+- [x] Write the script per behavior above
+- [x] `chmod +x ~/.claude/hooks/sherlock.sh`
+- [x] Quick sanity: `echo '{}' | ~/.claude/hooks/sherlock.sh` → exit 0, no stderr (no code touched — short-circuits before API call).
+- [x] `touch ~/.claude/watchdogs.disabled && echo '{}' | ~/.claude/hooks/sherlock.sh; rm ~/.claude/watchdogs.disabled` → exit 0, no stderr (kill-switch).
+- [x] Check `- [x]` and commit the plan progress.
 
 ---
 
