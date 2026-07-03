@@ -34,6 +34,7 @@ history" for the full rationale.
 | Verifier mechanism | Custom `Stop` hook that spawns an LLM subagent | Deterministic grep (can't judge whether a claim was verified); skill-only (skill is opt-in and gets skipped) |
 | Location | Global `~/.claude/` — always on, every project | Project-scoped |
 | Voice / messaging | Claude Code's generic "permission denied" for deny rules; persona-flavored message for Verifier's LLM output | Custom persona voice for all three (not worth the code) |
+| Per-session toggle | Marker file (`~/.claude/watchdogs.disabled`) for Verifier only; no toggle for deny rules | Marker check for all three (would require converting deny rules to hooks — undoes the simplification); no toggle at all (leaves Verifier hard to skip on refactor-heavy sessions) |
 
 ## Mechanism 1 — DB Guardian (deny rules)
 
@@ -127,10 +128,13 @@ Registered in `~/.claude/settings.json` under `hooks.Stop`:
 
 1. `verifier.sh` receives JSON on stdin with (at minimum) the transcript
    of the finishing turn. Confirms via schema check when we build it.
-2. Short-circuit: if the turn had no code edits (no `Edit`, `Write`, or
+2. **Kill-switch check.** If `~/.claude/watchdogs.disabled` exists, exit
+   `0` immediately. Lets you skip verification for a session or task
+   without editing config. Toggle via `touch` / `rm`.
+3. Short-circuit: if the turn had no code edits (no `Edit`, `Write`, or
    code-relevant `Bash` calls), exit `0` silently. Pure conversation turns
    cost zero.
-3. If the turn DID touch code, spawn a Haiku 4.5 subagent (via
+4. If the turn DID touch code, spawn a Haiku 4.5 subagent (via
    `~/.claude/agents/verifier.md`) with:
    - My final assistant message
    - A summary of tool calls made this turn (types + counts, not full
@@ -140,7 +144,7 @@ Registered in `~/.claude/settings.json` under `hooks.Stop`:
      it actually ran? Evidence means calling a `preview_*` tool,
      `curl`ing the local dev server, or reading test output. Answer
      JSON: `{claimed_done: bool, has_evidence: bool, message: string}`."
-4. If `claimed_done && !has_evidence`, exit `2` with the subagent's
+5. If `claimed_done && !has_evidence`, exit `2` with the subagent's
    `message` on stderr. That injects the finding into my context; I
    have to address it in the next turn (auto-fix: actually run the
    check; or explain if the finding is a false positive).
@@ -200,6 +204,25 @@ confirm it goes through.
 The subagent call itself is not unit-tested — it's an LLM. But the shell
 wrapper's short-circuit logic, JSON parsing, and exit-code discipline
 absolutely are.
+
+## Disabling and toggling
+
+**Permanent disable** (any of the three): edit `~/.claude/settings.json`.
+Delete the relevant deny rule(s), or remove the Stop-hook registration
+for Verifier. ~30 seconds. Reversible by re-adding.
+
+**Per-session or per-task disable for Verifier**: `touch ~/.claude/watchdogs.disabled`
+before the task, `rm ~/.claude/watchdogs.disabled` after. The Verifier
+script checks for the marker at the top and exits `0` if it exists.
+
+**Per-session disable for DB Guardian or Consent Cop**: not supported by
+design. Deny rules are declarative — either present in `settings.json` or
+not. If you truly need to bypass one, edit the file and restart Claude Code.
+The friction is intentional: these two mechanisms only block *destructive*
+operations, and the everyday flows (reading DBs, running the app, normal
+git commits and pushes) are unaffected. Legitimate cases where you'd want
+to bypass — a schema migration, an intentional force-push — are rare and
+better done from your own terminal (where hooks don't fire) anyway.
 
 ## Non-goals
 
