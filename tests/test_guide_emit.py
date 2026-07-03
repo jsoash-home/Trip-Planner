@@ -309,6 +309,21 @@ def test_emit_hero_escapes_user_supplied_strings():
     assert "<script>alert(1)" not in out
 
 
+def test_emit_hero_sources_note_renders_verbatim_when_present():
+    tm = _trip_meta()
+    tm["sources_note"] = "Drawn from <i>Nordic History</i> Vol. 1."
+    out = emit_hero(tm, "nordlys")
+    assert 'class="sources-note"' in out
+    assert "Drawn from <i>Nordic History</i> Vol. 1." in out
+
+
+def test_emit_hero_sources_note_absent_omits_details_block():
+    tm = _trip_meta()
+    tm.pop("sources_note", None)
+    out = emit_hero(tm, "nordlys")
+    assert 'class="sources-note"' not in out
+
+
 # ── emit_toc ────────────────────────────────────────────────────────────────
 
 def test_emit_toc_produces_anchor_per_slug():
@@ -321,6 +336,12 @@ def test_emit_toc_produces_anchor_per_slug():
 def test_emit_toc_escapes_label():
     out = emit_toc([("x", "<b>bad</b>")])
     assert "&lt;b&gt;bad&lt;/b&gt;" in out
+
+
+def test_emit_toc_empty_slugs_renders_aside_with_no_anchors():
+    out = emit_toc([])
+    assert 'class="vp-toc"' in out
+    assert "<a " not in out
 
 
 # ── emit_go_deeper ──────────────────────────────────────────────────────────
@@ -343,6 +364,19 @@ def test_emit_go_deeper_n_cards_produce_n_articles():
     assert 'href="https://a.example"' in out
     assert 'href="https://b.example"' in out
     assert 'href="https://c.example"' in out
+
+
+def test_emit_go_deeper_escapes_card_fields():
+    cards = [{
+        "kind": "Book",
+        "title": "<b>Bad</b>",
+        "url": "https://x.example/?q=1&r=2",
+        "annotation": 'say "hi"',
+    }]
+    out = emit_go_deeper(cards)
+    assert "&lt;b&gt;Bad&lt;/b&gt;" in out
+    assert "&quot;hi&quot;" in out
+    assert "https://x.example/?q=1&amp;r=2" in out
 
 
 # ── emit_section_wrapper ────────────────────────────────────────────────────

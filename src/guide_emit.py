@@ -117,8 +117,8 @@ def emit_walking_chip(
 
 def emit_css(palette: Dict[str, Any], eras: List[Dict[str, str]]) -> str:
     """Return the full CSS block for the guide, parameterised by palette + eras."""
-    c = palette["colors"]
-    f = palette["fonts"]
+    colors = palette["colors"]
+    fonts = palette["fonts"]
     era_css = "\n".join(f'  --era-{e["slug"]}: {e["hex"]};' for e in eras)
     era_class_css = "\n".join(
         f'.era-{e["slug"]} {{ --era: var(--era-{e["slug"]}); }}'
@@ -126,20 +126,20 @@ def emit_css(palette: Dict[str, Any], eras: List[Dict[str, str]]) -> str:
     )
     return f"""
 :root {{
-  --bg: {c["bg"]};
-  --surface: {c["surface"]};
-  --ink: {c["ink"]};
-  --ink-soft: {c["ink_soft"]};
-  --ink-display: {c["ink_display"]};
-  --accent: {c["accent"]};
-  --accent-2: {c["accent_2"]};
-  --muted: {c["muted"]};
-  --hairline: {c["hairline"]};
-  --warning: {c["warning"]};
+  --bg: {colors["bg"]};
+  --surface: {colors["surface"]};
+  --ink: {colors["ink"]};
+  --ink-soft: {colors["ink_soft"]};
+  --ink-display: {colors["ink_display"]};
+  --accent: {colors["accent"]};
+  --accent-2: {colors["accent_2"]};
+  --muted: {colors["muted"]};
+  --hairline: {colors["hairline"]};
+  --warning: {colors["warning"]};
 {era_css}
-  --font-display: '{f["display"]}', Georgia, serif;
-  --font-body:    '{f["body"]}', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono:    '{f["mono"]}', SFMono-Regular, Consolas, monospace;
+  --font-display: '{fonts["display"]}', Georgia, serif;
+  --font-body:    '{fonts["body"]}', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    '{fonts["mono"]}', SFMono-Regular, Consolas, monospace;
   --font-sans:    var(--font-body);
   --font-serif:   var(--font-display);
 }}
@@ -684,7 +684,6 @@ details.sources-note p {{ margin: 12px 0 0 0; color: var(--ink); }}
   font-size: 0.92em; color: var(--ink-soft);
   font-style: italic;
 }}
-.era-class-defs {{ /* placeholder for era class lookups */ }}
 {era_class_css}
 
 .date-chip {{
@@ -1045,6 +1044,9 @@ def emit_hero(trip_meta: Dict[str, Any], palette_name: str) -> str:
     `palette_name` surfaces in the "Trip guide · {name}" eyebrow.
     `trip_meta["route_svg"]` (optional) is inserted verbatim into the hero.
     Absent → no SVG element in the hero.
+    `trip_meta["sources_note"]` (optional) is inserted verbatim — caller is
+    responsible for supplying safe HTML (may contain <i>, <a>, &lsquo;, etc.).
+    Absent or empty → no sources block.
     """
     start = trip_meta["start_date"]
     end = trip_meta["end_date"]
@@ -1082,7 +1084,7 @@ def emit_hero(trip_meta: Dict[str, Any], palette_name: str) -> str:
 
 
 def emit_toc(slugs: List[Tuple[str, str]]) -> str:
-    """slugs = [(slug, label), ...]."""
+    """Return an `<aside class="vp-toc">` nav block with one anchor per (slug, label) pair."""
     items = "\n".join(
         f'    <a href="#{slug}">{esc(label)}</a>'
         for slug, label in slugs
