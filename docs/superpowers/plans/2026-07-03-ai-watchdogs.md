@@ -223,11 +223,11 @@ The body (system prompt) covers three things:
 
 **Steps:**
 
-- [ ] Check whether `hooks.Stop` exists in settings.json: `jq .hooks.Stop ~/.claude/settings.json`. If `null`, add the whole array. If existing, append the hook object to the first matcher.
-- [ ] Add the entry with `jq`. Concrete command: `jq '.hooks.Stop = ((.hooks.Stop // []) + [{"matcher":"","hooks":[{"type":"command","command":"~/.claude/hooks/sherlock.sh"}]}])' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json`.
-- [ ] Validate: `jq . ~/.claude/settings.json > /dev/null` succeeds.
-- [ ] Restart Claude Code for the new hook to load. In a fresh session: verify no errors on startup (Claude Code will complain loudly if the hook config is malformed).
-- [ ] Check `- [x]` and commit the plan progress.
+- [x] Check whether `hooks.Stop` exists in settings.json: `jq .hooks.Stop ~/.claude/settings.json`. If `null`, add the whole array. If existing, append the hook object to the first matcher.
+- [x] Add the entry with `jq`. Concrete command: `jq '.hooks.Stop = ((.hooks.Stop // []) + [{"matcher":"","hooks":[{"type":"command","command":"~/.claude/hooks/sherlock.sh"}]}])' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json`.
+- [x] Validate: `jq . ~/.claude/settings.json > /dev/null` succeeds.
+- [x] Restart Claude Code for the new hook to load. In a fresh session: verify no errors on startup (Claude Code will complain loudly if the hook config is malformed).
+- [x] Check `- [x]` and commit the plan progress.
 
 ---
 
