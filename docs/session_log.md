@@ -1,5 +1,29 @@
 # Session Log
 
+## 2026-07-04 — AI Watchdogs: Cerberus + Sarge shipped, Sherlock deferred
+
+**Shipped:**
+- Cerberus DB Guardian — 5 deny rules in `~/.claude/settings.json` (blocks writes to `*.db`, `*.sqlite`, `*.sqlite3`)
+- Sarge Consent Cop — 12 deny rules (blocks `rm -rf`, `git push --force`, `git reset --hard`, `--no-verify`, etc.)
+- Sherlock Verifier — full POSIX shell wrapper + subagent definition + 7 passing tests on disk under `~/.claude/`, Stop hook unregistered to avoid Anthropic API cost
+- Design spec (bba5ad3, 93e8e16, 59f6640) and implementation plan (1012303, 27a927e) committed on main and pushed
+- Aborted a stalled merge from `phase-2c-two-track-compose` into main that was left with a conflict on the watchdogs spec
+
+**Test status:** 1010 passing / 0 failing (2.5s)
+
+**Stopped at:** Cerberus + Sarge are configured but haven't been smoke-tested in a live session — Claude Code caches `permissions.deny` at session start, so a restart is required before rules take effect. Sherlock is intentionally paused pending decision on whether to fund the Anthropic API key spend (~$1–5/month at typical usage).
+
+**Pick up next with:** Restart Claude Code (Cmd-Q → relaunch), then verify Cerberus blocks a write to `/tmp/vacation.db`. Full Task 8 checklist is in the plan.
+
+**Kickoff prompt for next session:**
+
+> Verify AI watchdogs Cerberus + Sarge fire correctly after Claude Code restart. First: ask Claude Code to write "test" to `/tmp/vacation.db` — expect permission denied. Then write "test" to `/tmp/other.txt` — expect allowed. Then in `/tmp/smoke-test` (create as a git repo), try `git push --force origin main` — expect denied. Full Task 8 checklist is in `docs/superpowers/plans/2026-07-03-ai-watchdogs.md`. If any block fails, check `jq .permissions.deny ~/.claude/settings.json` to confirm the rules are still there.
+
+**Loose ends:**
+- Sherlock is built but disabled. Files at `~/.claude/hooks/sherlock.sh`, `~/.claude/agents/sherlock.md`, `~/.claude/hooks/tests/`. Re-enable command in the plan's "Current status" section. Requires `ANTHROPIC_API_KEY` in shell profile before it can actually make LLM calls.
+- `.claude/worktrees/` shows as untracked in `git status` — consider adding to `.gitignore` since worktree dirs are session-specific and ephemeral.
+- `phase-2c-two-track-compose` branch still has in-progress trip-guide phase-2c work. The merge into main was aborted this session; branch and commits are untouched. Merge when ready.
+
 ## 2026-07-03 — Trip guide #5 (Tettegouche → Mishawaka) + Claude settings split
 
 **Shipped:**
