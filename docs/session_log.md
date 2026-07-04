@@ -1,5 +1,30 @@
 # Session Log
 
+## 2026-07-04 — Trip guide Phase 2c: two-track compose refactor shipped to branch
+
+**Shipped:**
+- `src/guide_emit.py` — 1,032 LOC, 14 pure emit helpers extracted from the trip-2 compose script (esc/emit_h2/emit_practical_link/emit_walking_chip/emit_css/emit_js/emit_hero/emit_toc/emit_go_deeper/emit_section_wrapper etc.)
+- `tests/test_guide_emit.py` — 43 unit tests, all pass
+- `scripts/2026-06-27_compose_trip2.py` → `compose/trip_2.py` — retrofitted to import from `src.guide_emit`, per-section emitters return `((slug, label), html_str)` tuples, `compose()` unpacks them
+- SKILL.md Step 7 rewritten to teach the two-track pattern; composer-file-conventions subsection added; cross-refs added in Walking-distance chips + Practical hyperlinks sections
+- All 6 audit counts preserved exactly through the retrofit (145 practical-link / 53 walkchip / 1 date-chip / 6 go-deeper / 2 data-check-note / 6 era-chip); body word count identical (14,951); zero JS console errors in headless-chrome check
+- 8 commits on branch `phase-2c-two-track-compose`, pushed to `origin/phase-2c-two-track-compose`
+
+**Test status:** 1010 passing / 0 failing on main (unchanged). Phase-2c branch: 1053 passing (+43 new).
+
+**Stopped at:** merge into main was attempted and hit an add/add conflict on `docs/superpowers/specs/2026-07-03-ai-watchdogs-design.md` — an accidental `docs(watchdogs)` commit (`53e6946`) leaked onto the phase-2c branch during parallel watchdog work and now duplicates main's more-iterated version. Merge was aborted. Branch is intact remotely; ready to merge cleanly after that duplicate commit is dropped.
+
+**Pick up next with:** Rebase `phase-2c-two-track-compose` interactively to drop commit `53e6946` (the stale watchdogs spec), then merge to main. `git rebase --onto ef85eba 53e6946 phase-2c-two-track-compose` for a targeted drop, verify `python -m compose.trip_2` still passes the audit-count gate, then `git merge --no-ff phase-2c-two-track-compose`.
+
+**Kickoff prompt for next session:**
+
+> Merge branch `phase-2c-two-track-compose` into main. First drop commit `53e6946 docs(watchdogs): design spec for 10 AI watchdog personas` from the branch — it's a stale duplicate of what's already on main and caused the last merge to conflict. Recommended: `git rebase --onto ef85eba 53e6946 phase-2c-two-track-compose`. Then verify `.venv/bin/python -m compose.trip_2` still prints practical-link=145, walkchip=53, date-chip=1, go-deeper=6, data-check-note=2, era-chip=6. Full test suite should be 1053 passing on the branch. Then `git merge --no-ff phase-2c-two-track-compose` on main. Design spec: `docs/superpowers/specs/2026-07-03-trip-guide-phase2c-design.md`. Plan: `docs/superpowers/plans/2026-07-03-trip-guide-phase2c.md`. Branch is at `origin/phase-2c-two-track-compose`.
+
+**Loose ends:**
+- Worktree at `.claude/worktrees/phase-2c-cleanup/` still exists — remove with `git worktree remove .claude/worktrees/phase-2c-cleanup` before or after the merge.
+- Phase-2c plan file (`docs/superpowers/plans/2026-07-03-trip-guide-phase2c.md`) has an "Audit reference block" filled in on the branch (commit `ef85eba`) but blank on main — the fill-in will land with the merge.
+- No Phase 2c PR opened yet. GitHub link surfaces after push: https://github.com/jsoash-home/Trip-Planner/pull/new/phase-2c-two-track-compose
+
 ## 2026-07-04 — AI Watchdogs: Cerberus + Sarge shipped, Sherlock deferred
 
 **Shipped:**
