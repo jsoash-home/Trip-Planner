@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Current status (2026-07-04)
+
+- **Cerberus + Sarge: SHIPPED and active.** 17 `permissions.deny` entries live in `~/.claude/settings.json`.
+- **Sherlock: BUILT but DEFERRED.** The Stop hook was registered (Task 6) then explicitly unregistered by Jeff on 2026-07-04 to avoid the per-turn Anthropic API cost (~$1-5/month) while he decides whether to ship LLM-based verification. The files (`sherlock.sh`, `sherlock.md`, `test_sherlock.sh`, fixtures, `fake-curl.sh`) all remain on disk under `~/.claude/hooks/` and `~/.claude/agents/`. Tests still pass. To re-enable: `jq '.hooks.Stop = [{"matcher":"","hooks":[{"type":"command","command":"~/.claude/hooks/sherlock.sh"}]}]' ~/.claude/settings.json > /tmp/settings.new && mv /tmp/settings.new ~/.claude/settings.json`, then set `ANTHROPIC_API_KEY` in your shell profile.
+- **Task 8 (smoke test):** now scoped to Cerberus + Sarge only. Sherlock's live-session tests moved to a follow-up if/when Sherlock is re-enabled.
+
 **Goal:** Ship three enforcement mechanisms — Cerberus (DB Guardian deny rules), Sarge (Consent Cop deny rules), and Sherlock (Verifier Stop hook) — into `~/.claude/` so every future Claude Code session gets automatic protection against DB writes, destructive commands, and unverified completion claims.
 
 **Architecture:** Cerberus and Sarge are `permissions.deny` entries in `~/.claude/settings.json` — declarative, zero runtime, no shell scripting. Sherlock is a small POSIX shell wrapper (`~/.claude/hooks/sherlock.sh`) invoked on the `Stop` hook event; it checks a kill-switch marker, short-circuits pure-conversation turns, and calls the Anthropic Messages API directly via `curl` with a system prompt loaded from `~/.claude/agents/sherlock.md`. Direct API is chosen over `claude -p --agent` to avoid CLI-recursion and auth-mode uncertainty.
