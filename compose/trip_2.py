@@ -6,20 +6,17 @@ multi-hotel things_to_do skip, transit-day skip.
 Author: Claude Code session 2026-06-27
 """
 
-import html as html_mod
 import logging
-import math
 import os
-import re
 import sys
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger("compose_trip2")
 
-PROJECT_ROOT = Path("/Users/jeff_s/Projects/Vacation Planner")
+PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 if not os.environ.get("MAPBOX_TOKEN"):
@@ -38,6 +35,11 @@ from src.data_check import find_hotel_night_gaps, HotelNightGap
 from src.geocoding import geocode_with_cache
 from src.place_links import maps_url, practical_link
 from src.walking_distance import walking_chip
+from src.guide_emit import (
+    esc, emit_h2, emit_practical_link, emit_walking_chip, category_color,
+    emit_css, emit_js, emit_hero, emit_toc, emit_go_deeper,
+    emit_section_wrapper,
+)
 
 TRIP_ID = 2
 MAPBOX_TOKEN = os.environ.get("MAPBOX_TOKEN", "").strip()
@@ -207,11 +209,6 @@ def geocode_all_venues() -> Tuple[Dict[str, Tuple[float, float]], Dict[str, Opti
     return coords, relevance
 
 
-# venue lookup helper, dual-citified: tries multiple keys
-def venue_xy(coords: Dict[str, Tuple[float, float]], name: str) -> Optional[Tuple[float, float]]:
-    return coords.get(name.lower())
-
-
 # ============================================================================
 # HOTELS
 # ============================================================================
@@ -276,6 +273,34 @@ def resolve_hotel_for_night(hotels: List[Dict], target: date) -> Optional[Dict]:
 # TRIP META
 # ============================================================================
 
+ROUTE_SVG = """
+<svg class="route-svg" viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Route: Oslo via Svalbard to Helsinki, Tallinn, Stockholm, Copenhagen">
+  <line x1="40" y1="50" x2="120" y2="20" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="120" y1="20" x2="200" y2="40" stroke="var(--accent)" stroke-width="1"/>
+  <line x1="200" y1="40" x2="280" y2="50" stroke="var(--accent)" stroke-width="1"/>
+  <line x1="280" y1="50" x2="360" y2="50" stroke="var(--accent)" stroke-width="1"/>
+  <line x1="360" y1="50" x2="440" y2="50" stroke="var(--accent)" stroke-width="1"/>
+  <line x1="440" y1="50" x2="520" y2="60" stroke="var(--accent)" stroke-width="1"/>
+  <line x1="520" y1="60" x2="560" y2="60" stroke="var(--accent)" stroke-width="1"/>
+  <circle cx="40" cy="50" r="5" fill="var(--accent)"/>
+  <circle cx="120" cy="20" r="7" fill="var(--accent-2)" stroke="var(--accent)" stroke-width="2"/>
+  <circle cx="200" cy="40" r="4" fill="var(--accent)"/>
+  <circle cx="280" cy="50" r="4" fill="var(--accent)"/>
+  <circle cx="360" cy="50" r="4" fill="var(--accent)"/>
+  <circle cx="440" cy="50" r="4" fill="var(--accent)"/>
+  <circle cx="520" cy="60" r="4" fill="var(--accent)"/>
+  <circle cx="560" cy="60" r="4" fill="var(--accent)"/>
+  <text x="40" y="72" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Oslo</text>
+  <text x="120" y="14" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Svalbard</text>
+  <text x="200" y="32" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Tromsø</text>
+  <text x="280" y="42" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Lofoten</text>
+  <text x="360" y="42" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Bergen</text>
+  <text x="440" y="42" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Helsinki</text>
+  <text x="520" y="52" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Tallinn/Stockholm</text>
+  <text x="560" y="72" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Cph</text>
+</svg>
+"""
+
 TRIP_META = {
     "title": "Scandinavia '26",
     "subtitle": ("Twenty-three days from Oslo to Copenhagen by way of Svalbard, "
@@ -288,6 +313,12 @@ TRIP_META = {
     "countries": ["Norway", "Finland", "Estonia", "Sweden", "Denmark"],
     "share_token": "1f1ad0d2-0c8a-4dfd-83cf-bfd5e8a7e7e0",  # filled at end
 }
+# Populate TRIP_META with all fields emit_hero now expects (was hard-coded in old emit_hero)
+TRIP_META["nights"] = 22
+TRIP_META["countries_count"] = 5
+TRIP_META["bookings_count"] = 27
+TRIP_META["route_svg"] = ROUTE_SVG
+# SOURCES_NOTE is defined later in this file; assigned to TRIP_META after its def
 
 
 # ============================================================================
@@ -1877,6 +1908,7 @@ SOURCES_NOTE = ("Sources for this guide. Norwegian history draws on Hans Sigurd 
                 "yr.no (Norwegian Met Office), fetched 2026-06-27. Opinion is marked in "
                 "the prose; sources for individual claims are linked in the &lsquo;Sources "
                 "&amp; further reading&rsquo; section at the foot.")
+TRIP_META["sources_note"] = SOURCES_NOTE
 
 GO_DEEPER = {
     # Per-section 4-card asides at Deep tier
@@ -1969,1105 +2001,13 @@ BIBLIOGRAPHY = [
 
 
 # ============================================================================
-# HELPERS
+# COMPOSE — emit each section  (helpers now imported from src.guide_emit)
 # ============================================================================
-
-def esc(s: str) -> str:
-    return html_mod.escape(s, quote=True)
-
-
-def reading_time(text: str) -> int:
-    """Words / 220 wpm, ceil. Strip HTML tags first."""
-    plain = re.sub(r'<[^>]+>', '', text)
-    words = len(plain.split())
-    return max(1, math.ceil(words / 220))
-
-
-def permalink(slug: str, label: str) -> str:
-    return (f'<a class="permalink" href="#{slug}" '
-            f'aria-label="Permalink to {esc(label)}">¶</a>')
-
-
-def reading_time_chip(text: str, slug_label: str) -> str:
-    m = reading_time(text)
-    return f'<span class="reading-time">{m} min · {esc(slug_label)}</span>'
-
-
-def emit_h2(slug: str, label: str, slug_label: str, body_text: str) -> str:
-    rt = reading_time_chip(body_text, slug_label)
-    pl = permalink(slug, label)
-    return f'<h2 id="{slug}">{esc(label)}{rt}{pl}</h2>'
-
-
-def emit_practical_link(name: str, city: str, full_text: Optional[str] = None) -> str:
-    """Wrap a venue name in <a class="practical-link"> linking to Google Maps."""
-    text = full_text or name
-    url = maps_url(name, city)
-    return (f'<a class="practical-link" href="{esc(url)}" '
-            f'rel="noopener" target="_blank">{esc(text)}</a>')
-
-
-def emit_walking_chip_for_card(card: Dict, hotel: Optional[Dict],
-                                venue_coords: Dict[str, Tuple[float, float]],
-                                venue_relevance: Dict[str, Optional[float]]) -> str:
-    """Emit a walkchip if both venue and hotel resolve; else ''.
-
-    Skips when venue_relevance is known and below the default 0.7 threshold —
-    those are usually Mapbox city-centroid fallbacks where the distance would
-    be misleading.
-    """
-    venue_key = card.get("venue_key")
-    if not venue_key or not hotel or not hotel.get("lat"):
-        return ""
-    vc = venue_xy(venue_coords, venue_key)
-    if not vc:
-        return ""
-    return walking_chip(
-        venue_coords=vc,
-        hotel_coords=(hotel["lat"], hotel["lng"]),
-        hotel_name=hotel["title"],
-        venue_confidence=venue_relevance.get(venue_key.lower()),
-    )
-
-
-def category_color(cat: str) -> str:
-    """Map itinerary category to a tag color CSS class."""
-    return {
-        "transit": "transit",
-        "meal": "meal",
-        "sightseeing": "sight",
-        "other": "other",
-    }.get(cat, "other")
-
-
-# ============================================================================
-# CSS GENERATION
-# ============================================================================
-
-def emit_css() -> str:
-    c = PALETTE["colors"]
-    f = PALETTE["fonts"]
-    era_css = "\n".join(f'  --era-{e["slug"]}: {e["hex"]};' for e in ERAS)
-    era_class_css = "\n".join(
-        f'.era-{e["slug"]} {{ --era: var(--era-{e["slug"]}); }}'
-        for e in ERAS
-    )
-    return f"""
-:root {{
-  --bg: {c["bg"]};
-  --surface: {c["surface"]};
-  --ink: {c["ink"]};
-  --ink-soft: {c["ink_soft"]};
-  --ink-display: {c["ink_display"]};
-  --accent: {c["accent"]};
-  --accent-2: {c["accent_2"]};
-  --muted: {c["muted"]};
-  --hairline: {c["hairline"]};
-  --warning: {c["warning"]};
-{era_css}
-  --font-display: '{f["display"]}', Georgia, serif;
-  --font-body:    '{f["body"]}', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono:    '{f["mono"]}', SFMono-Regular, Consolas, monospace;
-  --font-sans:    var(--font-body);
-  --font-serif:   var(--font-display);
-}}
-
-* {{ box-sizing: border-box; }}
-html {{ scroll-behavior: smooth; }}
-body {{
-  margin: 0; padding: 0;
-  background: var(--bg); color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 17px; line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-}}
-img, svg {{ max-width: 100%; }}
-a {{ color: var(--accent); }}
-
-/* Skip link */
-.skip-link {{
-  position: absolute; left: -9999px; top: 0;
-  background: var(--accent); color: var(--bg);
-  padding: 8px 12px; z-index: 999; text-decoration: none;
-  font-family: var(--font-mono); font-size: 0.85em;
-}}
-.skip-link:focus {{ left: 8px; top: 8px; }}
-
-/* Focus styles */
-*:focus-visible {{
-  outline: 2.5px solid var(--accent);
-  outline-offset: 3px;
-}}
-
-/* Top progress bar */
-#vp-progress {{
-  position: fixed; top: 0; left: 0; height: 3px; width: 0%;
-  background: var(--accent); z-index: 100;
-  transition: width 80ms linear;
-}}
-
-/* Top sticky nav bar */
-.topbar {{
-  position: sticky; top: 0; z-index: 50;
-  background: rgba(14, 19, 26, 0.92);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--hairline);
-  padding: 14px 24px;
-  display: flex; align-items: center; gap: 24px;
-  font-family: var(--font-mono); font-size: 0.78em;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--ink-soft);
-}}
-.topbar .crumb {{ color: var(--ink-soft); }}
-.topbar .crumb b {{ color: var(--ink); }}
-.topbar .spacer {{ flex: 1; }}
-
-.mode-toggle {{
-  display: inline-flex; gap: 0;
-  border: 1px solid var(--hairline); border-radius: 6px;
-  overflow: hidden;
-}}
-.mode-toggle button {{
-  background: transparent; color: var(--ink-soft);
-  border: 0; padding: 6px 12px;
-  font-family: var(--font-mono); font-size: 0.85em;
-  text-transform: uppercase; letter-spacing: 0.05em;
-  cursor: pointer;
-}}
-.mode-toggle button[aria-pressed="true"] {{
-  background: var(--accent); color: var(--bg);
-}}
-
-.print-btn {{
-  background: transparent; color: var(--ink-soft);
-  border: 1px solid var(--hairline); border-radius: 6px;
-  padding: 6px 12px; cursor: pointer;
-  font-family: var(--font-mono); font-size: 0.85em;
-  text-transform: uppercase; letter-spacing: 0.05em;
-}}
-.print-btn:hover {{ color: var(--ink); border-color: var(--accent); }}
-
-/* Hero */
-.hero {{
-  position: relative;
-  padding: 100px 24px 80px;
-  max-width: 1080px; margin: 0 auto;
-  border-bottom: 2px solid var(--accent);
-  overflow: hidden;
-}}
-.hero::before {{
-  content: "";
-  position: absolute; top: -200px; left: -150px;
-  width: 700px; height: 700px;
-  background: radial-gradient(circle, var(--accent) 0%, transparent 60%);
-  opacity: 0.10; z-index: 0;
-}}
-.hero::after {{
-  content: "";
-  position: absolute; bottom: -2px; left: 0; right: 0;
-  height: 1px; background: var(--accent-2);
-  opacity: 0.6;
-}}
-.hero > * {{ position: relative; z-index: 1; }}
-.hero .eyebrow {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  text-transform: uppercase; letter-spacing: 0.18em;
-  color: var(--accent); margin-bottom: 24px;
-}}
-.hero h1 {{
-  font-family: var(--font-display); color: var(--ink-display);
-  font-size: clamp(56px, 9vw, 110px); line-height: 0.96;
-  margin: 0 0 20px 0; letter-spacing: -0.02em;
-  font-weight: 600;
-}}
-.hero .narrator-dek {{
-  font-family: var(--font-display); font-style: italic;
-  font-size: 1.2em; color: var(--ink-soft);
-  margin: 0 0 28px 0; max-width: 56ch;
-}}
-.hero .subtitle {{
-  font-family: var(--font-body);
-  font-size: 1.15em; line-height: 1.55;
-  max-width: 62ch; color: var(--ink);
-  margin: 0 0 36px 0;
-}}
-.hero .meta-row {{
-  display: flex; flex-wrap: wrap; gap: 28px;
-  font-family: var(--font-mono); font-size: 0.85em;
-  color: var(--ink-soft);
-}}
-.hero .meta-row .meta b {{ color: var(--ink); margin-left: 4px; }}
-.hero .meta-row .meta {{
-  border-left: 2px solid var(--accent);
-  padding-left: 12px;
-  text-transform: uppercase; letter-spacing: 0.08em;
-}}
-
-/* Route SVG */
-.route-svg {{
-  margin: 36px 0 0 0;
-  width: 100%; height: auto;
-  max-height: 120px;
-}}
-
-/* Sticky TOC */
-.toc-wrap {{
-  max-width: 1080px; margin: 0 auto;
-  padding: 36px 24px;
-  display: grid; grid-template-columns: 220px 1fr;
-  gap: 60px;
-}}
-.vp-toc {{
-  position: sticky; top: 90px;
-  font-family: var(--font-mono); font-size: 0.82em;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  max-height: calc(100vh - 100px); overflow-y: auto;
-}}
-.vp-toc h3 {{
-  font-size: 0.95em; color: var(--ink-soft);
-  margin: 0 0 16px 0; text-transform: uppercase;
-  letter-spacing: 0.1em;
-}}
-.vp-toc a {{
-  display: block; padding: 6px 0;
-  color: var(--ink-soft); text-decoration: none;
-  border-left: 2px solid transparent; padding-left: 12px;
-  margin-left: -14px;
-}}
-.vp-toc a:hover {{ color: var(--ink); border-color: var(--hairline); }}
-.vp-toc a.active {{
-  color: var(--accent); font-weight: 600;
-  border-color: var(--accent);
-}}
-.vp-toc a.active::before {{ content: "▸ "; }}
-
-/* Main content */
-main {{ max-width: none; padding: 0; }}
-main section[id] {{
-  scroll-margin-top: 90px;
-  padding: 60px 0 80px;
-  border-bottom: 1px solid var(--hairline);
-}}
-main section[id]:last-child {{ border-bottom: none; }}
-
-/* Section register classes */
-.section--practical {{ font-family: var(--font-sans); max-width: 52ch; }}
-.section--practical p {{ margin: 0.6em 0; }}
-.section--practical ul {{ padding-left: 1.2em; }}
-.section--atmospheric {{ font-family: var(--font-serif); max-width: 62ch; }}
-.section--atmospheric p {{ margin: 1em 0; text-indent: 0; }}
-.section--atmospheric p + p {{ text-indent: 1.5em; }}
-
-/* Section headings */
-h2 {{
-  font-family: var(--font-display); color: var(--ink-display);
-  font-size: clamp(36px, 5vw, 56px); line-height: 1.05;
-  margin: 0 0 32px 0; font-weight: 600; letter-spacing: -0.01em;
-}}
-h3 {{
-  font-family: var(--font-display); color: var(--ink-display);
-  font-size: 1.7em; line-height: 1.2;
-  margin: 36px 0 16px 0; font-weight: 600;
-}}
-h4 {{
-  font-family: var(--font-display); color: var(--ink);
-  font-size: 1.3em; margin: 28px 0 12px 0;
-}}
-h5 {{
-  font-family: var(--font-body); color: var(--ink-display);
-  font-size: 1.05em; font-weight: 600;
-  margin: 0 0 6px 0;
-}}
-
-/* Reading-time chip */
-.reading-time {{
-  display: inline-block; font-family: var(--font-mono);
-  font-size: 0.6em; color: var(--ink-soft);
-  margin-left: 16px; padding: 3px 8px;
-  border: 1px solid var(--hairline); border-radius: 3px;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  vertical-align: middle;
-}}
-
-/* Permalink anchor */
-.permalink {{
-  opacity: 0; margin-left: 0.4em; color: var(--ink-soft);
-  text-decoration: none; transition: opacity 120ms;
-  font-size: 0.6em; vertical-align: middle;
-}}
-h2:hover .permalink, h3:hover .permalink {{ opacity: 0.6; }}
-.permalink:hover {{ opacity: 1 !important; color: var(--accent); }}
-
-/* Lede / .deep two-track */
-.lede {{
-  font-weight: 600;
-  font-size: 1.06em; line-height: 1.5;
-  margin: 0 0 1em 0;
-  color: var(--ink);
-}}
-.deep {{
-  font-size: 0.96em; line-height: 1.65;
-  color: var(--ink-soft);
-}}
-.deep p:first-child {{ margin-top: 0; }}
-
-/* Mode-toggle visibility rules */
-body[data-mode="skim"] .deep,
-body[data-mode="skim"] .dig-deeper,
-body[data-mode="skim"] .sidenote-content,
-body[data-mode="skim"] .endnotes {{ display: none; }}
-
-body[data-mode="standard"] .dig-deeper,
-body[data-mode="standard"] .sidenote-content {{ display: none; }}
-
-/* Section content wrappers */
-section .content-block {{ margin: 0 24px; }}
-@media (min-width: 760px) {{
-  section .content-block {{ margin: 0; }}
-}}
-
-/* Practical links */
-a.practical-link {{
-  color: var(--ink);
-  text-decoration-color: var(--ink-soft);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-  transition: color 120ms, text-decoration-color 120ms, text-decoration-thickness 120ms;
-}}
-a.practical-link:hover, a.practical-link:focus-visible {{
-  color: var(--accent);
-  text-decoration-color: var(--accent);
-  text-decoration-thickness: 2px;
-}}
-
-/* Sources note */
-details.sources-note {{
-  margin: 36px 0;
-  padding: 16px 20px;
-  background: var(--surface);
-  border-left: 3px solid var(--accent-2);
-  border-radius: 0 6px 6px 0;
-  font-size: 0.92em;
-}}
-details.sources-note summary {{
-  cursor: pointer; font-family: var(--font-mono);
-  text-transform: uppercase; letter-spacing: 0.08em;
-  font-size: 0.85em; color: var(--ink-soft);
-}}
-details.sources-note p {{ margin: 12px 0 0 0; color: var(--ink); }}
-
-/* Data check callout */
-.data-check {{
-  margin: 24px 0;
-  padding: 18px 22px;
-  background: rgba(224, 124, 91, 0.10);
-  border-left: 3px solid var(--warning);
-  border-radius: 0 6px 6px 0;
-  font-family: var(--font-body); font-size: 0.95em;
-}}
-.data-check .label {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  text-transform: uppercase; letter-spacing: 0.1em;
-  color: var(--warning); margin-bottom: 8px;
-}}
-
-/* Day-by-day */
-.daymark {{
-  margin: 60px 0 24px 0;
-  padding-top: 24px;
-  border-top: 1px dashed var(--hairline);
-}}
-.daymark:first-of-type {{ border-top: none; }}
-.daynum {{
-  font-family: var(--font-mono); font-size: 0.85em;
-  color: var(--accent); text-transform: uppercase;
-  letter-spacing: 0.12em; margin-bottom: 6px;
-}}
-.dayname {{
-  font-family: var(--font-display); color: var(--ink-display);
-  font-size: 2em; line-height: 1.1; margin: 0 0 4px 0;
-  font-weight: 600;
-}}
-.daymeta {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--ink-soft); margin: 0 0 24px 0;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}}
-.daymeta b {{ color: var(--accent); }}
-.dayintro {{
-  font-family: var(--font-display); font-size: 1.1em;
-  line-height: 1.55; max-width: 62ch;
-  margin: 0 0 12px 0; color: var(--ink);
-  font-style: italic;
-}}
-.dayintro-deep {{
-  font-size: 0.95em; line-height: 1.65;
-  max-width: 62ch; color: var(--ink-soft);
-  margin: 0 0 24px 0;
-}}
-
-/* Site cards */
-.site-card {{
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 18px 22px;
-  margin: 14px 0;
-  border-left: 3px solid var(--hairline);
-}}
-.site-card-head {{
-  display: flex; align-items: baseline; gap: 14px;
-  margin-bottom: 8px;
-}}
-.site-card h5 {{
-  margin: 0; flex: 1; font-size: 1.05em;
-}}
-.time-badge {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--accent); padding: 2px 8px;
-  border: 1px solid var(--accent);
-  border-radius: 3px;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  white-space: nowrap;
-}}
-.time-badge.transit {{ color: var(--accent-2); border-color: var(--accent-2); }}
-.time-badge.meal {{ color: var(--warning); border-color: var(--warning); }}
-.time-badge.other {{ color: var(--muted); border-color: var(--muted); }}
-.site-card p {{ margin: 6px 0; font-size: 0.96em; }}
-.site-card .opnote {{
-  margin: 10px 0 4px 0;
-  padding-left: 12px;
-  border-left: 2px solid var(--accent-2);
-  font-style: italic; color: var(--ink-soft);
-  font-size: 0.93em;
-}}
-
-/* Data-check callout — surfaces bookings-data inconsistencies (gap nights) */
-.data-check-note {{
-  margin: 14px 0 18px 0;
-  padding: 10px 14px;
-  background: rgba(212, 162, 76, 0.08);
-  border-left: 3px solid #d4a24c;
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-  color: var(--ink-soft);
-  border-radius: 0 4px 4px 0;
-}}
-.data-check-note::before {{
-  content: "⚠ Data check · ";
-  color: #d4a24c;
-  font-weight: 600;
-}}
-.site-card .tags {{
-  display: flex; flex-wrap: wrap; gap: 6px;
-  margin-top: 12px;
-}}
-.walkchip {{
-  display: inline-block;
-  font-family: var(--font-mono); font-size: 0.72em;
-  color: var(--ink-soft); background: var(--bg);
-  padding: 2px 8px; border-radius: 10px;
-  border: 1px solid var(--hairline);
-}}
-.travelpill {{
-  display: inline-block;
-  font-family: var(--font-mono); font-size: 0.72em;
-  color: var(--accent-2); background: var(--bg);
-  padding: 2px 8px; border-radius: 10px;
-  border: 1px solid var(--accent-2);
-}}
-.tag {{
-  display: inline-block;
-  font-family: var(--font-mono); font-size: 0.72em;
-  color: var(--ink-soft); background: var(--bg);
-  padding: 2px 8px; border-radius: 10px;
-  border: 1px solid var(--hairline);
-}}
-
-/* Field guide */
-.fg-search {{
-  margin: 0 0 24px 0;
-  padding: 12px 16px;
-  width: 100%; max-width: 460px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
-  color: var(--ink); font-size: 1em;
-  font-family: var(--font-body);
-}}
-.fg-chips {{
-  display: flex; flex-wrap: wrap; gap: 8px;
-  margin: 0 0 24px 0;
-}}
-.fg-chip {{
-  font-family: var(--font-mono); font-size: 0.8em;
-  padding: 6px 14px;
-  background: transparent; border: 1px solid var(--hairline);
-  border-radius: 20px; color: var(--ink-soft);
-  cursor: pointer;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}}
-.fg-chip:hover {{ color: var(--ink); border-color: var(--accent); }}
-.fg-chip.active {{ background: var(--accent); color: var(--bg); border-color: var(--accent); }}
-.fg-grid {{
-  display: grid; gap: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-}}
-.fg-card {{
-  background: var(--surface);
-  padding: 18px 20px; border-radius: 8px;
-  border-left: 3px solid var(--accent);
-}}
-.fg-card h5 {{ margin: 0 0 4px 0; font-size: 1.05em; }}
-.fg-card .latin {{
-  font-style: italic; font-size: 0.92em;
-  color: var(--ink-soft); margin: 0 0 8px 0;
-}}
-.fg-card .likely {{
-  font-family: var(--font-mono); font-size: 0.75em;
-  color: var(--accent-2); margin: 0 0 8px 0;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}}
-.fg-card p {{ font-size: 0.93em; margin: 8px 0 0 0; }}
-.fg-card .fg-tags {{
-  display: flex; flex-wrap: wrap; gap: 4px;
-  margin-top: 12px;
-}}
-.fg-card .fg-tag {{
-  font-family: var(--font-mono); font-size: 0.68em;
-  background: var(--bg); color: var(--ink-soft);
-  padding: 2px 7px; border-radius: 10px;
-  border: 1px solid var(--hairline);
-}}
-.fg-region-h {{
-  font-family: var(--font-mono); font-size: 0.85em;
-  color: var(--accent-2); text-transform: uppercase;
-  letter-spacing: 0.1em; margin: 32px 0 12px 0;
-}}
-
-/* Things to do */
-.ttd-group {{ margin: 40px 0; }}
-.ttd-group h4 {{ color: var(--accent); margin: 0 0 16px 0; }}
-.ttd-entry {{
-  margin: 14px 0; padding: 14px 18px;
-  background: var(--surface); border-radius: 6px;
-  border-left: 2px solid var(--hairline);
-}}
-.ttd-entry h5 {{ margin: 0 0 4px 0; }}
-.ttd-entry .neighborhood {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--accent-2); margin: 0 0 6px 0;
-}}
-.ttd-entry p {{ margin: 6px 0 0 0; font-size: 0.95em; }}
-
-/* Opinion */
-.opinion {{
-  border-left: 3px solid var(--accent);
-  padding: 14px 18px;
-  margin: 24px 0;
-  font-style: italic; color: var(--ink-soft);
-  font-size: 0.98em;
-}}
-
-/* Weather */
-.weather-grid {{
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px; margin: 24px 0;
-}}
-.weather-stat {{
-  background: var(--surface); padding: 18px;
-  border-radius: 8px; border-top: 2px solid var(--accent);
-}}
-.weather-stat .label {{
-  font-family: var(--font-mono); font-size: 0.75em;
-  color: var(--ink-soft); text-transform: uppercase;
-  letter-spacing: 0.08em; margin-bottom: 8px;
-}}
-.weather-stat .value {{
-  font-family: var(--font-display); font-size: 1.9em;
-  color: var(--ink-display); margin-bottom: 6px;
-  font-weight: 600;
-}}
-.weather-stat .context {{
-  font-size: 0.85em; color: var(--ink-soft);
-  font-family: var(--font-body);
-}}
-
-/* History */
-.history-vignette {{
-  margin: 40px 0; padding: 22px 26px;
-  background: var(--surface); border-radius: 8px;
-  border-left: 4px solid var(--era, var(--accent));
-}}
-.history-vignette h4 {{ margin: 0 0 6px 0; color: var(--ink-display); }}
-.history-vignette .era-chip {{
-  display: inline-block; margin-bottom: 14px;
-  background: var(--era); color: white;
-  padding: 2px 8px; border-radius: 3px;
-  font-family: var(--font-mono); font-size: 0.75em;
-  text-transform: uppercase; letter-spacing: 0.08em;
-}}
-.history-vignette .consequence {{
-  margin-top: 16px; padding-top: 12px;
-  border-top: 1px dashed var(--hairline);
-  font-size: 0.92em; color: var(--ink-soft);
-  font-style: italic;
-}}
-.era-class-defs {{ /* placeholder for era class lookups */ }}
-{era_class_css}
-
-.date-chip {{
-  background: var(--era, var(--accent));
-  color: white;
-  padding: 1px 6px; border-radius: 3px;
-  font-family: var(--font-mono); font-size: 0.88em;
-  letter-spacing: 0.02em;
-}}
-
-/* Phrase table */
-.phrase-table {{
-  width: 100%; margin: 28px 0;
-  border-collapse: collapse; font-size: 0.9em;
-}}
-.phrase-table th, .phrase-table td {{
-  padding: 8px 12px; text-align: left;
-  border-bottom: 1px solid var(--hairline);
-}}
-.phrase-table th {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--accent); text-transform: uppercase;
-  letter-spacing: 0.06em;
-}}
-.phrase-table tr:first-child td {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--accent); text-transform: uppercase;
-  letter-spacing: 0.06em; border-bottom: 2px solid var(--accent);
-}}
-
-/* Fun facts */
-.facts-layout {{
-  display: grid; gap: 32px;
-  grid-template-columns: 1fr;
-}}
-@media (min-width: 760px) {{
-  .facts-layout {{ grid-template-columns: 1fr 1fr; }}
-}}
-.fact-group {{ margin: 0 0 24px 0; }}
-.fg-loc {{
-  font-family: var(--font-mono); font-size: 0.85em;
-  color: var(--accent); text-transform: uppercase;
-  letter-spacing: 0.08em; margin: 0 0 10px 0;
-  padding-bottom: 6px; border-bottom: 1px solid var(--hairline);
-}}
-.fact-group ul {{ margin: 0; padding: 0; list-style: none; }}
-.fact-group li {{
-  position: relative;
-  padding: 8px 0 8px 22px;
-  border-bottom: 1px dashed var(--hairline);
-  font-size: 0.95em; line-height: 1.5;
-}}
-.fact-group li::before {{
-  content: "•"; color: var(--accent);
-  position: absolute; left: 6px; top: 6px;
-  font-weight: bold;
-}}
-.fact-group li:last-child {{ border-bottom: none; }}
-
-/* Food */
-.food-grid {{
-  display: grid; gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  margin: 24px 0;
-}}
-.food-card {{
-  background: var(--surface); padding: 16px 18px;
-  border-radius: 6px; border-left: 2px solid var(--accent-2);
-}}
-.food-card h5 {{ margin: 0 0 2px 0; }}
-.food-card .local {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--ink-soft); font-style: italic;
-  margin: 0 0 4px 0;
-}}
-.food-card .region {{
-  font-family: var(--font-mono); font-size: 0.7em;
-  color: var(--accent-2); margin: 0 0 8px 0;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}}
-.food-card p {{ font-size: 0.92em; margin: 6px 0 0 0; }}
-.food-card .food-tag {{
-  display: inline-block; margin-top: 8px;
-  font-family: var(--font-mono); font-size: 0.7em;
-  background: var(--bg); color: var(--ink-soft);
-  padding: 1px 6px; border-radius: 8px;
-}}
-
-.tier-block {{ margin: 24px 0; }}
-.tier-block h4 {{ color: var(--accent); margin: 0 0 14px 0; }}
-.tier-entry {{
-  margin: 10px 0; padding: 12px 16px;
-  background: var(--surface); border-radius: 6px;
-  border-left: 2px solid var(--hairline);
-}}
-.tier-entry h5 {{ margin: 0 0 4px 0; font-size: 0.98em; }}
-.tier-entry p {{ font-size: 0.9em; margin: 4px 0 0 0; }}
-.tier-entry .city {{
-  font-family: var(--font-mono); font-size: 0.72em;
-  color: var(--accent-2); margin: 0 0 4px 0;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}}
-.tier-entry .tag-row {{
-  display: flex; gap: 6px; margin-top: 8px;
-}}
-.booked-tag {{
-  font-family: var(--font-mono); font-size: 0.7em;
-  background: var(--accent); color: var(--bg);
-  padding: 1px 8px; border-radius: 8px;
-}}
-
-/* Dig-deeper — Deep-mode-only supplementary inset */
-aside.dig-deeper {{
-  margin: 24px 0 8px 0;
-  padding: 16px 20px;
-  background: rgba(126, 200, 177, 0.06);
-  border-left: 3px solid var(--accent);
-  border-radius: 0 6px 6px 0;
-}}
-aside.dig-deeper > h5 {{
-  margin: 0 0 8px 0;
-  font-family: var(--font-mono);
-  font-size: 0.78em;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-}}
-aside.dig-deeper > p {{
-  margin: 0;
-  font-size: 0.95em;
-  color: var(--ink-soft);
-  line-height: 1.6;
-}}
-
-/* Go-deeper */
-.go-deeper {{
-  margin: 36px 0 0 0;
-  padding: 24px 0 0 0;
-  border-top: 1px solid var(--hairline);
-}}
-.go-deeper > h4 {{
-  margin: 0 0 16px 0; color: var(--accent-2);
-  font-family: var(--font-mono); font-size: 0.95em;
-  text-transform: uppercase; letter-spacing: 0.08em;
-}}
-.gd-grid {{
-  display: grid; gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-}}
-.gd-card {{
-  background: var(--surface); padding: 14px 16px;
-  border-radius: 6px; border-top: 2px solid var(--accent-2);
-}}
-.gd-kind {{
-  font-family: var(--font-mono); font-size: 0.7em;
-  color: var(--accent-2); text-transform: uppercase;
-  letter-spacing: 0.08em; margin-bottom: 6px;
-  display: block;
-}}
-.gd-card h5 {{ margin: 0 0 6px 0; font-size: 0.95em; }}
-.gd-card p {{ font-size: 0.85em; margin: 6px 0 0 0; color: var(--ink-soft); }}
-
-/* Bibliography */
-.biblio-group {{ margin: 28px 0; }}
-.biblio-group h4 {{
-  font-family: var(--font-mono); font-size: 0.85em;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--accent); margin: 0 0 12px 0;
-  border-bottom: 1px solid var(--hairline); padding-bottom: 6px;
-}}
-.biblio-group ul {{ padding-left: 0; list-style: none; }}
-.biblio-group li {{
-  padding: 10px 0; border-bottom: 1px dashed var(--hairline);
-}}
-.biblio-group li b {{ font-weight: 600; }}
-.biblio-group li .ay {{
-  font-family: var(--font-mono); font-size: 0.85em;
-  color: var(--ink-soft); margin: 0 6px;
-}}
-
-/* Live-data callout */
-.live-data {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  color: var(--ink-soft); margin-top: 24px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--hairline);
-}}
-
-/* Footer */
-footer.guide-footer {{
-  padding: 40px 24px; text-align: center;
-  font-family: var(--font-mono); font-size: 0.8em;
-  color: var(--ink-soft); border-top: 1px solid var(--hairline);
-}}
-footer.guide-footer .palette-name {{
-  color: var(--accent); letter-spacing: 0.1em;
-  text-transform: uppercase;
-}}
-
-/* Hotels at a glance */
-.hotels-table {{
-  width: 100%; border-collapse: collapse;
-  margin: 24px 0; font-size: 0.92em;
-}}
-.hotels-table th, .hotels-table td {{
-  padding: 10px 14px; text-align: left;
-  border-bottom: 1px solid var(--hairline);
-}}
-.hotels-table th {{
-  font-family: var(--font-mono); font-size: 0.78em;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--accent);
-}}
-
-/* Responsive */
-@media (max-width: 920px) {{
-  .topbar .crumb .crumb-rest {{ display: none; }}
-}}
-@media (max-width: 760px) {{
-  .toc-wrap {{ grid-template-columns: 1fr; gap: 24px; padding: 24px 18px; }}
-  .vp-toc {{ position: static; max-height: none; }}
-  .hero {{ padding: 60px 18px 50px; }}
-  main section[id] {{ padding: 40px 0 60px; }}
-  section .content-block {{ margin: 0 18px; }}
-  .topbar {{ padding: 10px 14px; gap: 14px; flex-wrap: wrap; }}
-  .topbar .crumb {{ display: none; }}
-  .gd-grid {{ grid-template-columns: 1fr; }}
-}}
-
-/* Print */
-@media print {{
-  .deep, .dig-deeper, .sidenote-content {{ display: block !important; }}
-  .mode-toggle, .print-btn, #vp-progress, .vp-toc, .skip-link {{ display: none !important; }}
-  .topbar {{ position: static; }}
-  body {{ background: white; color: black; font-size: 11pt; }}
-  a {{ color: black; text-decoration: underline; }}
-  .walkchip, .tag, .travelpill {{ display: none; }}
-}}
-
-@media (prefers-reduced-motion: reduce) {{
-  html {{ scroll-behavior: auto; }}
-  * {{ transition: none !important; animation: none !important; }}
-}}
-"""
-
-
-# ============================================================================
-# JS GENERATION
-# ============================================================================
-
-def emit_js() -> str:
-    return """
-window.VPGuide = window.VPGuide || {};
-
-(function(VPGuide){
-  function initProgressBar(){
-    try {
-      var bar = document.getElementById("vp-progress");
-      if (!bar) return;
-      window.addEventListener("scroll", function(){
-        var h = document.documentElement;
-        var pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
-        bar.style.width = pct + "%";
-      }, { passive: true });
-    } catch(e){ console.warn("progress bar init failed", e); }
-  }
-
-  function initScrollSpy(){
-    try {
-      var links = document.querySelectorAll(".vp-toc a[href^='#']");
-      if (!links.length || !("IntersectionObserver" in window)) return;
-      var byId = {};
-      links.forEach(function(a){ byId[a.getAttribute("href").slice(1)] = a; });
-      var obs = new IntersectionObserver(function(entries){
-        entries.forEach(function(e){
-          var a = byId[e.target.id];
-          if (!a) return;
-          if (e.isIntersecting) {
-            links.forEach(function(l){ l.classList.remove("active"); });
-            a.classList.add("active");
-          }
-        });
-      }, { rootMargin: "-40% 0px -55% 0px" });
-      document.querySelectorAll("main section[id]").forEach(function(s){ obs.observe(s); });
-    } catch(e){ console.warn("scroll-spy init failed", e); }
-  }
-
-  function initModeToggle(){
-    try {
-      var KEY = "vp.guide.mode";
-      var saved = null;
-      try { saved = localStorage.getItem(KEY); } catch(e) {}
-      var mode = saved || "standard";
-      document.body.setAttribute("data-mode", mode);
-      var buttons = document.querySelectorAll(".mode-toggle [data-mode]");
-      buttons.forEach(function(btn){
-        btn.setAttribute("aria-pressed", btn.dataset.mode === mode ? "true" : "false");
-        btn.addEventListener("click", function(){
-          var next = btn.dataset.mode;
-          document.body.setAttribute("data-mode", next);
-          buttons.forEach(function(b){
-            b.setAttribute("aria-pressed", b.dataset.mode === next ? "true" : "false");
-          });
-          try { localStorage.setItem(KEY, next); } catch(e){}
-        });
-      });
-    } catch(e){ console.warn("mode toggle init failed", e); }
-  }
-
-  function initFieldGuide(){
-    try {
-      var search = document.getElementById("fg-search");
-      var chips = document.querySelectorAll(".fg-chip");
-      var cards = document.querySelectorAll(".fg-card");
-      if (!cards.length) return;
-      var activeRegion = "all";
-      function apply(){
-        var q = (search && search.value || "").toLowerCase().trim();
-        cards.forEach(function(c){
-          var matchesQ = !q || c.textContent.toLowerCase().indexOf(q) !== -1;
-          var matchesR = activeRegion === "all" || (c.dataset.tags || "").indexOf(activeRegion) !== -1;
-          c.style.display = (matchesQ && matchesR) ? "" : "none";
-        });
-      }
-      if (search) search.addEventListener("input", apply);
-      chips.forEach(function(ch){
-        ch.addEventListener("click", function(){
-          activeRegion = ch.dataset.region || "all";
-          chips.forEach(function(c){ c.classList.remove("active"); });
-          ch.classList.add("active");
-          apply();
-        });
-      });
-    } catch(e){ console.warn("field guide init failed", e); }
-  }
-
-  function initPrint(){
-    try {
-      var btn = document.getElementById("print-btn");
-      if (btn) btn.addEventListener("click", function(){ window.print(); });
-    } catch(e){}
-  }
-
-  VPGuide.initWayfinding = function(){
-    initProgressBar();
-    initScrollSpy();
-    initModeToggle();
-    initFieldGuide();
-    initPrint();
-  };
-  document.addEventListener("DOMContentLoaded", VPGuide.initWayfinding);
-})(window.VPGuide);
-"""
-
-
-# ============================================================================
-# COMPOSE — emit each section
-# ============================================================================
-
-def emit_hero() -> str:
-    start = TRIP_META["start_date"]
-    end = TRIP_META["end_date"]
-    days = (end - start).days + 1
-    countries = " · ".join(TRIP_META["countries"])
-    date_str = f"{start.strftime('%b %-d')} → {end.strftime('%b %-d')} · {start.year}"
-    # Simple abstract route SVG — 5 dots for 5 countries left to right
-    route_svg = """
-<svg class="route-svg" viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Route: Oslo via Svalbard to Helsinki, Tallinn, Stockholm, Copenhagen">
-  <line x1="40" y1="50" x2="120" y2="20" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3,3"/>
-  <line x1="120" y1="20" x2="200" y2="40" stroke="var(--accent)" stroke-width="1"/>
-  <line x1="200" y1="40" x2="280" y2="50" stroke="var(--accent)" stroke-width="1"/>
-  <line x1="280" y1="50" x2="360" y2="50" stroke="var(--accent)" stroke-width="1"/>
-  <line x1="360" y1="50" x2="440" y2="50" stroke="var(--accent)" stroke-width="1"/>
-  <line x1="440" y1="50" x2="520" y2="60" stroke="var(--accent)" stroke-width="1"/>
-  <line x1="520" y1="60" x2="560" y2="60" stroke="var(--accent)" stroke-width="1"/>
-  <circle cx="40" cy="50" r="5" fill="var(--accent)"/>
-  <circle cx="120" cy="20" r="7" fill="var(--accent-2)" stroke="var(--accent)" stroke-width="2"/>
-  <circle cx="200" cy="40" r="4" fill="var(--accent)"/>
-  <circle cx="280" cy="50" r="4" fill="var(--accent)"/>
-  <circle cx="360" cy="50" r="4" fill="var(--accent)"/>
-  <circle cx="440" cy="50" r="4" fill="var(--accent)"/>
-  <circle cx="520" cy="60" r="4" fill="var(--accent)"/>
-  <circle cx="560" cy="60" r="4" fill="var(--accent)"/>
-  <text x="40" y="72" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Oslo</text>
-  <text x="120" y="14" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Svalbard</text>
-  <text x="200" y="32" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Tromsø</text>
-  <text x="280" y="42" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Lofoten</text>
-  <text x="360" y="42" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Bergen</text>
-  <text x="440" y="42" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Helsinki</text>
-  <text x="520" y="52" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Tallinn/Stockholm</text>
-  <text x="560" y="72" fill="var(--ink-soft)" font-family="var(--font-mono)" font-size="9" text-anchor="middle">Cph</text>
-</svg>
-"""
-    return f"""
-<section id="hero" class="hero">
-  <div class="eyebrow">Trip guide · {esc(PALETTE['name'])}</div>
-  <h1>{esc(TRIP_META['title'])}</h1>
-  <div class="narrator-dek">{esc(TRIP_META['narrator_dek'])}</div>
-  <p class="subtitle">{esc(TRIP_META['subtitle'])}</p>
-  <div class="meta-row">
-    <div class="meta">When<b>{esc(date_str)}</b></div>
-    <div class="meta">Length<b>{days} days · 22 nights</b></div>
-    <div class="meta">Countries<b>5</b></div>
-    <div class="meta">Bookings<b>27</b></div>
-  </div>
-  {route_svg}
-</section>
-
-<details class="sources-note">
-  <summary>A note on sources</summary>
-  <p>{SOURCES_NOTE}</p>
-</details>
-"""
-
-
-def emit_toc(slugs: List[Tuple[str, str]]) -> str:
-    """slugs = [(slug, label), ...]"""
-    items = "\n".join(
-        f'    <a href="#{slug}">{esc(label)}</a>'
-        for slug, label in slugs
-    )
-    return f"""
-<aside class="vp-toc" role="navigation" aria-label="Section navigation">
-  <h3>Sections</h3>
-{items}
-</aside>
-"""
-
-
-def emit_go_deeper(section_key: str) -> str:
-    cards = GO_DEEPER.get(section_key, [])
-    if not cards:
-        return ""
-    card_html = "\n".join(
-        f'''    <article class="gd-card">
-      <span class="gd-kind">{esc(c["kind"])}</span>
-      <h5><a class="practical-link" href="{esc(c["url"])}" rel="noopener" target="_blank">{esc(c["title"])}</a></h5>
-      <p>{esc(c["annotation"])}</p>
-    </article>'''
-        for c in cards
-    )
-    return f"""
-<aside class="go-deeper">
-  <h4>Go deeper on this</h4>
-  <div class="gd-grid">
-{card_html}
-  </div>
-</aside>
-"""
 
 
 def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, float]],
                     venue_relevance: Dict[str, Optional[float]],
-                    gaps_by_date: Dict[date, HotelNightGap]) -> Tuple[str, str]:
+                    gaps_by_date: Dict[date, HotelNightGap]) -> Tuple[Tuple[str, str], str]:
     intro_body = ("Twenty-three days, six modes of transport, eleven hotels. The intros "
                   "set the day's frame; the cards run in time order and carry the practical "
                   "load. Walking-distance chips show distance from <i>tonight's hotel</i> "
@@ -3119,23 +2059,24 @@ def emit_day_by_day(hotels: List[Dict], venue_coords: Dict[str, Tuple[float, flo
             tag_parts = []
             if card.get("travelpill"):
                 tag_parts.append(f'<span class="travelpill">{esc(card["travelpill"])}</span>')
-            chip = emit_walking_chip_for_card(card, hotel, venue_coords, venue_relevance)
+            chip = emit_walking_chip(card.get("venue_key"), hotel, venue_coords, venue_relevance)
             if chip:
                 tag_parts.append(chip)
             if tag_parts:
                 out.append(f'      <div class="tags">{" ".join(tag_parts)}</div>')
             out.append(f'    </div>')
         out.append(f'</div>')
-    out.append(emit_go_deeper("day_by_day"))
-    body_text = body_for_rt
-    h2 = emit_h2("days", "Day by day", "timeline", body_text)
-    return (
-        f'<section id="days" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    body_html = "".join(out)
+    section_html = emit_section_wrapper(
+        slug="days", label="Day by day", kind="atmospheric",
+        body_html=body_html,
+        go_deeper_html=emit_go_deeper(GO_DEEPER.get("day_by_day", [])),
+        slug_label="timeline",
     )
+    return ("days", "Day by day"), section_html
 
 
-def emit_field_guide() -> Tuple[str, str]:
+def emit_field_guide() -> Tuple[Tuple[str, str], str]:
     fg = FIELD_GUIDE
     body_text = fg["intro_lede"]
     out = [f'<p class="lede">{esc(fg["intro_lede"])}</p>']
@@ -3182,15 +2123,17 @@ def emit_field_guide() -> Tuple[str, str]:
             out.append(f'  </article>')
         out.append('</div>')
     out.append('</div>')
-    out.append(emit_go_deeper("field_guide"))
-    h2 = emit_h2("field-guide", "Field guide", "field guide", body_text)
-    return (
-        f'<section id="field-guide" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    body_html = "".join(out)
+    section_html = emit_section_wrapper(
+        slug="field-guide", label="Field guide", kind="atmospheric",
+        body_html=body_html,
+        go_deeper_html=emit_go_deeper(GO_DEEPER.get("field_guide", [])),
+        slug_label="field guide",
     )
+    return ("field-guide", "Field guide"), section_html
 
 
-def emit_things_to_do(is_single_hotel: bool) -> Tuple[str, str]:
+def emit_things_to_do(is_single_hotel: bool) -> Tuple[Tuple[str, str], str]:
     """Emit things_to_do — chips SKIPPED entirely on multi-hotel trips per spec."""
     ttd = THINGS_TO_DO
     body_text = ttd["intro_lede"]
@@ -3225,14 +2168,15 @@ def emit_things_to_do(is_single_hotel: bool) -> Tuple[str, str]:
             out.append(f'  </div>')
         out.append(f'</div>')
     out.append('</div>')
-    h2 = emit_h2("things-to-do", "Things to do", "off-itinerary", body_text)
-    return (
-        f'<section id="things-to-do" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    section_html = emit_section_wrapper(
+        slug="things-to-do", label="Things to do", kind="atmospheric",
+        body_html="".join(out),
+        slug_label="off-itinerary",
     )
+    return ("things-to-do", "Things to do"), section_html
 
 
-def emit_weather() -> Tuple[str, str]:
+def emit_weather() -> Tuple[Tuple[str, str], str]:
     w = WEATHER
     body_text = w["intro_lede"] + w["season_notes"]
     out = [f'<p class="lede">{esc(w["intro_lede"])}</p>']
@@ -3254,14 +2198,15 @@ def emit_weather() -> Tuple[str, str]:
     out.append('  </ul>')
     out.append('</div>')
     out.append('<p class="live-data">Weather data: yr.no (Norwegian Met Office), fetched 2026-06-27.</p>')
-    h2 = emit_h2("weather", "Weather", "climate", body_text)
-    return (
-        f'<section id="weather" class="section--practical">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    section_html = emit_section_wrapper(
+        slug="weather", label="Weather", kind="practical",
+        body_html="".join(out),
+        slug_label="climate",
     )
+    return ("weather", "Weather"), section_html
 
 
-def emit_history() -> Tuple[str, str]:
+def emit_history() -> Tuple[Tuple[str, str], str]:
     h = HISTORY
     body_text = h["intro_lede"]
     out = [f'<p class="lede">{esc(h["intro_lede"])}</p>']
@@ -3295,15 +2240,17 @@ def emit_history() -> Tuple[str, str]:
             out.append('    <tr>' + "".join(f'<td>{esc(c)}</td>' for c in cells) + '</tr>')
     out.append('  </table>')
     out.append('</div>')
-    out.append(emit_go_deeper("history"))
-    h2 = emit_h2("history", "History", "history", body_text)
-    return (
-        f'<section id="history" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    body_html = "".join(out)
+    section_html = emit_section_wrapper(
+        slug="history", label="History", kind="atmospheric",
+        body_html=body_html,
+        go_deeper_html=emit_go_deeper(GO_DEEPER.get("history", [])),
+        slug_label="history",
     )
+    return ("history", "History"), section_html
 
 
-def emit_fun_facts() -> Tuple[str, str]:
+def emit_fun_facts() -> Tuple[Tuple[str, str], str]:
     ff = FUN_FACTS
     body_text = ff["intro_lede"]
     out = [f'<p class="lede">{esc(ff["intro_lede"])}</p>']
@@ -3337,14 +2284,15 @@ def emit_fun_facts() -> Tuple[str, str]:
     out.append('</div>')
     out.append('</div>')
     out.append('</div>')
-    h2 = emit_h2("fun-facts", "Fun facts & tips", "trivia", body_text)
-    return (
-        f'<section id="fun-facts" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    section_html = emit_section_wrapper(
+        slug="fun-facts", label="Fun facts & tips", kind="atmospheric",
+        body_html="".join(out),
+        slug_label="trivia",
     )
+    return ("fun-facts", "Fun facts & tips"), section_html
 
 
-def emit_food() -> Tuple[str, str]:
+def emit_food() -> Tuple[Tuple[str, str], str]:
     fd = FOOD
     body_text = fd["intro_lede"]
     out = [f'<p class="lede">{esc(fd["intro_lede"])}</p>']
@@ -3390,15 +2338,17 @@ def emit_food() -> Tuple[str, str]:
             out.append(f'  </div>')
         out.append(f'</div>')
     out.append('</div>')
-    out.append(emit_go_deeper("food"))
-    h2 = emit_h2("food", "Food", "meals", body_text)
-    return (
-        f'<section id="food" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    body_html = "".join(out)
+    section_html = emit_section_wrapper(
+        slug="food", label="Food", kind="atmospheric",
+        body_html=body_html,
+        go_deeper_html=emit_go_deeper(GO_DEEPER.get("food", [])),
+        slug_label="meals",
     )
+    return ("food", "Food"), section_html
 
 
-def emit_beer() -> Tuple[str, str]:
+def emit_beer() -> Tuple[Tuple[str, str], str]:
     """Themed bonus section — beer + breweries grouped by city."""
     b = BEER
     body_text = b["intro_lede"]
@@ -3428,14 +2378,15 @@ def emit_beer() -> Tuple[str, str]:
             out.append(f'  </div>')
         out.append(f'</div>')
     out.append('</div>')
-    h2 = emit_h2("beer", "Beer & breweries", "breweries", body_text)
-    return (
-        f'<section id="beer" class="section--atmospheric">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    section_html = emit_section_wrapper(
+        slug="beer", label="Beer & breweries", kind="atmospheric",
+        body_html="".join(out),
+        slug_label="breweries",
     )
+    return ("beer", "Beer & breweries"), section_html
 
 
-def emit_sources() -> Tuple[str, str]:
+def emit_sources() -> Tuple[Tuple[str, str], str]:
     body_text = "Sources and further reading"
     out = [f'<p class="lede">Books, podcasts, films, and people whose work informed this guide. Every entry links to its canonical source.</p>']
     for grp in BIBLIOGRAPHY:
@@ -3452,11 +2403,12 @@ def emit_sources() -> Tuple[str, str]:
             body_text += e["annotation"]
         out.append('  </ul>')
         out.append(f'</div>')
-    h2 = emit_h2("sources", "Sources & further reading", "sources", body_text)
-    return (
-        f'<section id="sources" class="section--practical">{h2}<div class="content-block">{"".join(out)}</div></section>',
-        body_text
+    section_html = emit_section_wrapper(
+        slug="sources", label="Sources & further reading", kind="practical",
+        body_html="".join(out),
+        slug_label="sources",
     )
+    return ("sources", "Sources & further reading"), section_html
 
 
 # ============================================================================
@@ -3468,20 +2420,19 @@ def compose(venue_coords: Dict[str, Tuple[float, float]],
             hotels: List[Dict],
             gaps_by_date: Dict[date, HotelNightGap]) -> str:
     is_single_hotel = len(set((h["lat"], h["lng"]) for h in hotels)) == 1
-    sections = []
-    sections.append(("days", "Day by day",
-                     emit_day_by_day(hotels, venue_coords, venue_relevance, gaps_by_date)))
-    sections.append(("field-guide", "Field guide", emit_field_guide()))
-    sections.append(("things-to-do", "Things to do", emit_things_to_do(is_single_hotel)))
-    sections.append(("weather", "Weather", emit_weather()))
-    sections.append(("history", "History", emit_history()))
-    sections.append(("food", "Food", emit_food()))
-    sections.append(("beer", "Beer & breweries", emit_beer()))
-    sections.append(("fun-facts", "Fun facts & tips", emit_fun_facts()))
-    sections.append(("sources", "Sources & further reading", emit_sources()))
-
-    sections_html = "".join(s[2][0] for s in sections)
-    toc_slugs = [(s[0], s[1]) for s in sections]
+    sections = [
+        emit_day_by_day(hotels, venue_coords, venue_relevance, gaps_by_date),
+        emit_field_guide(),
+        emit_things_to_do(is_single_hotel),
+        emit_weather(),
+        emit_history(),
+        emit_food(),
+        emit_beer(),
+        emit_fun_facts(),
+        emit_sources(),
+    ]
+    toc_slugs = [(slug, label) for (slug, label), _html in sections]
+    sections_html = "".join(html for _s, html in sections)
 
     body = f"""
 <a class="skip-link" href="#main">Skip to content</a>
@@ -3498,7 +2449,7 @@ def compose(venue_coords: Dict[str, Tuple[float, float]],
   <button id="print-btn" class="print-btn">Save as PDF</button>
 </div>
 
-{emit_hero()}
+{emit_hero(TRIP_META, PALETTE["name"])}
 
 <div class="toc-wrap">
   {emit_toc(toc_slugs)}
@@ -3512,7 +2463,7 @@ def compose(venue_coords: Dict[str, Tuple[float, float]],
 </footer>
 """
 
-    css = emit_css()
+    css = emit_css(PALETTE, ERAS)
     js = emit_js()
 
     fonts_url = (f"https://fonts.googleapis.com/css2?"

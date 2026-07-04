@@ -701,6 +701,12 @@ html = practical_link("Vasa Museum", "Stockholm")
 opens the link in a new tab so the reader doesn't lose their place
 in the guide.
 
+**Composer wrapper.** Per-trip composers call
+`emit_practical_link(name, city, full_text=None)` from
+[`src/guide_emit.py`](../../../../src/guide_emit.py) — same behaviour, thin
+adapter around `place_links.practical_link` so all shared rendering imports come
+from one module.
+
 ### CSS verbatim
 
 ```css
@@ -808,6 +814,13 @@ chip_html = walking_chip(
 Either coord can be `None`; in that case `walking_chip` returns the
 empty string and the composer omits the chip entirely. This is the
 graceful path when geocoding hasn't run yet or returned no result.
+
+**Composer wrapper.** Per-trip composers call
+`emit_walking_chip(venue_key, hotel, venue_coords, venue_relevance)` from
+[`src/guide_emit.py`](../../../../src/guide_emit.py), which wraps
+`walking_distance.walking_chip` with the venue-key + hotel-dict plumbing
+(same skip semantics, same confidence threshold — see the "Confidence
+threshold" subsection below).
 
 ### Hotel resolution per day
 
@@ -1270,15 +1283,38 @@ continues; the guide still ships; the chips just don't render.
 
 ### 7. Compose the HTML
 
-Write the complete single-file HTML in one pass. Requirements:
+Build the guide as `compose/trip_<id>.py` following the two-track pattern:
+**Track 1 (top of file):** Python dicts + lists holding prose data and configuration
+(`PALETTE`, `ERAS`, `TRIP_META`, `GO_DEEPER`, plus one dict/list per section —
+`DAY_BY_DAY`, `FIELD_GUIDE`, and so on).
+**Track 2 (below):** per-section emitter functions that iterate track-1 data and
+return HTML, plus a `compose()` driver that concatenates them.
 
-- Inlined CSS — no external stylesheet
+All shared rendering — CSS, JS, hero, TOC, go-deeper card rows, section wrappers,
+practical links, walking chips, text primitives — lives in `src/guide_emit.py`.
+Import what you need:
+
+```python
+from src.guide_emit import (
+    esc, emit_h2, emit_practical_link, emit_walking_chip, category_color,
+    emit_css, emit_js, emit_hero, emit_toc, emit_go_deeper, emit_section_wrapper,
+)
+```
+
+**Canonical worked example:** [`compose/trip_2.py`](../../../../compose/trip_2.py) is
+the reference implementation. Copy its structure — imports, prose-data ordering,
+per-section emitter pattern, and the way `compose()` returns `((slug, label), html_str)`
+tuples from each section emitter so the TOC stays in lock-step with the section list.
+
+Requirements (unchanged from the earlier one-file approach):
+
+- Inlined CSS via `emit_css(PALETTE, ERAS)` — no external stylesheet
 - Fonts via Google Fonts CDN only (no other external assets)
-- No JS framework — vanilla JS only
+- Vanilla JS via `emit_js()` — no framework
 - Mobile-responsive — single-column under 600px
 - Print-friendly — `@media print` shows all content, hides sticky nav + chips, uses serif body
 - `prefers-reduced-motion: reduce` respected (skip transitions/animations)
-- The `field_guide` section ships ~80 lines of vanilla JS for search + chip filters
+- The `field_guide` section's search + chip-filter JS ships inside `emit_js()`
 - Every other section is static HTML + CSS
 - No external images — inline SVG / CSS only
 
@@ -1437,6 +1473,43 @@ This step is not optional. Do it before claiming success.
 
 If any check fails, surface the offending phrase, console error, or
 missing element and stop. Do not smooth over failures with "probably fine."
+
+---
+
+## Composer file conventions
+
+**File name.** One composer per trip, `compose/trip_<id>.py`. Versioned in git.
+Never re-use a trip's composer across trips — copy and adapt.
+
+**File section ordering** (top to bottom):
+
+1. Imports (stdlib → third-party → `app` / `models` / `src`)
+2. Trip-wide constants: `TRIP_ID`, `PALETTE`, `ERAS`, `TRIP_META`, `GO_DEEPER`,
+   `SOURCES_NOTE`
+3. Per-section prose dicts: `DAY_BY_DAY`, `FIELD_GUIDE`, `THINGS_TO_DO`, `WEATHER`,
+   `HISTORY`, `FUN_FACTS`, `FOOD`, plus any themed-bonus dicts
+4. Per-section emitters (one function per section)
+5. `compose(...)` driver
+6. `main()` — geocoding, gap detection, compose, save, audit-print
+
+**Per-section emitter return convention.** Every per-section emitter returns a
+`((slug: str, label: str), html: str)` tuple. The compose driver unpacks these:
+slugs feed `emit_toc`; html strings concatenate into the page body. This keeps
+the TOC in lock-step with the section list — a future edit can't add a section
+without adding a TOC entry.
+
+**Input-shape source of truth.** The docstrings in `src/guide_emit.py` document
+the exact shapes for `palette`, `eras`, `hotel`, `trip_meta`, and go-deeper cards.
+The composer's dicts conform to those shapes.
+
+**Route SVG.** `emit_hero` renders `trip_meta["route_svg"]` verbatim; the composer
+builds the SVG string itself (each trip has its own geometry) and puts it into
+`TRIP_META["route_svg"]` before calling `compose()`. Absent key → no SVG in hero.
+
+**Trust contract on `sources_note`.** `emit_hero` also renders
+`trip_meta["sources_note"]` verbatim inside the `<details class="sources-note">`
+block. Prose may contain safe HTML (`<i>`, `<a>`, `&lsquo;` etc.); the caller is
+responsible for supplying trusted content. Absent → no sources block.
 
 ---
 
