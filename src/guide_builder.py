@@ -12,7 +12,7 @@ import uuid
 from dataclasses import dataclass, asdict, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -74,23 +74,13 @@ def _fresh_config(trip_id: int) -> GuideConfig:
     )
 
 
-def load_or_init_config(trip_id: int) -> GuideConfig:
-    """
-    Read data/guides/<trip_id>.config.json; return a fresh empty
-    GuideConfig if the file is missing, corrupt, or has a mismatched
-    schema_version (logs a warning in the latter two cases).
-    """
-    path = GUIDES_DIR / f"{trip_id}.config.json"
-    if not path.exists():
-        return _fresh_config(trip_id)
+def _guide_config_from_dict(trip_id: int, data: Dict[str, Any]) -> GuideConfig:
+    """Build a GuideConfig from a parsed JSON dict.
 
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning("guide_builder: corrupt config for trip %s: %s", trip_id, exc)
-        return _fresh_config(trip_id)
-
+    Handles schema-version mismatch and missing-key errors the same way in
+    both filesystem and database backends: log a warning and return a fresh
+    empty config.
+    """
     if data.get("schema_version") != CONFIG_SCHEMA_VERSION:
         logger.warning(
             "guide_builder: schema_version mismatch for trip %s (got %s, expected %s)",
@@ -121,6 +111,48 @@ def load_or_init_config(trip_id: int) -> GuideConfig:
         return _fresh_config(trip_id)
 
 
+def load_or_init_config(trip_id: int) -> GuideConfig:
+    """
+    Return the GuideConfig for a trip, or a fresh empty one when absent.
+
+    Filesystem: reads data/guides/<trip_id>.config.json.
+    Database:   reads Trip.guide_config_json.
+
+    Both modes return a fresh empty GuideConfig if the config is missing,
+    corrupt, or has a mismatched schema_version (logs a warning in the
+    latter two cases).
+    """
+    if GUIDE_STORAGE == "filesystem":
+        path = GUIDES_DIR / f"{trip_id}.config.json"
+        if not path.exists():
+            return _fresh_config(trip_id)
+
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("guide_builder: corrupt config for trip %s: %s", trip_id, exc)
+            return _fresh_config(trip_id)
+
+        return _guide_config_from_dict(trip_id, data)
+    elif GUIDE_STORAGE == "database":
+        trip = _load_trip_or_raise(trip_id)
+        if trip.guide_config_json is None:
+            return _fresh_config(trip_id)
+
+        try:
+            data = json.loads(trip.guide_config_json)
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "guide_builder: corrupt config for trip %s: %s", trip_id, exc
+            )
+            return _fresh_config(trip_id)
+
+        return _guide_config_from_dict(trip_id, data)
+    else:
+        raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
+
+
 def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
     """Atomically write text to path via temp file + os.replace. Cleans up the
     temp file on failure and re-raises."""
@@ -133,16 +165,31 @@ def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
         raise
 
 
-def save_config(trip_id: int, config: GuideConfig) -> Path:
+def save_config(trip_id: int, config: GuideConfig) -> Optional[Path]:
     """
-    Write the config to data/guides/<trip_id>.config.json.
-    Atomic write (temp file + os.replace). Creates the directory if
-    needed. Returns the written path.
+    Write the config for a trip.
+
+    Filesystem: atomic write of json.dumps(asdict(config)) to
+    data/guides/<trip_id>.config.json. Creates the directory if needed.
+    Returns the written Path.
+
+    Database: json.dumps into Trip.guide_config_json, commits.
+    Returns None. Raises TripNotFound if the trip row does not exist.
     """
-    path = GUIDES_DIR / f"{trip_id}.config.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _atomic_write_text(path, json.dumps(asdict(config), indent=2))
-    return path
+    if GUIDE_STORAGE == "filesystem":
+        path = GUIDES_DIR / f"{trip_id}.config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write_text(path, json.dumps(asdict(config), indent=2))
+        return path
+    elif GUIDE_STORAGE == "database":
+        from models import db
+
+        trip = _load_trip_or_raise(trip_id)
+        trip.guide_config_json = json.dumps(asdict(config), indent=2)
+        db.session.commit()
+        return None
+    else:
+        raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
 
 
 def load_trip_data(trip_id: int) -> Dict[str, Any]:
@@ -243,23 +290,47 @@ def guide_path(trip_id: int) -> Path:
     return GUIDES_DIR / f"{trip_id}.html"
 
 
+def _load_trip_or_raise(trip_id: int) -> Any:
+    """Fetch the Trip row; raise TripNotFound if missing.
+
+    Deferred import: top-level would circular via models → app → guide_builder.
+    """
+    from models import Trip, db
+
+    trip = db.session.get(Trip, trip_id)
+    if trip is None:
+        raise TripNotFound(f"Trip {trip_id} not found")
+    return trip
+
+
 def guide_exists(trip_id: int) -> bool:
-    """Return True if a guide HTML file exists for this trip."""
+    """Return True if a guide exists for this trip.
+
+    Filesystem: checks for the .html file.
+    Database: checks Trip.guide_html IS NOT NULL. Raises TripNotFound
+    if the trip row itself is missing.
+    """
     if GUIDE_STORAGE == "filesystem":
         return guide_path(trip_id).exists()
     elif GUIDE_STORAGE == "database":
-        raise NotImplementedError("database backend pending hosted-deployment work")
+        trip = _load_trip_or_raise(trip_id)
+        return trip.guide_html is not None
     else:
         raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
 
 
-def save_guide(trip_id: int, html: str) -> Path:
+def save_guide(trip_id: int, html: str) -> Optional[Path]:
     """
-    Write guide HTML for trip_id.
+    Write guide HTML for trip_id. Also bumps last_generated_at on the config.
 
     Filesystem backend: rotates any existing HTML to .bak, atomic-writes the
     new HTML via a temp file + os.replace, then bumps last_generated_at on the
-    config sidecar. Returns the written path.
+    config sidecar. Returns the written Path.
+
+    Database backend: writes UTF-8 bytes to Trip.guide_html, bumps
+    last_generated_at on the config in Trip.guide_config_json, commits.
+    Returns None (there is no on-disk path). Raises TripNotFound if the
+    trip row does not exist.
     """
     if GUIDE_STORAGE == "filesystem":
         path = guide_path(trip_id)
@@ -276,7 +347,17 @@ def save_guide(trip_id: int, html: str) -> Path:
 
         return path
     elif GUIDE_STORAGE == "database":
-        raise NotImplementedError("database backend pending hosted-deployment work")
+        from models import db
+
+        trip = _load_trip_or_raise(trip_id)
+        trip.guide_html = html.encode("utf-8")
+
+        cfg = load_or_init_config(trip_id)
+        cfg.last_generated_at = datetime.now(timezone.utc).isoformat()
+        save_config(trip_id, cfg)  # this commits guide_config_json too
+
+        db.session.commit()
+        return None
     else:
         raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
 
@@ -284,6 +365,10 @@ def save_guide(trip_id: int, html: str) -> Path:
 def read_guide(trip_id: int) -> bytes:
     """
     Read guide HTML for trip_id. Raises GuideMissing if not present.
+
+    Filesystem: reads the .html file.
+    Database: returns Trip.guide_html bytes. Raises TripNotFound if the
+    trip row is missing; GuideMissing if the column is NULL.
     """
     if GUIDE_STORAGE == "filesystem":
         path = guide_path(trip_id)
@@ -291,7 +376,10 @@ def read_guide(trip_id: int) -> bytes:
             raise GuideMissing(f"No guide found for trip {trip_id}")
         return path.read_bytes()
     elif GUIDE_STORAGE == "database":
-        raise NotImplementedError("database backend pending hosted-deployment work")
+        trip = _load_trip_or_raise(trip_id)
+        if trip.guide_html is None:
+            raise GuideMissing(f"No guide found for trip {trip_id}")
+        return bytes(trip.guide_html)
     else:
         raise ValueError(f"unknown GUIDE_STORAGE: {GUIDE_STORAGE!r}")
 

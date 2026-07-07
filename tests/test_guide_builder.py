@@ -527,18 +527,124 @@ def test_read_guide_raises_guide_missing_when_absent(patch_guides_dir):
         read_guide(999)
 
 
-def test_save_guide_database_storage_raises_not_implemented(patch_guides_dir, monkeypatch):
-    """GUIDE_STORAGE='database' → NotImplementedError."""
-    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
-    with pytest.raises(NotImplementedError):
-        save_guide(30, "<html/>")
-
-
 def test_save_guide_unknown_storage_raises_value_error(patch_guides_dir, monkeypatch):
     """GUIDE_STORAGE='whatever' → ValueError."""
     monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "whatever")
     with pytest.raises(ValueError, match="unknown GUIDE_STORAGE"):
         save_guide(31, "<html/>")
+
+
+# ─── DB-mode storage tests (GUIDE_STORAGE=database) ─────────────────────────
+
+
+def test_db_save_and_read_guide_roundtrip(app, trip, monkeypatch):
+    """DB mode: save_guide writes bytes to Trip.guide_html; read_guide returns them."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+
+    html = "<html><body>Rome guide</body></html>"
+    result = save_guide(trip.id, html)
+    assert result is None  # DB mode has no on-disk path to return
+
+    assert read_guide(trip.id) == html.encode("utf-8")
+
+
+def test_db_guide_exists_false_before_save_true_after(app, trip, monkeypatch):
+    """DB mode: guide_exists tracks Trip.guide_html IS NOT NULL."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+
+    assert guide_exists(trip.id) is False
+    save_guide(trip.id, "<html/>")
+    assert guide_exists(trip.id) is True
+
+
+def test_db_read_guide_raises_guide_missing_when_null(app, trip, monkeypatch):
+    """DB mode: NULL guide_html column → GuideMissing on read."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+    with pytest.raises(GuideMissing):
+        read_guide(trip.id)
+
+
+def test_db_save_guide_bumps_last_generated_at_in_config_column(app, trip, monkeypatch):
+    """DB mode: save_guide writes an ISO UTC timestamp into guide_config_json.last_generated_at."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+
+    save_guide(trip.id, "<html/>")
+
+    db.session.refresh(trip)
+    assert trip.guide_config_json is not None
+    cfg = json.loads(trip.guide_config_json)
+    assert cfg["last_generated_at"] is not None
+    # ISO-8601 UTC has a trailing "+00:00"
+    assert cfg["last_generated_at"].endswith("+00:00")
+
+
+def test_db_save_guide_raises_trip_not_found_when_no_row(app, monkeypatch):
+    """DB mode: save_guide on a nonexistent trip id → TripNotFound."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+    with pytest.raises(TripNotFound):
+        save_guide(999, "<html/>")
+
+
+def test_db_load_or_init_config_returns_fresh_when_column_is_null(app, trip, monkeypatch):
+    """DB mode: NULL guide_config_json column → fresh empty GuideConfig."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+
+    cfg = load_or_init_config(trip.id)
+    assert cfg.schema_version == CONFIG_SCHEMA_VERSION
+    assert cfg.trip_id == trip.id
+    assert cfg.sections == []
+    assert cfg.palette == {}
+    assert cfg.last_generated_at is None
+
+
+def test_db_save_config_and_load_or_init_roundtrip_full_config(app, trip, monkeypatch):
+    """DB mode: save + load returns every field intact."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+
+    original = GuideConfig(
+        schema_version=CONFIG_SCHEMA_VERSION,
+        trip_id=trip.id,
+        sections=["day_by_day", "field_guide", "food"],
+        palette={"primary": "#d68949", "accent": "#4b7d99"},
+        last_generated_at="2026-07-07T12:00:00+00:00",
+        depth_tier="deep",
+        section_depth_overrides={"field_guide": "souvenir_grade"},
+        archetype="mixed_leisure",
+        narrator_angle="curious-outsider",
+    )
+    save_config(trip.id, original)
+
+    loaded = load_or_init_config(trip.id)
+    assert loaded.schema_version == original.schema_version
+    assert loaded.trip_id == original.trip_id
+    assert loaded.sections == original.sections
+    assert loaded.palette == original.palette
+    assert loaded.last_generated_at == original.last_generated_at
+    assert loaded.depth_tier == original.depth_tier
+    assert loaded.section_depth_overrides == original.section_depth_overrides
+    assert loaded.archetype == original.archetype
+    assert loaded.narrator_angle == original.narrator_angle
+
+
+def test_db_load_or_init_config_returns_fresh_on_schema_version_mismatch(app, trip, monkeypatch, caplog):
+    """DB mode: mismatched schema_version → warning + fresh empty config."""
+    monkeypatch.setattr(guide_builder, "GUIDE_STORAGE", "database")
+
+    trip.guide_config_json = json.dumps({
+        "schema_version": 99,
+        "trip_id": trip.id,
+        "sections": ["day_by_day"],
+        "palette": {},
+        "last_generated_at": None,
+    })
+    db.session.commit()
+
+    with caplog.at_level(logging.WARNING):
+        cfg = load_or_init_config(trip.id)
+
+    assert cfg.schema_version == CONFIG_SCHEMA_VERSION  # fresh, not 99
+    assert cfg.sections == []
+    assert "schema_version mismatch" in caplog.text
 
 
 # ─── share-token helpers ────────────────────────────────────────────────────
