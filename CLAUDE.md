@@ -174,18 +174,36 @@ optionally mints a public URL (`/guides/share/<token>`) for sharing with
 non-collaborators.
 
 **Storage abstraction.** All guide IO goes through
-`src/guide_builder.read_guide` / `save_guide` — Flask routes never touch
-the filesystem directly. A `GUIDE_STORAGE` env var (default `filesystem`)
-dispatches between local-file and a future database backend; the latter
-is unimplemented in v1 (raises `NotImplementedError`) and exists to make
-later cloud-hosting work cheap.
+`src/guide_builder` — Flask routes never touch the filesystem or the
+DB directly. A `GUIDE_STORAGE` env var (default `filesystem`) picks a
+backend for both the rendered HTML *and* the config sidecar (they move
+together as a package):
+
+- `filesystem` (default) — HTML at `data/guides/<id>.html`, config JSON
+  at `data/guides/<id>.config.json`. Includes `.bak` rotation on
+  overwrite.
+- `database` — HTML in `Trip.guide_html` (LargeBinary), config JSON in
+  `Trip.guide_config_json` (Text). No `.bak` rotation; DB backups
+  handle undo. Both columns nullable so pre-migration rows still work.
+
+The DB backend is prep for cloud hosting where the local filesystem is
+ephemeral and (with multiple app copies) not shared. Switch by setting
+`GUIDE_STORAGE=database` alongside `DATABASE_URL` on the host; leave
+both unset locally. Existing on-disk guides are NOT auto-migrated when
+you flip modes — regenerate to populate the DB.
 
 **Run the skill:** type `/trip-guide` in Claude Code inside this repo.
-The skill is project-local and only surfaces here.
+The skill is project-local and only surfaces here. The skill always
+writes via the storage helpers, so it works identically regardless of
+mode.
 
-**Migration:** `scripts/2026-06-19_add_guide_share_token.py` adds the
-share-token column to existing `vacation.db`. Run once locally; backed
-up automatically by the script before altering.
+**Migrations:**
+- `scripts/2026-06-19_add_guide_share_token.py` — share-token column.
+- `scripts/2026-07-07_add_guide_storage_columns.py` — `guide_html` +
+  `guide_config_json` columns for the DB backend.
+
+Both scripts back up `vacation.db` automatically before altering, and
+are idempotent (re-running is a no-op).
 
 ## Local port
 Local dev server runs on port **5002** (stock-tracker uses 5001).

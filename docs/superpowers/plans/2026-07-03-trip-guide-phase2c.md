@@ -629,5 +629,6 @@ schema changes) are absent from the plan by construction.
   Each is its own compose run; the retrofit here proves the shared module works.
 - New visual primitives, palette rules, content-model changes — Phase 2c is a
   renderer refactor, not a content-spec change.
-- Storage-backend work (`GUIDE_STORAGE=database`) — still `NotImplementedError`;
-  Phase 2c doesn't touch it.
+- ~~Storage-backend work (`GUIDE_STORAGE=database`) — still `NotImplementedError`;
+  Phase 2c doesn't touch it.~~ Shipped 2026-07-07 —
+  see [../plans/2026-07-07-guide-storage-db-backend.md](2026-07-07-guide-storage-db-backend.md).

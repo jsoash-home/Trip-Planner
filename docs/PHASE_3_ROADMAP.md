@@ -424,6 +424,7 @@ parked) post-phase-3.
 | Trip-prep to-dos (v1)    | ✓ shipped   | [docs/superpowers/specs/2026-06-14-trip-prep-todos-design.md](superpowers/specs/2026-06-14-trip-prep-todos-design.md) | [docs/superpowers/plans/2026-06-14-trip-prep-todos.md](superpowers/plans/2026-06-14-trip-prep-todos.md) |
 | Trip guide skill         | ✓ shipped   | [docs/superpowers/specs/2026-06-19-trip-guide-skill-design.md](superpowers/specs/2026-06-19-trip-guide-skill-design.md) | (shipped without a tracked plan file)                       |
 | Paste-and-parse (D2)     | ✓ shipped   | [docs/superpowers/specs/2026-06-20-paste-and-parse-booking-design.md](superpowers/specs/2026-06-20-paste-and-parse-booking-design.md) | [docs/superpowers/plans/2026-06-20-paste-and-parse-booking.md](superpowers/plans/2026-06-20-paste-and-parse-booking.md) |
+| Guide storage: DB backend | ✓ shipped   | [docs/superpowers/specs/2026-07-07-guide-storage-db-backend-design.md](superpowers/specs/2026-07-07-guide-storage-db-backend-design.md) | [docs/superpowers/plans/2026-07-07-guide-storage-db-backend.md](superpowers/plans/2026-07-07-guide-storage-db-backend.md) |
 
 ### Parked
 
