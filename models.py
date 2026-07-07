@@ -83,6 +83,14 @@ class Trip(db.Model):
     # on the authenticated guide page.
     guide_share_token = db.Column(db.String(36), unique=True, nullable=True, index=True)
 
+    # ── Trip Guide DB storage (Phase 4) ────────────────────────────────
+    # Populated only when GUIDE_STORAGE=database. Filesystem mode leaves
+    # both NULL and writes to data/guides/<id>.html / <id>.config.json.
+    # See src/guide_builder.py for the dispatch. Nullable so existing
+    # rows continue to work.
+    guide_html = db.Column(db.LargeBinary, nullable=True)
+    guide_config_json = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
