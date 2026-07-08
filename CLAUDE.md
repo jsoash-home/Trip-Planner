@@ -205,6 +205,22 @@ mode.
 Both scripts back up `vacation.db` automatically before altering, and
 are idempotent (re-running is a no-op).
 
+## iCal subscription
+
+Every user has a per-user `ical_token` (nullable). When set, it exposes
+a public read-only iCal feed at `/ical/subscribe/<token>.ics` covering
+every trip the user owns or collaborates on. The token doubles as the
+credential — no login on the route; unknown tokens 404.
+
+Rotate from **Settings → Calendar subscription** (POST to
+`/settings/ical/rotate`). Rotation invalidates every subscribed device
+at once — accepted trade-off for one-token-per-user.
+
+Events are floating (no TZID), matching the app's naive-local datetime
+model. Feed is `Cache-Control: private, max-age=300`.
+
+Migration: `scripts/2026-07-08_add_ical_token.py`.
+
 ## Local port
 Local dev server runs on port **5002** (stock-tracker uses 5001).
 

@@ -96,6 +96,7 @@ from src.destination_clock import COMMON_TIMEZONES, iana_from_coords
 from src.drift_review import chronological_order
 from src.geocoding import ensure_geocoded
 from src import guide_builder
+from src.ical_feed import build_feed, generate_token, user_by_token
 from src.itinerary import (
     ITINERARY_CATEGORIES,
     category_css,
@@ -958,6 +959,34 @@ def settings():
         "settings.html",
         supported_currencies=SUPPORTED_CURRENCIES,
     )
+
+
+@app.route("/ical/subscribe/<token>.ics")
+def ical_subscribe(token):
+    """Public iCal feed keyed by a per-user token. No login required —
+    the token IS the credential. Returns text/calendar per RFC 5545."""
+    user = user_by_token(token)
+    if user is None:
+        abort(404)
+    body = build_feed(user, datetime.utcnow())
+    resp = make_response(body)
+    resp.headers["Content-Type"] = "text/calendar; charset=utf-8"
+    resp.headers["Cache-Control"] = "private, max-age=300"
+    return resp
+
+
+@app.route("/settings/ical/rotate", methods=["POST"])
+@login_required
+def ical_rotate():
+    """Mint a fresh iCal token for the current user, invalidating any
+    previously subscribed devices. Also serves as first-time generate:
+    if ical_token is currently None, just sets one.
+    """
+    current_user.ical_token = generate_token()
+    db.session.commit()
+    logger.info("Rotated iCal token for user id=%s", current_user.id)
+    flash("Calendar subscription URL updated. Re-subscribe on any device.", "info")
+    return redirect(url_for("settings"))
 
 
 # ─── Trip prep (cross-trip to-dos) ──────────────────────────────────

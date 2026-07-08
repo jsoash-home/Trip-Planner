@@ -275,3 +275,43 @@ def test_build_feed_dedupes_when_owner_is_also_collaborator(app, owner, trip):
     # The itinerary item should appear exactly once, not duplicated because
     # the owner also matches the collaborator email filter.
     assert ics.count("Louvre") == 1
+
+
+# ─── /ical/subscribe/<token>.ics + /settings/ical/rotate routes ──────────────
+
+
+def test_route_404_on_unknown_token(app):
+    """An unknown token returns 404 — we don't leak whether tokens exist."""
+    client = flask_app.test_client()
+    resp = client.get("/ical/subscribe/no-such-token.ics")
+    assert resp.status_code == 404
+
+
+def test_route_returns_calendar_content_type(app, owner):
+    """A valid token returns text/calendar with the private cache header."""
+    owner.ical_token = "test-token-123"
+    db.session.commit()
+    client = flask_app.test_client()
+    resp = client.get(f"/ical/subscribe/{owner.ical_token}.ics")
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"].startswith("text/calendar")
+    assert "private" in resp.headers["Cache-Control"]
+    assert resp.data.startswith(b"BEGIN:VCALENDAR")
+
+
+def test_rotate_invalidates_old_token(app, owner):
+    """POST /settings/ical/rotate mints a new token; the old one 404s."""
+    owner.ical_token = "old-token"
+    db.session.commit()
+    client = flask_app.test_client()
+    # Simulate login via Flask-Login's session cookie by setting user_id.
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+    resp = client.post("/settings/ical/rotate")
+    assert resp.status_code in (302, 303)  # redirect to settings
+    db.session.refresh(owner)
+    assert owner.ical_token is not None
+    assert owner.ical_token != "old-token"
+    # Old token no longer resolves:
+    resp2 = client.get("/ical/subscribe/old-token.ics")
+    assert resp2.status_code == 404
