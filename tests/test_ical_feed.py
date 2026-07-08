@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta
 import pytest
 
 from app import app as flask_app
-from models import Booking, ItineraryItem, Trip, User, db
+from models import Booking, ItineraryItem, Trip, TripCollaborator, User, db
 from src import ical_feed
 
 
@@ -221,3 +221,57 @@ def test_generate_token_is_urlsafe_and_unique():
     assert len(t2) == 32
     # Two consecutive calls differ.
     assert t1 != t2
+
+
+def test_user_by_token_returns_none_for_empty_or_missing(app, owner):
+    assert ical_feed.user_by_token("") is None
+    assert ical_feed.user_by_token("no-such-token") is None
+    owner.ical_token = "abc123"
+    db.session.commit()
+    found = ical_feed.user_by_token("abc123")
+    assert found is not None
+    assert found.id == owner.id
+
+
+# ─── build_feed ──────────────────────────────────────────────────────────────
+
+
+def test_build_feed_includes_owned_and_collaborator_trips(app, owner):
+    """A user's feed contains events from trips they own AND trips shared with them."""
+    other = User(google_id="g-other", email="other@example.com", name="Other")
+    db.session.add(other)
+    db.session.commit()
+
+    owned = Trip(owner_id=owner.id, name="Owned",
+                 start_date=date(2026, 8, 10), end_date=date(2026, 8, 15))
+    shared = Trip(owner_id=other.id, name="Shared",
+                  start_date=date(2026, 9, 1), end_date=date(2026, 9, 5))
+    db.session.add_all([owned, shared])
+    db.session.commit()
+
+    db.session.add(TripCollaborator(
+        trip_id=shared.id, email="owner@example.com", role="viewer"))
+    db.session.add(ItineraryItem(
+        trip_id=owned.id, day_date=date(2026, 8, 11), title="Owned event"))
+    db.session.add(ItineraryItem(
+        trip_id=shared.id, day_date=date(2026, 9, 2), title="Shared event"))
+    db.session.commit()
+
+    ics = ical_feed.build_feed(owner, datetime(2026, 7, 8, 12, 0)).decode()
+    assert "Owned event" in ics
+    assert "Shared event" in ics
+
+
+def test_build_feed_dedupes_when_owner_is_also_collaborator(app, owner, trip):
+    """Owner who also has a TripCollaborator row on their own trip
+    should see each event once, not twice."""
+    db.session.add(TripCollaborator(
+        trip_id=trip.id, email="owner@example.com", role="editor"))
+    db.session.add(ItineraryItem(
+        trip_id=trip.id, day_date=date(2026, 8, 11), title="Louvre"))
+    db.session.commit()
+
+    ics = ical_feed.build_feed(owner, datetime(2026, 7, 8, 12, 0)).decode()
+    # The itinerary item should appear exactly once, not duplicated because
+    # the owner also matches the collaborator email filter.
+    assert ics.count("Louvre") == 1

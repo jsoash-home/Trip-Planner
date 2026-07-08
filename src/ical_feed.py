@@ -25,7 +25,6 @@ Design notes:
 """
 
 import logging
-import re
 import secrets
 from datetime import date, datetime, timedelta
 from typing import List, Optional
@@ -33,6 +32,7 @@ from typing import List, Optional
 from icalendar import Calendar, Event
 
 from models import Booking, ItineraryItem, Trip, TripCollaborator, User, db
+from src.sharing import normalize_email
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +48,6 @@ UID_HOST = "vacation-planner.local"
 # Booking types that get their own VEVENT. Everything else is expected
 # to appear via auto-linked itinerary items.
 BOOKING_EVENT_TYPES = ("flight", "hotel", "car")
-
-# Regex for validating a urlsafe base64 token. Used only in tests, but
-# defined here so the token shape lives with the generator.
-_URLSAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 # ─── token helpers ───────────────────────────────────────────────────────────
@@ -187,7 +183,7 @@ def _trips_for_user(user: User) -> List[Trip]:
     """
     owned = Trip.query.filter_by(owner_id=user.id).all()
 
-    email = (user.email or "").strip().lower()
+    email = normalize_email(user.email or "")
     if email:
         collab_trip_ids = [
             row.trip_id
