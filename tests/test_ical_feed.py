@@ -287,16 +287,39 @@ def test_route_404_on_unknown_token(app):
     assert resp.status_code == 404
 
 
-def test_route_returns_calendar_content_type(app, owner):
-    """A valid token returns text/calendar with the private cache header."""
-    owner.ical_token = "test-token-123"
+def test_route_serves_only_token_owners_events(app, owner):
+    """The token IS the credential — a user's feed must contain their
+    trips and MUST NOT contain a stranger's."""
+    stranger = User(google_id="g-str", email="stranger@example.com", name="Stranger")
+    db.session.add(stranger)
     db.session.commit()
+
+    my_trip = Trip(owner_id=owner.id, name="My Vacation",
+                   start_date=date(2026, 8, 10), end_date=date(2026, 8, 15))
+    stranger_trip = Trip(owner_id=stranger.id, name="Stranger Vacation",
+                         start_date=date(2026, 9, 1), end_date=date(2026, 9, 5))
+    db.session.add_all([my_trip, stranger_trip])
+    db.session.commit()
+
+    db.session.add(ItineraryItem(
+        trip_id=my_trip.id, day_date=date(2026, 8, 11), title="Own event"))
+    db.session.add(ItineraryItem(
+        trip_id=stranger_trip.id, day_date=date(2026, 9, 2), title="Stranger event"))
+    db.session.commit()
+
+    owner.ical_token = "my-token-abc"
+    db.session.commit()
+
     client = flask_app.test_client()
     resp = client.get(f"/ical/subscribe/{owner.ical_token}.ics")
     assert resp.status_code == 200
     assert resp.headers["Content-Type"].startswith("text/calendar")
     assert "private" in resp.headers["Cache-Control"]
     assert resp.data.startswith(b"BEGIN:VCALENDAR")
+
+    body = resp.data.decode()
+    assert "Own event" in body
+    assert "Stranger event" not in body
 
 
 def test_rotate_invalidates_old_token(app, owner):

@@ -962,7 +962,7 @@ def settings():
 
 
 @app.route("/ical/subscribe/<token>.ics")
-def ical_subscribe(token):
+def ical_subscribe(token: str):
     """Public iCal feed keyed by a per-user token. No login required —
     the token IS the credential. Returns text/calendar per RFC 5545."""
     user = user_by_token(token)
