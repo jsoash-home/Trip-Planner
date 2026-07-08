@@ -40,6 +40,12 @@ class User(UserMixin, db.Model):
         db.String(3), nullable=False, default="USD",
     )
 
+    # Opaque token that grants read access to /ical/<token>.ics. NULL means
+    # no calendar feed has been minted yet. One token per user covers every
+    # trip they own or collaborate on. Rotating invalidates all devices at
+    # once.
+    ical_token = db.Column(db.String(36), unique=True, nullable=True, index=True)
+
     trips = db.relationship("Trip", backref="owner", lazy=True)
 
 
