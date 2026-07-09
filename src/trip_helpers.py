@@ -8,7 +8,7 @@ they're trivial to unit-test.
 
 import logging
 from datetime import date
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, TypedDict
 
 from src.destination_clock import is_valid_iana
 
@@ -451,6 +451,58 @@ def themed_countdown_label(
     if theme:
         return f"{days_out} {unit_word} until {theme}"
     return f"{days_out} {unit_word} to go"
+
+
+class Palette(TypedDict):
+    accent: str
+    accent_soft: str
+    hero_from: str
+    hero_to: str
+    on_accent: str
+
+
+# Keys match the values in _EMOJI_THEME_MAP (theme phrases like "the beach",
+# "the mountains", …). Adding a new emoji to _EMOJI_THEME_MAP that maps to
+# an existing phrase automatically inherits its palette. Adding a new phrase
+# requires adding an entry here too — otherwise the default kicks in.
+_THEME_PALETTES: Dict[str, Palette] = {
+    "the beach":            Palette(accent="#0ea5e9", accent_soft="#e0f2fe", hero_from="#38bdf8", hero_to="#fbbf24", on_accent="#fff"),
+    "takeoff":              Palette(accent="#0369a1", accent_soft="#e0f2fe", hero_from="#0284c7", hero_to="#7dd3fc", on_accent="#fff"),
+    "the mountains":        Palette(accent="#166534", accent_soft="#dcfce7", hero_from="#15803d", hero_to="#78716c", on_accent="#fff"),
+    "the next great meal":  Palette(accent="#b91c1c", accent_soft="#fee2e2", hero_from="#dc2626", hero_to="#f59e0b", on_accent="#fff"),
+    "history":              Palette(accent="#92400e", accent_soft="#fef3c7", hero_from="#b45309", hero_to="#d97706", on_accent="#fff"),
+    "the open road":        Palette(accent="#4338ca", accent_soft="#e0e7ff", hero_from="#4f46e5", hero_to="#f97316", on_accent="#fff"),
+    "check-in":             Palette(accent="#0f766e", accent_soft="#ccfbf1", hero_from="#0d9488", hero_to="#7c3aed", on_accent="#fff"),
+    "the city":             Palette(accent="#7c3aed", accent_soft="#ede9fe", hero_from="#4c1d95", hero_to="#db2777", on_accent="#fff"),
+    "the north woods":      Palette(accent="#15803d", accent_soft="#dcfce7", hero_from="#166534", hero_to="#a3e635", on_accent="#fff"),
+    "the lake":             Palette(accent="#0369a1", accent_soft="#e0f2fe", hero_from="#0284c7", hero_to="#14b8a6", on_accent="#fff"),
+    "the campsite":         Palette(accent="#4d7c0f", accent_soft="#ecfccb", hero_from="#65a30d", hero_to="#eab308", on_accent="#fff"),
+    "the campfire":         Palette(accent="#c2410c", accent_soft="#ffedd5", hero_from="#ea580c", hero_to="#fbbf24", on_accent="#fff"),
+    "the wild":             Palette(accent="#3f6212", accent_soft="#ecfccb", hero_from="#4d7c0f", hero_to="#78350f", on_accent="#fff"),
+    "setting sail":         Palette(accent="#1e40af", accent_soft="#dbeafe", hero_from="#1d4ed8", hero_to="#06b6d4", on_accent="#fff"),
+    "the rails":            Palette(accent="#475569", accent_soft="#e2e8f0", hero_from="#334155", hero_to="#d97706", on_accent="#fff"),
+    "tip-off":              Palette(accent="#c2410c", accent_soft="#ffedd5", hero_from="#ea580c", hero_to="#fdba74", on_accent="#fff"),
+    "kickoff":              Palette(accent="#15803d", accent_soft="#dcfce7", hero_from="#16a34a", hero_to="#bbf7d0", on_accent="#111"),
+}
+
+_DEFAULT_PALETTE: Palette = Palette(
+    accent="#6d28d9",
+    accent_soft="#ede9fe",
+    hero_from="#7c3aed",
+    hero_to="#db2777",
+    on_accent="#fff",
+)
+
+
+def theme_palette(emoji: Optional[str]) -> Palette:
+    """Emoji → Palette. Falls back to _DEFAULT_PALETTE for empty, unknown,
+    or non-themed emojis (including 🧳)."""
+    if not emoji:
+        return _DEFAULT_PALETTE
+    theme = emoji_theme(emoji)
+    if theme is None:
+        return _DEFAULT_PALETTE
+    return _THEME_PALETTES.get(theme, _DEFAULT_PALETTE)
 
 
 def format_changes_since_label(

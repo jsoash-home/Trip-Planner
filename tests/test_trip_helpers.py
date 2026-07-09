@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from src.trip_helpers import (
+    _DEFAULT_PALETTE,
     countdown_label,
     day_of_trip,
     days_remaining,
@@ -20,6 +21,7 @@ from src.trip_helpers import (
     progress_fraction,
     sort_nav_trips,
     status_label,
+    theme_palette,
     themed_countdown_label,
     trip_form_values,
 )
@@ -882,3 +884,31 @@ def test_hotel_for_night_ignores_non_hotel_types():
         end_datetime=datetime(2026, 8, 3, 12, 0),
     )
     assert hotel_for_night([flight], date(2026, 8, 3)) is None
+
+
+# ─────────────────────────────  theme_palette  ─────────────────────────────
+
+
+def test_theme_palette_returns_beach_for_beach_emoji():
+    p = theme_palette("🏝️")
+    assert p["accent"] == "#0ea5e9"  # beach accent
+    assert p["hero_from"].startswith("#")
+
+
+def test_theme_palette_returns_default_for_unknown_emoji():
+    assert theme_palette("💎") == _DEFAULT_PALETTE
+
+
+def test_theme_palette_returns_default_for_none():
+    assert theme_palette(None) == _DEFAULT_PALETTE
+    assert theme_palette("") == _DEFAULT_PALETTE
+
+
+def test_palette_hex_values_are_valid_css():
+    import re
+    hex_re = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+    from src.trip_helpers import _THEME_PALETTES, _DEFAULT_PALETTE
+    all_palettes = list(_THEME_PALETTES.values()) + [_DEFAULT_PALETTE]
+    for p in all_palettes:
+        for key in ("accent", "accent_soft", "hero_from", "hero_to", "on_accent"):
+            assert hex_re.match(p[key]), f"invalid hex in {key}: {p[key]}"

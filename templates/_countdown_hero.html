@@ -3,6 +3,7 @@
    hero), except for a slim cover-photo banner when the trip has one. #}
 {% set _status = derive_status(trip.start_date, trip.end_date, today) %}
 {% set _has_cover = trip.cover_image_url is defined and trip.cover_image_url %}
+{% set palette = theme_palette(trip.cover_emoji) %}
 
 {% if _status == 'planning' %}
   {% set _d = days_until(trip.start_date, today) %}
@@ -10,7 +11,8 @@
            aria-label="Countdown to trip"
            data-countdown-hero
            data-trip-id="{{ trip.id }}"
-           data-countdown-target="{{ trip.start_date.isoformat() }}T00:00:00">
+           data-countdown-target="{{ trip.start_date.isoformat() }}T00:00:00"
+           style="--vp-hero-gradient-start: {{ palette.hero_from }}; --vp-hero-gradient-end: {{ palette.hero_to }}; --vp-accent: {{ palette.accent }}; --vp-accent-soft: {{ palette.accent_soft }}; color: {{ palette.on_accent }};">
     {% if _has_cover %}
       <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
            alt="" loading="lazy" aria-hidden="true">

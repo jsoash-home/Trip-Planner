@@ -163,6 +163,7 @@ from src.trip_helpers import (
     progress_fraction,
     sort_nav_trips,
     status_label,
+    theme_palette,
     themed_countdown_label,
     trip_form_values,
 )
@@ -481,6 +482,7 @@ app.jinja_env.globals.update(
     packing_progress_for_group=packing_progress_for_group,
     progress_fraction=progress_fraction,
     share_role_label=lambda code: SHARE_ROLE_LABELS.get(code, code),
+    theme_palette=theme_palette,
     themed_countdown_label=themed_countdown_label,
     format_temperature=format_temperature,
 )

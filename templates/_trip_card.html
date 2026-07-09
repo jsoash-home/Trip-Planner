@@ -9,7 +9,9 @@
   {% set countdown = countdown_label(trip.start_date, trip.end_date, today) %}
   {% set countdown_cls = ('is-active' if status == 'in_progress' else ('is-past' if status == 'completed' else '')) %}
   {% set href = url_for('yearbook', trip_id=trip.id) if on_this_day is not none else url_for('trip_overview', trip_id=trip.id) %}
-  <a class="trip-card" href="{{ href }}">
+  {% set palette = theme_palette(trip.cover_emoji) %}
+  <a class="trip-card" href="{{ href }}"
+     style="--vp-accent: {{ palette.accent }}; --vp-accent-soft: {{ palette.accent_soft }};">
     {% if trip.cover_image_url %}
       <img class="vp-cover-img" src="{{ trip.cover_image_url }}"
            alt="" loading="lazy" aria-hidden="true">
