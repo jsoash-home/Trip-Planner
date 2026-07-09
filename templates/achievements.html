@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Achievements · Vacation Planner{% endblock %}
+
+{% block content %}
+<section class="vp-achievements-hero mb-4">
+  <h1 class="h3 mb-2">🏆 Achievements</h1>
+  <p class="h5 mb-2">
+    <strong>{{ earned|length }} of {{ all_count }} earned</strong>
+  </p>
+  {% if all_count %}
+    {% set pct = (earned|length / all_count * 100)|round(0, 'floor')|int %}
+    <div class="progress" style="max-width: 32rem; height: 0.75rem;"
+         role="progressbar"
+         aria-label="Achievements progress"
+         aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-bar bg-success" style="width: {{ pct }}%;"></div>
+    </div>
+  {% endif %}
+</section>
+
+<section class="mb-4">
+  <h2 class="h5 mb-3">Earned</h2>
+
+  {% if earned %}
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+      {% for a in earned %}
+        <div class="col">
+          <div class="card h-100 bg-success text-white position-relative">
+            <div class="card-body text-center">
+              <div style="font-size: 3rem; line-height: 1;">{{ a.icon }}</div>
+              <h3 class="h5 mt-2 mb-1">{{ a.name }}</h3>
+              <p class="mb-0 small">{{ a.description }}</p>
+            </div>
+            <span class="badge bg-light text-success position-absolute top-0 end-0 m-2">
+              Earned
+            </span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">
+      Complete your first trip to unlock your first badge.
+    </p>
+  {% endif %}
+</section>
+
+{% if near %}
+<section class="mb-4">
+  <h2 class="h5 mb-3">In progress</h2>
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+    {% for a, current, target in near %}
+      {% set pct = (current / target * 100)|round(0, 'floor')|int %}
+      <div class="col">
+        <div class="card h-100 bg-body-secondary">
+          <div class="card-body text-center">
+            <div style="font-size: 3rem; line-height: 1; opacity: 0.7;">
+              {{ a.icon }}
+            </div>
+            <h3 class="h5 mt-2 mb-1">{{ a.name }}</h3>
+            <p class="mb-2 small text-muted">{{ a.description }}</p>
+            <div class="progress" style="height: 0.5rem;"
+                 role="progressbar"
+                 aria-label="{{ a.name }} progress"
+                 aria-valuenow="{{ current }}"
+                 aria-valuemin="0" aria-valuemax="{{ target }}">
+              <div class="progress-bar" style="width: {{ pct }}%;"></div>
+            </div>
+            <p class="mt-1 mb-0 small text-muted">{{ current }} / {{ target }}</p>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if locked %}
+<section class="mb-4">
+  <h2 class="h5 mb-3">Locked</h2>
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+    {% for a in locked %}
+      <div class="col">
+        <div class="card h-100 bg-body-secondary" style="opacity: 0.75;">
+          <div class="card-body text-center">
+            <div style="font-size: 3rem; line-height: 1; filter: grayscale(0.6);">
+              {{ a.icon }}
+            </div>
+            <h3 class="h5 mt-2 mb-1">{{ a.name }}</h3>
+            <p class="mb-0 small text-muted">{{ a.description }}</p>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+</content>
+</invoke>

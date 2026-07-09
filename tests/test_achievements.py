@@ -36,6 +36,12 @@ def owner(app):
     return u
 
 
+@pytest.fixture
+def client(app):
+    """Flask test client bound to the same app context."""
+    return app.test_client()
+
+
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
 
@@ -253,3 +259,28 @@ def test_near_earned_excludes_already_earned(app, owner):
     assert "countries_10" not in near_ids
     # countries_25 is still open with current=10 target=25 → should appear.
     assert "countries_25" in near_ids
+
+
+# ─── /achievements route ─────────────────────────────────────────────────────
+
+
+def test_route_requires_login(client):
+    """Unauthenticated GET should redirect to login (not 200)."""
+    resp = client.get("/achievements", follow_redirects=False)
+    assert resp.status_code in (302, 401), \
+        f"expected redirect/unauth, got {resp.status_code}"
+
+
+def test_route_renders_all_achievements_in_grid(client, app, owner):
+    """Signed-in GET renders the page + at least one achievement name."""
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(owner.id)
+        sess["_fresh"] = True
+
+    resp = client.get("/achievements")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    # First Trip appears in the Locked catalog for a brand-new user.
+    assert "First Trip" in body
+    # Hero counter renders.
+    assert "of 10 earned" in body

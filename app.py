@@ -96,6 +96,12 @@ from src.destination_clock import COMMON_TIMEZONES, iana_from_coords
 from src.drift_review import chronological_order
 from src.geocoding import ensure_geocoded
 from src import guide_builder
+from src.achievements import (
+    all_achievements,
+    compute_stats,
+    earned,
+    near_earned,
+)
 from src.ical_feed import build_feed, generate_token, user_by_token
 from src.itinerary import (
     ITINERARY_CATEGORIES,
@@ -989,6 +995,28 @@ def ical_rotate():
     logger.info("Rotated iCal token for user id=%s", current_user.id)
     flash("Calendar subscription URL updated. Re-subscribe on any device.", "info")
     return redirect(url_for("settings"))
+
+
+@app.route("/achievements")
+@login_required
+def achievements_view():
+    """Personal badges page. Shows earned achievements + closest
+    in-progress ones based on lifetime travel stats. Any registry
+    achievement that's neither earned nor in ``near`` renders in the
+    locked catalog so the user always sees the full set."""
+    stats = compute_stats(current_user)
+    earned_list = earned(current_user)
+    near = near_earned(current_user, limit=5)
+    shown_ids = {a.id for a in earned_list} | {a.id for (a, _, _) in near}
+    locked = [a for a in all_achievements() if a.id not in shown_ids]
+    return render_template(
+        "achievements.html",
+        stats=stats,
+        earned=earned_list,
+        near=near,
+        locked=locked,
+        all_count=len(all_achievements()),
+    )
 
 
 # ─── Trip prep (cross-trip to-dos) ──────────────────────────────────

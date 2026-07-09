@@ -257,6 +257,11 @@
             <span aria-hidden="true">🌍</span>
             <span>Map</span>
           </a>
+          <a class="vp-navlink {% if ep == 'achievements_view' %}is-active{% endif %}"
+             href="{{ url_for('achievements_view') }}">
+            <span aria-hidden="true">🏆</span>
+            <span>Achievements</span>
+          </a>
         </div>
 
         <div class="vp-unit-toggle ms-auto me-3" role="group" aria-label="Countdown unit" hidden>
