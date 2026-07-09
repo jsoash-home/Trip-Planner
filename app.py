@@ -98,7 +98,6 @@ from src.geocoding import ensure_geocoded
 from src import guide_builder
 from src.achievements import (
     all_achievements,
-    compute_stats,
     earned,
     near_earned,
 )
@@ -1004,14 +1003,12 @@ def achievements_view():
     in-progress ones based on lifetime travel stats. Any registry
     achievement that's neither earned nor in ``near`` renders in the
     locked catalog so the user always sees the full set."""
-    stats = compute_stats(current_user)
     earned_list = earned(current_user)
     near = near_earned(current_user, limit=5)
     shown_ids = {a.id for a in earned_list} | {a.id for (a, _, _) in near}
     locked = [a for a in all_achievements() if a.id not in shown_ids]
     return render_template(
         "achievements.html",
-        stats=stats,
         earned=earned_list,
         near=near,
         locked=locked,

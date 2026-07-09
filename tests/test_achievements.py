@@ -283,4 +283,5 @@ def test_route_renders_all_achievements_in_grid(client, app, owner):
     # First Trip appears in the Locked catalog for a brand-new user.
     assert "First Trip" in body
     # Hero counter renders.
-    assert "of 10 earned" in body
+    total = len(achievements.all_achievements())
+    assert f"of {total} earned" in body
