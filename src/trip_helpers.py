@@ -482,14 +482,14 @@ _THEME_PALETTES: Dict[str, Palette] = {
     "setting sail":         Palette(accent="#1e40af", accent_soft="#dbeafe", hero_from="#1d4ed8", hero_to="#06b6d4", on_accent="#fff"),
     "the rails":            Palette(accent="#475569", accent_soft="#e2e8f0", hero_from="#334155", hero_to="#d97706", on_accent="#fff"),
     "tip-off":              Palette(accent="#c2410c", accent_soft="#ffedd5", hero_from="#ea580c", hero_to="#fdba74", on_accent="#fff"),
-    "kickoff":              Palette(accent="#15803d", accent_soft="#dcfce7", hero_from="#16a34a", hero_to="#bbf7d0", on_accent="#111"),
+    "kickoff":              Palette(accent="#15803d", accent_soft="#dcfce7", hero_from="#16a34a", hero_to="#4d7c0f", on_accent="#fff"),
 }
 
 _DEFAULT_PALETTE: Palette = Palette(
-    accent="#6d28d9",
-    accent_soft="#ede9fe",
-    hero_from="#7c3aed",
-    hero_to="#db2777",
+    accent="#e8744f",
+    accent_soft="#fde4d8",
+    hero_from="#e8744f",
+    hero_to="#d05c39",
     on_accent="#fff",
 )
 

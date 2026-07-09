@@ -912,3 +912,12 @@ def test_palette_hex_values_are_valid_css():
     for p in all_palettes:
         for key in ("accent", "accent_soft", "hero_from", "hero_to", "on_accent"):
             assert hex_re.match(p[key]), f"invalid hex in {key}: {p[key]}"
+
+
+def test_theme_palette_all_emoji_map_phrases_have_palette_entries():
+    """Regression guard: every phrase in _EMOJI_THEME_MAP should have a
+    palette. Missing entries silently fall back to _DEFAULT_PALETTE via
+    theme_palette's .get() — this test surfaces that at CI time."""
+    from src.trip_helpers import _EMOJI_THEME_MAP, _THEME_PALETTES
+    missing = set(_EMOJI_THEME_MAP.values()) - set(_THEME_PALETTES.keys())
+    assert not missing, f"phrases missing palette: {missing}"
